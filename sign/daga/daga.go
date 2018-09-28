@@ -93,6 +93,7 @@ func NewClient(i int, s kyber.Scalar) (client, error) {
 // FIXME better name + doc as of Syta - Identity Management Through Privacy Preserving Aut 4.3.5
 // TODO see if not better to replace parameters by serverkeys and clientgenerator (only useful things) => that's what I'v done
 // TODO parameter checking + logging
+// TODO maybe split further into smaller methods, maybe one for each step
 // TODO see if useful to create a struct or better to return "tuple"....
 // #kyber daga
 func newInitialTagAndCommitments(serverKeys []kyber.Point, clientGenerator kyber.Point) (initialTagAndCommitments, error) {
@@ -125,11 +126,7 @@ func newInitialTagAndCommitments(serverKeys []kyber.Point, clientGenerator kyber
 	for _, secret := range sharedSecrets {
 		exp.Mul(exp, secret)
 	}
-	//for i := 0; i < len(context.g.y); i++ {
-	//	//rand := suite.Cipher(shared[i])  // QUESTION don't understand why this was done and not documented/commented... sha3(sha512) instead of sha256 in the first place...? => can I rewrite everything since this is what I'm doing anywhay..)
-	//	exp.Mul(exp, suite.Scalar().Pick(rand))
-	//}
-	// TODO not sure how this index thing will work in a decentralized setting, maybe will need to have maps pubkey->generator etc... instead of index
+	//QUESTION don't understand why sha3(sha512) was done by previous student instead of sha256 in the first place...? => can I rewrite everything since this is what I'm doing anywhay..)
 	T0 := suite.Point().Mul(exp, clientGenerator)
 
 	//	Computes the commitments to the shared secrets
@@ -152,12 +149,11 @@ func (c client) createRequest(context authenticationContext) (authenticationMess
 	ts, err := newInitialTagAndCommitments(context.g.y, context.h[c.index])
 	if err != nil {
 		// TODO onet.log something
-		//return nil,
 	}
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PK client, with one server
 	//	construct the Prover for PK client
-	prover := newClientProver()
+	prover := newClientProver(context, c, ts)
 	//	3-move interaction with server picked at random
 	// QUESTION TODO FIXME, will need to have kind of a directory mapping servers to their IP/location don't currently know how this is addressed in cothority onet
 	prov
