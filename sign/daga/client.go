@@ -8,44 +8,6 @@ import (
 	"github.com/dedis/kyber"
 )
 
-//GenerateProofCommitments creates and returns the client's commitments t and the random wieghts w
-func (client *Client) GenerateProofCommitments(context *ContextEd25519, T0 kyber.Point, s kyber.Scalar) (t *[]kyber.Point, v, w *[]kyber.Scalar) {
-	//Generates w randomly except for w[client.index] = 0
-	wtemp := make([]kyber.Scalar, len(context.H))
-	w = &wtemp
-	for i := range *w {
-		(*w)[i] = suite.Scalar().Pick(random.Stream)
-	}
-	(*w)[client.index] = suite.Scalar().Zero()
-
-	//Generates random v (2 per client)
-	vtemp := make([]kyber.Scalar, 2*len(context.H))
-	v = &vtemp
-	for i := 0; i < len(*v); i++ {
-		(*v)[i] = suite.Scalar().Pick(random.Stream)
-	}
-
-	//Generates the commitments t (3 per clients)
-	ttemp := make([]kyber.Point, 3*len(context.H))
-	t = &ttemp
-	for i := 0; i < len(context.H); i++ {
-		a := suite.Point().Mul(context.G.X[i], (*w)[i])
-		b := suite.Point().Mul(nil, (*v)[2*i])
-		(*t)[3*i] = suite.Point().Add(a, b)
-
-		Sm := suite.Point().Mul(nil, s)
-		c := suite.Point().Mul(Sm, (*w)[i])
-		d := suite.Point().Mul(nil, (*v)[2*i+1])
-		(*t)[3*i+1] = suite.Point().Add(c, d)
-
-		e := suite.Point().Mul(T0, (*w)[i])
-		f := suite.Point().Mul(context.H[i], (*v)[2*i+1])
-		(*t)[3*i+2] = suite.Point().Add(e, f)
-	}
-
-	return t, v, w
-}
-
 //GenerateProofResponses creates the responses to the challenge cs sent by the servers
 func (client *Client) GenerateProofResponses(context *ContextEd25519, s kyber.Scalar, challenge *Challenge, v, w *[]kyber.Scalar) (c, r *[]kyber.Scalar, err error) {
 	//Check challenge signatures
