@@ -2,15 +2,11 @@ package daga
 
 // TODO quick documentation and DAGA description with links to relevant parts of the Syta papers
 // TODO see what to export and what not
-// QUESTION ask if append should be replaced by assign if possible (are we chasing that kind of performance ?)
-
 import (
 	"fmt"
 	"github.com/dedis/kyber"
-	"github.com/dedis/kyber/proof"
 	"github.com/dedis/kyber/util/key"
 	"hash"
-	"strconv"
 )
 
 // Suite represents the set of functionalities needed by the DAGA package
@@ -22,10 +18,10 @@ import (
 type Suite interface {
 	kyber.Group
 	kyber.Random
-	//QUESTION use key.Generator interface instead ?
+	//TODO remove
 	newKey() kyber.Scalar // present since in the case of edwards25519 we need to take care in order to avoid subgroup attacks
 	hashOne() hash.Hash   // FIXME "correct" names..and maybe transform this suite concept into a daga interface and define methods needed by the algo
-	hashTwo() hash.Hash
+	hashTwo() hash.Hash		// TODO add hashfactory and remove one hash
 }
 
 // EC crypto variant of DAGA Suite
@@ -74,7 +70,7 @@ type client struct {
 If no private key is given, a random one is chosen
 */
 // TODO see how this i will be handled...
-func NewClient(i int, s kyber.Scalar) (client, error) {
+func newClient(i int, s kyber.Scalar) (client, error) {
 	if i < 0 {
 		return client{}, fmt.Errorf("invalid parameters")
 	}
@@ -108,8 +104,8 @@ func newInitialTagAndCommitments(serverKeys []kyber.Point, clientGenerator kyber
 	for _, serverKey := range serverKeys {
 		// TODO ensure that this is working like I think its working..
 		hasher := suite.hashOne()
-		// QUESTION FIXME do we need to ensure that the unlikely 00000 hash never occurs or something else ? (I'd say yes)
-		// QUESTION ask related hash question see log.txt (to my understanding secrets distribution will not be uniform and that kind of violate random oracle model assumption)
+		// QUESTION ask Ewa Syta related hash question see log.txt (to my understanding secrets distribution will not be uniform and that kind of violate random oracle model assumption)
+		// but since nothing is said about this concern in Curve25519 paper I'd say this is not an issue finally...
 		_, err := suite.Point().Mul(z, serverKey).MarshalTo(hasher)
 		if err != nil {
 			// FIXME never happens or ??
@@ -152,11 +148,38 @@ func (c client) createRequest(context authenticationContext) (authenticationMess
 	}
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PK client, with one server
-	//	construct the Prover for PK client
+	//	construct the Prover for client's PK
 	prover := newClientProver(context, c, ts)
 	//	3-move interaction with server picked at random
+	// TODO
+	proverCtx := &clientProverCtx{}
+
+	//	start the prover and proof machinery in new goroutine
+	var P clientProof
+	go func() {
+		if err := prover(proverCtx); err != nil {
+			// TODO onet.log something
+		}
+	}()
+	//	get initial commit from prover
+	commit := <- proverCtx.messages
+	// TODO encoding
+	P.t = commit
+
+	//	send it to random server/verifier (over anon. circuit etc.. !!)
 	// QUESTION TODO FIXME, will need to have kind of a directory mapping servers to their IP/location don't currently know how this is addressed in cothority onet
-	prov
+	// QUESTION can I have a quick intro on how I to do this using onet ? or should I do my own cuisine ?
+
+	//	receive challenge from server (over anon. circuit etc.. !!)
+	// TODO
+	var challenge interface{}
+
+	//	forward challenge to prover in order to continue the proof process
+	// TODO decoding
+	proverCtx.challenges <- challenge
+
+	// get
+
 
 	M0 := authenticationMessage{
 		c:                        context,

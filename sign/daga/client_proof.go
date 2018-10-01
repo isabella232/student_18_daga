@@ -2,6 +2,7 @@ package daga
 
 import (
 	"crypto/cipher"
+	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/proof"
@@ -9,25 +10,12 @@ import (
 	"strconv"
 )
 
-// Sigma-protocol proof.ProverContext used to conduct interactive proofs with a verifier over the network
-// TODO create specific clientprover, take inspiration and directions from hashprover and deniableprover
-// QUESTION should I instead try to see if I can reuse proof.deniableProver ? and override needed methods ?
-// QUESTION what about the deniable prover thing in package and protocols and clique ? should I use them or build my own things ?
-// QUESTION can I use deniable prover and instantiate a custom verifier as a proxy for the actual remote verifier ?
-
-// QUESTION => I'd say no, better to write my own and see later if it or parts can be made reusable or be shared with.. in proof.something
-type clientProverCtx struct {
-	SuiteProof
-	//prirand io.Reader  // TODO not convinced it is useful.. but for harmony with other implementations ...or maybe not in fact
-}
-
 // cipherStreamReader adds a Read method onto a cipher.Stream,
 // so that it can be used as an io.Reader.
 // TODO FIXME QUESTION copy pasted from hashProve => need to put it elsewhere in kyber to allow reusability !!
 type cipherStreamReader struct {
 	cipher.Stream
 }
-
 func (s *cipherStreamReader) Read(in []byte) (int, error) {
 	x := make([]byte, len(in))
 	s.XORKeyStream(x, x)
@@ -35,33 +23,53 @@ func (s *cipherStreamReader) Read(in []byte) (int, error) {
 	return len(in), nil
 }
 
-// Send message to verifier
-func (cpCtx clientProverCtx) Put(message interface{}) error {
-	// TODO get server from context (=> TODO choose random server at context creation)
-	// TODO send the message => TODO see whats available in onet/cothority
-	// TODO OR grab the message and put it in a channel toward user code that will do the work elsewhere, probably better !
-	// TODO but it is not possible currently since prf.prove() call put then call pubrand
-	// TODO yes it is possible but unnecessarily complicated IMHO and looks like it was done in deniable prover
-	// TODO I find this is bad design, the prove and hence Prover() fucntions should not do what they are doing now
-	// TODO maybe better to do things in CPS style or async await
-	// TODO e.g add aditional arg into Put() to register what the function should do/call once it has finished
-	// QUESTION I kind of feel that I'm fixing an unusable framework and that the resulting thing is a mess..
-	// DECISION : not really my job now => move forward keep things like they are => extend / override deniable prover and basta
-	log.Info("client proof, sending message to ..")
-	return nil
+// Sigma-protocol proof.ProverContext used to conduct interactive proofs with a verifier over the network
+// TODO create specific clientprover, take inspiration and directions from hashprover and deniableprover
+// UESTION should I instead try to see if I can reuse proof.deniableProver ? and override needed methods ?
+// UESTION what about the deniable prover thing in package and protocols and clique ? should I use them or build my own things ?
+// UESTION can I use deniable prover and instantiate a custom verifier as a proxy for the actual remote verifier ?
+// QUESTION => I'd say no, better to write my own and see later if it or parts can be made reusable or be shared with.. in proof.something
+type clientProverCtx struct {
+	SuiteProof
+	messages chan kyber.Point  // to extract the prover's msgs from prover and make them accessible (i.e. fix the API...)
+	challenges chan kyber.Scalar // to give challenges to the prover
 }
 
-// Get public randomness / challenge from verifier
-func (cpCtx clientProverCtx) PubRand(message ...interface{}) error {
-	// TODO listen for message/challenge from verifier
-	// TODO deserialize it and put it in message
-	// QUESTION what is the suite.read suite.write about in deniable prover context ? to serialize deserialize it ? => yes use it !
-	return nil
+// TODO doc + QUESTION convention for newSomething returning a pointer ?
+func newClientProverCtx(suite Suite, n int) clientProverCtx {
+	return clientProverCtx{
+		SuiteProof: newSuiteProof(suite),
+		messages: make(chan kyber.Point, n),
+		challenges: make(chan kyber.Scalar),
+	}
+}
+
+// "Send message to verifier" or make the prover's messages available to our/user code
+// QUESTION TODO try to understand why message was designed to have type interface{}
+func (cpCtx *clientProverCtx) Put(message interface{}) error {
+	// QUESTION I kind of feel that I'm fixing an unusable framework and the resulting thing is a mess..
+	// need documentation
+	// DECISION : not really my job now => move forward keep things like they are => extend / override / copy deniable prover and basta
+	// then only maybe add my stone
+	if msg, ok := message.(kyber.Point); ok {
+		cpCtx.messages <- msg
+		log.Info("client proof, " + strconv.Itoa(len(cpCtx.messages)) + " prover's message/commit available in channel ..")
+		return nil
+	} else {
+		return errors.New("clientProverCtx.Put: commit message from prover not of type kyber.Point (" + fmt.Sprint("%T", message) + ")")
+	}
+}
+
+// Get public randomness / challenge from verifier/chan..
+func (cpCtx *clientProverCtx) PubRand(message ...interface{}) error {
+	challenge := <- cpCtx.challenges
+
+	// QUESTION how can this be the way to go ?? why not a slice instead of variadic stuff
 }
 
 // Get private randomness
 // TODO kind of copy pasted from hasprovercontext => see how/where to share code/helpers
-func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
+func (cpCtx *clientProverCtx) PriRand(message ...interface{}) error {
 	if err := cpCtx.Read(&cipherStreamReader{cpCtx.RandomStream()}, message...); err != nil {
 		return fmt.Errorf("error reading random stream: %v", err.Error())
 	}

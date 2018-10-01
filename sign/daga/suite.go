@@ -23,7 +23,7 @@ type SuiteEC struct {
 // QUESTION why internal ?
 
 func newSuiteEC() Suite {
-	// TODO ask if it is useful + return T or *T in interface var ??
+	// QUESTION TODO ask if it is useful + return T or *T in interface var , what are the best practises and pitfalls to avoid ??
 	return new(SuiteEC)
 }
 
@@ -48,14 +48,13 @@ func (s SuiteEC) RandomStream() cipher.Stream {
 	return random.New()
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // used to give to the proof framework the method it needs, satisfy both proof.Suite and daga.Suite
 type SuiteProof struct {
 	Suite
 }
 
 func newSuiteProof(suite Suite) SuiteProof {
-	// QUESTION ask if it is useful + whether return T or *T in interface var ??
 	return SuiteProof{suite}
 }
 
