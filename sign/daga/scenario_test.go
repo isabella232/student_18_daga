@@ -3,11 +3,10 @@ package daga_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/dedis/kyber"
+	"github.com/dedis/student_18_daga/sign/daga"
 	"math/rand"
 	"testing"
-
-	"github.com/dedis/student_17_pop_fs/daga"
-	"gopkg.in/dedis/crypto.v0/abstract"
 )
 
 func TestScenario(test *testing.T) {
@@ -17,7 +16,7 @@ func TestScenario(test *testing.T) {
 	s := 10
 
 	//Generates clients
-	var X []abstract.Point
+	var X []kyber.Point
 	var clients []daga.Client
 	for i := 0; i < c; i++ {
 		client, err := daga.CreateClient(i, nil)
@@ -30,7 +29,7 @@ func TestScenario(test *testing.T) {
 	}
 
 	//Generates servers
-	var Y []abstract.Point
+	var Y []kyber.Point
 	var servers []daga.Server
 	for j := 0; j < s; j++ {
 		server, err := daga.CreateServer(j, nil)
@@ -43,13 +42,13 @@ func TestScenario(test *testing.T) {
 	}
 
 	//Generate server's round secrets
-	var R []abstract.Point
+	var R []kyber.Point
 	for i := range servers {
 		R = append(R, servers[i].GenerateNewRoundSecret())
 	}
 
 	//Generate client's generators
-	var H []abstract.Point
+	var H []kyber.Point
 	for i := 0; i < len(X); i++ {
 		temp, err := daga.GenerateClientGenerator(i, &R)
 		if err != nil {
@@ -128,7 +127,7 @@ func TestScenario(test *testing.T) {
 	//The commitments and the openings will be stored in the following array to ease their manipulation
 	//They will be transferred on the network according to the protocol below
 	var commits []daga.Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	//Initialize both arrays
 	for num := 0; num < len(context.G.Y); num++ {
 		commits = append(commits, daga.Commitment{})

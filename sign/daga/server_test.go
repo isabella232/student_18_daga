@@ -2,19 +2,17 @@ package daga
 
 import (
 	"crypto/sha512"
+	"github.com/dedis/kyber"
 	"io"
 	"math/rand"
 	"strconv"
 	"testing"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/random"
-)
+	)
 
 func TestCreateServer(t *testing.T) {
 	//Normal execution
 	i := rand.Int()
-	s := suite.Scalar().Pick(random.Stream)
+	s := suite.Scalar().Pick(suite.RandomStream())
 	server, err := CreateServer(i, s)
 	if err != nil || server.index != i || !server.private.Equal(s) {
 		t.Error("Cannot initialize a new server with a given private key")
@@ -33,7 +31,7 @@ func TestCreateServer(t *testing.T) {
 }
 
 func TestGetPublicKey_Server(t *testing.T) {
-	server, _ := CreateServer(0, suite.Scalar().Pick(random.Stream))
+	server, _ := CreateServer(0, suite.Scalar().Pick(suite.RandomStream()))
 	P := server.GetPublicKey()
 	if P == nil {
 		t.Error("Cannot get public key")
@@ -49,14 +47,14 @@ func TestGenerateCommitment(t *testing.T) {
 	if err != nil {
 		t.Error("Cannot generate a commitment")
 	}
-	if !commit.commit.Equal(suite.Point().Mul(nil, opening)) {
+	if !commit.commit.Equal(suite.Point().Mul(opening, nil)) {
 		t.Error("Cannot open the commitment")
 	}
 	msg, err := commit.commit.MarshalBinary()
 	if err != nil {
 		t.Error("Invalid commitment")
 	}
-	err = ECDSAVerify(suite.Point().Mul(nil, servers[0].private), msg, commit.sig.sig)
+	err = ECDSAVerify(suite.Point().Mul(servers[0].private, nil), msg, commit.sig.sig)
 	if err != nil {
 		t.Error("Wrong signature")
 	}
@@ -104,7 +102,7 @@ func TestCheckOpenings(t *testing.T) {
 
 	//Generate commitments
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -184,7 +182,7 @@ func TestInitializeChallenge(t *testing.T) {
 
 	//Generate commitments
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -231,7 +229,7 @@ func TestCheckUpdateChallenge(t *testing.T) {
 
 	//Generate commitments
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -293,12 +291,12 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	}
 
 	//Change a commitment
-	challenge.commits[0].commit = suite.Point().Mul(nil, suite.Scalar().One())
+	challenge.commits[0].commit = suite.Point().Mul(suite.Scalar().One(), nil)
 	err = servers[0].CheckUpdateChallenge(context, challenge)
 	if err == nil {
 		t.Error("Invalid commitment signature check")
 	}
-	challenge.commits[0].commit = suite.Point().Mul(nil, challenge.openings[0])
+	challenge.commits[0].commit = suite.Point().Mul(challenge.openings[0], nil)
 
 	//Change an opening
 	challenge.openings[0] = suite.Scalar().Zero()
@@ -314,7 +312,7 @@ func TestFinalizeChallenge(t *testing.T) {
 
 	//Generate commitments
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -384,7 +382,7 @@ func TestInitializeServerMessage(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -433,7 +431,7 @@ func TestServerProtocol(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -567,7 +565,7 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -594,15 +592,17 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Prepare the proof
 	hasher := sha512.New()
-	var writer io.Writer = hasher
-	suite.Point().Mul(servMsg.request.sArray[0], servers[0].private).MarshalTo(writer)
+	var writer io.Writer = hasher  // ...
+	suite.Point().Mul(servers[0].private, servMsg.request.sArray[0]).MarshalTo(writer)
 	hash := hasher.Sum(nil)
-	rand := suite.Cipher(hash)
-	secret := suite.Scalar().Pick(rand)
+	hasher = suite.Hash()
+	hasher.Write(hash)
+	//rand := suite.Cipher(hash)
+	secret := suite.Scalar().SetBytes(hasher.Sum(nil))
 
 	inv := suite.Scalar().Inv(secret)
 	exp := suite.Scalar().Mul(servers[0].r, inv)
-	T := suite.Point().Mul(T0, exp)
+	T := suite.Point().Mul(exp, T0)
 
 	//Normal execution
 	proof, err := servers[0].generateServerProof(context, secret, T, &servMsg)
@@ -647,7 +647,7 @@ func TestVerifyServerProof(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -673,15 +673,17 @@ func TestVerifyServerProof(t *testing.T) {
 
 	//Prepare the proof
 	hasher := sha512.New()
-	var writer io.Writer = hasher
-	suite.Point().Mul(servMsg.request.sArray[0], servers[0].private).MarshalTo(writer)
+	var writer io.Writer = hasher // ..
+	suite.Point().Mul(servers[0].private, servMsg.request.sArray[0]).MarshalTo(writer)
 	hash := hasher.Sum(nil)
-	rand := suite.Cipher(hash)
-	secret := suite.Scalar().Pick(rand)
+	hasher = suite.Hash()
+	hasher.Write(hash)
+	//rand := suite.Cipher(hash)
+	secret := suite.Scalar().SetBytes(hasher.Sum(nil))
 
 	inv := suite.Scalar().Inv(secret)
 	exp := suite.Scalar().Mul(servers[0].r, inv)
-	T := suite.Point().Mul(T0, exp)
+	T := suite.Point().Mul(exp, T0)
 
 	//Generate the proof
 	proof, _ := servers[0].generateServerProof(context, secret, T, &servMsg)
@@ -801,7 +803,7 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -867,7 +869,7 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -985,13 +987,13 @@ func TestGenerateNewRoundSecret(t *testing.T) {
 	if R == nil {
 		t.Error("Cannot generate new round secret")
 	}
-	if R.Equal(suite.Point().Mul(nil, suite.Scalar().One())) {
+	if R.Equal(suite.Point().Mul(suite.Scalar().One(), nil)) {
 		t.Error("R is the generator")
 	}
 	if servers[0].r == nil {
 		t.Error("r was not saved to the server")
 	}
-	if !R.Equal(suite.Point().Mul(nil, servers[0].r)) {
+	if !R.Equal(suite.Point().Mul(servers[0].r, nil)) {
 		t.Error("Mismatch between r and R")
 	}
 }
@@ -1003,7 +1005,7 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	//Generate a valid challenge
 	var commits []Commitment
-	var openings []abstract.Scalar
+	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
 		commit, open, _ := servers[i].GenerateCommitment(context)
 		commits = append(commits, *commit)
@@ -1041,5 +1043,4 @@ func TestToBytes_ServerProof(t *testing.T) {
 	if err != nil || data == nil {
 		t.Error("Cannot convert misbehaving proof")
 	}
-
 }

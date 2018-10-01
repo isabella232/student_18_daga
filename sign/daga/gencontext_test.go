@@ -1,11 +1,9 @@
 package daga
 
 import (
+	"github.com/dedis/kyber"
 	"math/rand"
 	"testing"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/random"
 )
 
 func TestGenerateTestContext(t *testing.T) {
@@ -77,9 +75,9 @@ func TestGenerateTestContext(t *testing.T) {
 func TestGenerateClientGenerator(t *testing.T) {
 	//Test correct execution of the function
 	index := rand.Int()
-	var commits []abstract.Point
+	var commits []kyber.Point
 	for i := 0; i < rand.Intn(10)+1; i++ {
-		commits = append(commits, suite.Point().Mul(nil, suite.Scalar().Pick(random.Stream)))
+		commits = append(commits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	}
 	h, err := GenerateClientGenerator(index, &commits)
 	if err != nil || h == nil {
@@ -97,7 +95,7 @@ func TestGenerateClientGenerator(t *testing.T) {
 		t.Errorf("Error in handling negative index: %d", index)
 	}
 
-	h, err = GenerateClientGenerator(index, new([]abstract.Point))
+	h, err = GenerateClientGenerator(index, new([]kyber.Point))
 	if h != nil || err == nil {
 		t.Errorf("Error in handling empty commits")
 	}

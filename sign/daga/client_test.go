@@ -1,18 +1,17 @@
 package daga
 
 import (
+	"github.com/dedis/kyber"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/random"
 )
 
 func TestCreateClient(t *testing.T) {
 	//Normal execution
 	i := rand.Int()
-	s := suite.Scalar().Pick(random.Stream)
+	s := suite.Scalar().Pick(suite.RandomStream())
 	client, err := CreateClient(i, s)
 	if err != nil || client.index != i || !client.private.Equal(s) {
 		t.Error("Cannot initialize a new client with a given private key")
@@ -32,7 +31,7 @@ func TestCreateClient(t *testing.T) {
 }
 
 func TestGetPublicKey_Client(t *testing.T) {
-	client, _ := CreateClient(0, suite.Scalar().Pick(random.Stream))
+	client, _ := CreateClient(0, suite.Scalar().Pick(suite.RandomStream()))
 	P := client.GetPublicKey()
 	if P == nil {
 		t.Error("Cannot get public key")
@@ -106,7 +105,7 @@ func TestGenerateProofResponses(t *testing.T) {
 	_, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -144,9 +143,9 @@ func TestGenerateProofResponses(t *testing.T) {
 	}
 
 	//Incorrect challenges
-	var fake abstract.Scalar
+	var fake kyber.Scalar
 	for {
-		fake = suite.Scalar().Pick(random.Stream)
+		fake = suite.Scalar().Pick(suite.RandomStream())
 		if !fake.Equal(cs) {
 			break
 		}
@@ -186,7 +185,7 @@ func TestVerifyClientProof(t *testing.T) {
 	tproof, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -254,7 +253,7 @@ func TestAssembleMessage(t *testing.T) {
 	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -284,7 +283,7 @@ func TestAssembleMessage(t *testing.T) {
 	if clientMsg != nil {
 		t.Error("Wrong check: Empty S")
 	}
-	clientMsg = clients[0].AssembleMessage(context, &[]abstract.Point{}, T0, &challenge, tclient, c, r)
+	clientMsg = clients[0].AssembleMessage(context, &[]kyber.Point{}, T0, &challenge, tclient, c, r)
 	if clientMsg != nil {
 		t.Error("Wrong check: len(S) = 0")
 	}
@@ -300,7 +299,7 @@ func TestAssembleMessage(t *testing.T) {
 	if clientMsg != nil {
 		t.Error("Wrong check: Empty t")
 	}
-	clientMsg = clients[0].AssembleMessage(context, &S, T0, &challenge, &[]abstract.Point{}, c, r)
+	clientMsg = clients[0].AssembleMessage(context, &S, T0, &challenge, &[]kyber.Point{}, c, r)
 	if clientMsg != nil {
 		t.Error("Wrong check: len(t) = 0 ")
 	}
@@ -308,7 +307,7 @@ func TestAssembleMessage(t *testing.T) {
 	if clientMsg != nil {
 		t.Error("Wrong check: Empty c")
 	}
-	clientMsg = clients[0].AssembleMessage(context, &S, T0, &challenge, tclient, &[]abstract.Scalar{}, r)
+	clientMsg = clients[0].AssembleMessage(context, &S, T0, &challenge, tclient, &[]kyber.Scalar{}, r)
 	if clientMsg != nil {
 		t.Error("Wrong check: Empty ")
 	}
@@ -316,7 +315,7 @@ func TestAssembleMessage(t *testing.T) {
 	if clientMsg != nil {
 		t.Error("Wrong check: Empty r")
 	}
-	clientMsg = clients[0].AssembleMessage(context, &S, T0, &challenge, tclient, c, &[]abstract.Scalar{})
+	clientMsg = clients[0].AssembleMessage(context, &S, T0, &challenge, tclient, c, &[]kyber.Scalar{})
 	if clientMsg != nil {
 		t.Error("Wrong check: Empty ")
 	}
@@ -334,7 +333,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -416,7 +415,7 @@ func TestValidateClientMessage(t *testing.T) {
 	tproof, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -445,7 +444,7 @@ func TestValidateClientMessage(t *testing.T) {
 
 	//Modifying the length of various elements
 	ScratchMsg := ClientMsg
-	ScratchMsg.proof.c = append(ScratchMsg.proof.c, suite.Scalar().Pick(random.Stream))
+	ScratchMsg.proof.c = append(ScratchMsg.proof.c, suite.Scalar().Pick(suite.RandomStream()))
 	check = verifyClientProof(ScratchMsg)
 	if check {
 		t.Errorf("Incorrect length check for c: %d instead of %d", len(ScratchMsg.proof.c), len(clients))
@@ -457,7 +456,7 @@ func TestValidateClientMessage(t *testing.T) {
 	}
 
 	ScratchMsg = ClientMsg
-	ScratchMsg.proof.r = append(ScratchMsg.proof.r, suite.Scalar().Pick(random.Stream))
+	ScratchMsg.proof.r = append(ScratchMsg.proof.r, suite.Scalar().Pick(suite.RandomStream()))
 	check = verifyClientProof(ScratchMsg)
 	if check {
 		t.Errorf("Incorrect length check for r: %d instead of %d", len(ScratchMsg.proof.c), len(clients))
@@ -469,7 +468,7 @@ func TestValidateClientMessage(t *testing.T) {
 	}
 
 	ScratchMsg = ClientMsg
-	ScratchMsg.proof.t = append(ScratchMsg.proof.t, suite.Point().Mul(nil, suite.Scalar().Pick(random.Stream)))
+	ScratchMsg.proof.t = append(ScratchMsg.proof.t, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	check = verifyClientProof(ScratchMsg)
 	if check {
 		t.Errorf("Incorrect length check for t: %d instead of %d", len(ScratchMsg.proof.c), len(clients))
@@ -481,7 +480,7 @@ func TestValidateClientMessage(t *testing.T) {
 	}
 
 	ScratchMsg = ClientMsg
-	ScratchMsg.sArray = append(ScratchMsg.sArray, suite.Point().Mul(nil, suite.Scalar().Pick(random.Stream)))
+	ScratchMsg.sArray = append(ScratchMsg.sArray, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	check = verifyClientProof(ScratchMsg)
 	if check {
 		t.Errorf("Incorrect length check for S: %d instead of %d", len(ScratchMsg.sArray), len(servers)+2)
@@ -494,12 +493,12 @@ func TestValidateClientMessage(t *testing.T) {
 
 	//Modify the value of the generator in S[1]
 	ScratchMsg = ClientMsg
-	ScratchMsg.sArray[1] = suite.Point().Mul(nil, suite.Scalar().Pick(random.Stream))
+	ScratchMsg.sArray[1] = suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil)
 	check = verifyClientProof(ScratchMsg)
 	if check {
 		t.Errorf("Incorrect check for the generator in S[1]")
 	}
-	ScratchMsg.sArray[1] = suite.Point().Mul(nil, suite.Scalar().One())
+	ScratchMsg.sArray[1] = suite.Point().Mul(suite.Scalar().One(), nil)
 
 	//Remove T0
 	ScratchMsg.t0 = nil
@@ -515,7 +514,7 @@ func TestToBytes_ClientMessage(t *testing.T) {
 	tproof, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -552,7 +551,7 @@ func TestToBytes_ClientProof(t *testing.T) {
 	tproof, v, w := clients[0].GenerateProofCommitments(context, T0, s)
 
 	//Dumb challenge generation
-	cs := suite.Scalar().Pick(random.Stream)
+	cs := suite.Scalar().Pick(suite.RandomStream())
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
@@ -578,5 +577,4 @@ func TestToBytes_ClientProof(t *testing.T) {
 	if data == nil {
 		t.Error("Data is empty for a correct proof")
 	}
-
 }

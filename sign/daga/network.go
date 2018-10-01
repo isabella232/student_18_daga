@@ -2,18 +2,19 @@ package daga
 
 import (
 	"fmt"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
+	"github.com/dedis/kyber"
 )
+
+// ......
 
 //Provides functions to help with JSON marshal/unmarshal
 
-/*NetPoint provides a JSON compatible representation of a abstract.Point*/
+/*NetPoint provides a JSON compatible representation of a kyber.Point*/
 type NetPoint struct {
 	Value []byte
 }
 
-/*NetScalar provides a JSON compatible representation of a abstract.Scalar*/
+/*NetScalar provides a JSON compatible representation of a kyber.Scalar*/
 type NetScalar struct {
 	Value []byte
 }
@@ -92,7 +93,7 @@ type NetServerMessage struct {
 	Sigs    []NetServerSignature
 }
 
-func NetEncodePoint(point abstract.Point) (*NetPoint, error) {
+func NetEncodePoint(point kyber.Point) (*NetPoint, error) {
 	value, err := point.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("Encode error\n%s", err)
@@ -101,7 +102,7 @@ func NetEncodePoint(point abstract.Point) (*NetPoint, error) {
 	return &NetPoint{Value: value}, nil
 }
 
-func (netpoint *NetPoint) NetDecode() (abstract.Point, error) {
+func (netpoint *NetPoint) NetDecode() (kyber.Point, error) {
 	point := suite.Point().Null()
 	err := point.UnmarshalBinary(netpoint.Value)
 	if err != nil {
@@ -111,7 +112,7 @@ func (netpoint *NetPoint) NetDecode() (abstract.Point, error) {
 	return point, nil
 }
 
-func NetEncodeScalar(scalar abstract.Scalar) (*NetScalar, error) {
+func NetEncodeScalar(scalar kyber.Scalar) (*NetScalar, error) {
 	value, err := scalar.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("Encode error\n%s", err)
@@ -120,7 +121,7 @@ func NetEncodeScalar(scalar abstract.Scalar) (*NetScalar, error) {
 	return &NetScalar{Value: value}, nil
 }
 
-func (netscalar *NetScalar) NetDecode() (abstract.Scalar, error) {
+func (netscalar *NetScalar) NetDecode() (kyber.Scalar, error) {
 	scalar := suite.Scalar().Zero()
 	err := scalar.UnmarshalBinary(netscalar.Value)
 	if err != nil {
@@ -130,7 +131,7 @@ func (netscalar *NetScalar) NetDecode() (abstract.Scalar, error) {
 	return scalar, nil
 }
 
-func NetEncodePoints(points []abstract.Point) ([]NetPoint, error) {
+func NetEncodePoints(points []kyber.Point) ([]NetPoint, error) {
 	var netpoints []NetPoint
 	for i, p := range points {
 		temp, err := p.MarshalBinary()
@@ -142,8 +143,8 @@ func NetEncodePoints(points []abstract.Point) ([]NetPoint, error) {
 	return netpoints, nil
 }
 
-func NetDecodePoints(netpoints []NetPoint) ([]abstract.Point, error) {
-	var points []abstract.Point
+func NetDecodePoints(netpoints []NetPoint) ([]kyber.Point, error) {
+	var points []kyber.Point
 	if len(netpoints) == 0 {
 		return nil, fmt.Errorf("Empty array")
 	}
@@ -158,7 +159,7 @@ func NetDecodePoints(netpoints []NetPoint) ([]abstract.Point, error) {
 	return points, nil
 }
 
-func NetEncodeScalars(scalars []abstract.Scalar) ([]NetScalar, error) {
+func NetEncodeScalars(scalars []kyber.Scalar) ([]NetScalar, error) {
 	var netscalars []NetScalar
 	for i, s := range scalars {
 		temp, err := s.MarshalBinary()
@@ -170,8 +171,8 @@ func NetEncodeScalars(scalars []abstract.Scalar) ([]NetScalar, error) {
 	return netscalars, nil
 }
 
-func NetDecodeScalars(netscalars []NetScalar) ([]abstract.Scalar, error) {
-	var scalars []abstract.Scalar
+func NetDecodeScalars(netscalars []NetScalar) ([]kyber.Scalar, error) {
+	var scalars []kyber.Scalar
 	if len(netscalars) == 0 {
 		return nil, fmt.Errorf("Empty array")
 	}

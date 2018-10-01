@@ -2,16 +2,17 @@ package daga
 
 import (
 	"fmt"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/ed25519"
-	"gopkg.in/dedis/crypto.v0/sign"
+	"github.com/dedis/kyber"
+	"github.com/dedis/kyber/group/edwards25519"
+	"github.com/dedis/kyber/sign/schnorr"
 )
+
+// QUESTION this code is not copy pastable into kyber this makes no sense, (e.g no Suite, strange things, etc..)
 
 /*Members contains the list of client's (X) and server's (Y) public keys*/
 type Members struct {
-	X []abstract.Point
-	Y []abstract.Point
+	X []kyber.Point
+	Y []kyber.Point
 }
 
 /*ContextEd25519 holds all the context elements for DAGA with the ed25519 curve
@@ -20,16 +21,17 @@ R is the server's commitments
 H is the client's per-round generators*/
 type ContextEd25519 struct {
 	G Members
-	R []abstract.Point
-	H []abstract.Point
+	R []kyber.Point
+	H []kyber.Point
 }
 
 //Suite exports the cryptographic interface to external packages
-var Suite = ed25519.NewAES128SHA256Ed25519(false)
-var suite = ed25519.NewAES128SHA256Ed25519(false)
+var Suite = edwards25519.NewBlakeSHA256Ed25519()
+var suite = edwards25519.NewBlakeSHA256Ed25519() // QUESTION WTF ?
 
 /*ECDSASign gnerates a Schnorr signature*/
-func ECDSASign(priv abstract.Scalar, msg []byte) (s []byte, err error) {
+// QUESTION another WTF, why bring ECDSA here ? but ok ..
+func ECDSASign(priv kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
 	if priv == nil {
 		return nil, fmt.Errorf("Empty private key")
@@ -38,7 +40,7 @@ func ECDSASign(priv abstract.Scalar, msg []byte) (s []byte, err error) {
 		return nil, fmt.Errorf("Empty message")
 	}
 
-	s, err = sign.Schnorr(suite, priv, msg)
+	s, err = schnorr.Sign(suite, priv, msg)
 	if err != nil {
 		return nil, fmt.Errorf("Error in the signature generation")
 	}
@@ -46,7 +48,8 @@ func ECDSASign(priv abstract.Scalar, msg []byte) (s []byte, err error) {
 }
 
 /*ECDSAVerify checks if a Schnorr signature is valid*/
-func ECDSAVerify(public abstract.Point, msg, sig []byte) (err error) {
+// QUESTION same WTF as above
+func ECDSAVerify(public kyber.Point, msg, sig []byte) (err error) {
 	//Input checks
 	if public == nil {
 		return fmt.Errorf("Empty public key")
@@ -58,11 +61,12 @@ func ECDSAVerify(public abstract.Point, msg, sig []byte) (err error) {
 		return fmt.Errorf("Empty signature")
 	}
 
-	err = sign.VerifySchnorr(suite, public, msg, sig)
+	err = schnorr.Verify(suite, public, msg, sig)
 	return err
 }
 
 /*ToBytes is a utility functton to convert a ContextEd25519 into []byte, used in signatures*/
+// QUESTION WTF ?
 func (context *ContextEd25519) ToBytes() (data []byte, err error) {
 	temp, e := PointArrayToBytes(&context.G.X)
 	if e != nil {
@@ -91,8 +95,9 @@ func (context *ContextEd25519) ToBytes() (data []byte, err error) {
 	return data, nil
 }
 
-/*PointArrayToBytes is a utility function to convert a abstract.Point array into []byte, used in signatures*/
-func PointArrayToBytes(array *[]abstract.Point) (data []byte, err error) {
+/*PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures*/
+// QUESTION same as above
+func PointArrayToBytes(array *[]kyber.Point) (data []byte, err error) {
 	for _, p := range *array {
 		temp, e := p.MarshalBinary()
 		if e != nil {
@@ -103,8 +108,8 @@ func PointArrayToBytes(array *[]abstract.Point) (data []byte, err error) {
 	return data, nil
 }
 
-/*ScalarArrayToBytes is a utility function to convert a abstract.Scalar array into []byte, used in signatures*/
-func ScalarArrayToBytes(array *[]abstract.Scalar) (data []byte, err error) {
+/*ScalarArrayToBytes is a utility function to convert a kyber.Scalar array into []byte, used in signatures*/
+func ScalarArrayToBytes(array *[]kyber.Scalar) (data []byte, err error) {
 	for _, s := range *array {
 		temp, e := s.MarshalBinary()
 		if e != nil {

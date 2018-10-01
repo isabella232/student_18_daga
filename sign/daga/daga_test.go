@@ -1,15 +1,13 @@
 package daga
 
 import (
+	"github.com/dedis/kyber"
 	"math/rand"
 	"testing"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/random"
-)
+	)
 
 func TestECDSASign(t *testing.T) {
-	priv := suite.Scalar().Pick(random.Stream)
+	priv := suite.Scalar().Pick(suite.RandomStream())
 
 	//Normal execution
 	sig, err := ECDSASign(priv, []byte("Test String"))
@@ -32,12 +30,12 @@ func TestECDSASign(t *testing.T) {
 
 func TestECDSAVerify(t *testing.T) {
 	//Correct signature
-	priv := suite.Scalar().Pick(random.Stream)
+	priv := suite.Scalar().Pick(suite.RandomStream())
 	msg := []byte("Test String")
 	sig, _ := ECDSASign(priv, msg)
 
 	//Normal signature
-	check := ECDSAVerify(suite.Point().Mul(nil, priv), msg, sig)
+	check := ECDSAVerify(suite.Point().Mul(priv, nil), msg, sig)
 	if check != nil {
 		t.Error("Cannot verify signatures")
 	}
@@ -46,7 +44,7 @@ func TestECDSAVerify(t *testing.T) {
 	var fake []byte
 	copy(fake, msg)
 	fake = append(fake, []byte("A")...)
-	check = ECDSAVerify(suite.Point().Mul(nil, priv), fake, sig)
+	check = ECDSAVerify(suite.Point().Mul(priv, nil), fake, sig)
 	if check == nil {
 		t.Error("Wrong check: Message edited")
 	}
@@ -54,7 +52,7 @@ func TestECDSAVerify(t *testing.T) {
 	//Signature modification
 	newsig := append([]byte("A"), sig...)
 	newsig = newsig[:len(sig)]
-	check = ECDSAVerify(suite.Point().Mul(nil, priv), msg, newsig)
+	check = ECDSAVerify(suite.Point().Mul(priv, nil), msg, newsig)
 	if check == nil {
 		t.Error("Wrong check: signature changed")
 	}
@@ -66,25 +64,25 @@ func TestECDSAVerify(t *testing.T) {
 	}
 
 	//Empty message
-	check = ECDSAVerify(suite.Point().Mul(nil, priv), nil, sig)
+	check = ECDSAVerify(suite.Point().Mul(priv, nil), nil, sig)
 	if check == nil {
 		t.Error("Wrong check: empty message")
 	}
 
 	//0 length message
-	check = ECDSAVerify(suite.Point().Mul(nil, priv), []byte{}, sig)
+	check = ECDSAVerify(suite.Point().Mul(priv, nil), []byte{}, sig)
 	if check == nil {
 		t.Error("Wrong check: 0 length message")
 	}
 
 	//Empty signature
-	check = ECDSAVerify(suite.Point().Mul(nil, priv), msg, nil)
+	check = ECDSAVerify(suite.Point().Mul(priv, nil), msg, nil)
 	if check == nil {
 		t.Error("Wrong check: empty signature")
 	}
 
 	//0 length signature
-	check = ECDSAVerify(suite.Point().Mul(nil, priv), msg, []byte{})
+	check = ECDSAVerify(suite.Point().Mul(priv, nil), msg, []byte{})
 	if check == nil {
 		t.Error("Wrong check: 0 length signature")
 	}
@@ -102,9 +100,9 @@ func TestToBytes(t *testing.T) {
 
 func TestPointArrayToBytes(t *testing.T) {
 	length := rand.Intn(10) + 1
-	var Points []abstract.Point
+	var Points []kyber.Point
 	for i := 0; i < length; i++ {
-		Points = append(Points, suite.Point().Mul(nil, suite.Scalar().Pick(random.Stream)))
+		Points = append(Points, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	}
 	data, err := PointArrayToBytes(&Points)
 	if err != nil || data == nil || len(data) == 0 {
@@ -114,9 +112,9 @@ func TestPointArrayToBytes(t *testing.T) {
 
 func TestScalarArrayToBytes(t *testing.T) {
 	length := rand.Intn(10) + 1
-	var Scalars []abstract.Scalar
+	var Scalars []kyber.Scalar
 	for i := 0; i < length; i++ {
-		Scalars = append(Scalars, suite.Scalar().Pick(random.Stream))
+		Scalars = append(Scalars, suite.Scalar().Pick(suite.RandomStream()))
 	}
 	data, err := ScalarArrayToBytes(&Scalars)
 	if err != nil || data == nil || len(data) == 0 {
