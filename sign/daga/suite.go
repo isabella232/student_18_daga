@@ -6,7 +6,6 @@ import (
 	"github.com/dedis/fixbuf"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/group/edwards25519"
-	"github.com/dedis/kyber/group/mod"
 	"github.com/dedis/kyber/util/random"
 	"github.com/dedis/kyber/xof/blake2xb"
 	"hash"
@@ -17,10 +16,6 @@ import (
 type SuiteEC struct {
 	edwards25519.Curve  // twisted edwards curve used in Ed25519 (birationnaly equivalent to Curve25519 <== FIXME naming issue in kyber, the Curve25519 of kyber is the same as edwards25519 only allowing vartime ops
 }
-// QUESTION as an alternative to current construction SuiteProof, can just embedd edward's suite in SuiteEC and avoid code duplication that defines everything but I'm not fan of take everything even if not needed... ?
-// QUESTION I think my solution is more flexible too but maybe overkill, the last and best alternative is to clean other packages to decouple the functionality that they internally need from the functionality that they need but that is dictated by the user code
-// QUESTION ok I have no choice in fact, marshalling is internal to group.... ?? => ok possible but now there is a little code duplication
-// QUESTION why internal ?
 
 func newSuiteEC() Suite {
 	// QUESTION TODO ask if it is useful + return T or *T in interface var , what are the best practises and pitfalls to avoid ??
@@ -33,9 +28,9 @@ func (s SuiteEC) newKey() kyber.Scalar {
 
 /* returns new hash.Hash computing the SHA-256 checksum
 	this hash is used in DAGA to derive valid Scalars of the group used
-	// TODO comments..
+	// TODO doc
  */
-func (s SuiteEC) hashOne() hash.Hash {
+func (s SuiteEC) Hash() hash.Hash {
 	return sha256.New()
 }
 
@@ -49,6 +44,9 @@ func (s SuiteEC) RandomStream() cipher.Stream {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// QUESTION as an alternative to current construction SuiteProof, can just embedd edward's suite in SuiteEC and avoid code duplication that defines everything but I'm not fan of take everything even if not needed... ?
+// QUESTION I think my solution is more flexible too but maybe overkill, the last and best alternative is to clean other packages to decouple the functionality that they internally need from the functionality that they need but that is dictated by the user code
+// QUESTION ok I have no choice in fact, marshalling is internal to group.... why ?? => ok possible but now there is a little code duplication (New())
 // used to give to the proof framework the method it needs, satisfy both proof.Suite and daga.Suite
 type SuiteProof struct {
 	Suite
@@ -59,7 +57,7 @@ func newSuiteProof(suite Suite) SuiteProof {
 }
 
 func (s SuiteProof) Hash() hash.Hash {
-	return s.hashOne()
+	return s.Hash()
 }
 
 // XOF returns an XOF which is implemented via the Blake2b hash.
@@ -68,10 +66,12 @@ func (s SuiteProof) XOF(key []byte) kyber.XOF {
 }
 
 func (s SuiteProof) Write(w io.Writer, objs ...interface{}) error {
+	// TODO choose
 	return fixbuf.Write(w, objs)
 }
 
 func (s SuiteProof) Read(r io.Reader, objs ...interface{}) error {
+	// TODO choose
 	return fixbuf.Read(r, s, objs...)
 }
 
@@ -89,13 +89,13 @@ func (s SuiteProof) New(t reflect.Type) interface{} {
 	return nil
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-type SuiteSchnorr struct {
-	mod.Int
-}
-
-func newSuiteSchnorr() Suite {
-	return new(SuiteSchnorr)
-}
+// TODO if time, concrete implementation that uses same primitives that in DAGA paper (work in a schnorr group)
+//type SuiteSchnorr struct {
+//	mod.Int
+//}
+//
+//func newSuiteSchnorr() Suite {
+//	return new(SuiteSchnorr)
+//}
 
