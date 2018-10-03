@@ -147,17 +147,22 @@ func (c client) createRequest(context authenticationContext) (authenticationMess
 	// DAGA client Steps 1, 2, 3:
 	ts, err := newInitialTagAndCommitments(context.g.y, context.h[c.index])
 	if err != nil {
-		// TODO onet.log something
+		// TODO log
+		return authenticationMessage{}, err
 	}
+
+	// TODO server selection and circuit establishment + way to give circuit access to prove() see TODOs in prove()
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PK client, with one random server
-	P := prove(context, c, ts)
-
-	M0 := authenticationMessage{
-		c:                        context,
-		initialTagAndCommitments: ts,
-		p0:                       P,
+	if P, err := prove(context, c, ts); err != nil { // TODO server communication not done
+		// TODO log
+		return authenticationMessage{}, err
+	} else {
+		M0 := authenticationMessage{
+			c:                        context,
+			initialTagAndCommitments: ts,
+			p0:                       P,
+		}
+		return M0, nil
 	}
-
-	return M0, nil
 }
