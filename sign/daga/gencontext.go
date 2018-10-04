@@ -34,6 +34,7 @@ func GenerateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point
 	return
 }
 
+// QUESTION RHAAAAAAA why this not used in scenario test + why here + fuuuuck ..
 func generateTestContext(c, s int) (clients []Client, servers []Server, context *authenticationContext, err error) {
 	context = &authenticationContext{}
 	if c <= 0 {
@@ -71,6 +72,5 @@ func generateTestContext(c, s int) (clients []Client, servers []Server, context 
 
 		context.h = append(context.h, temp)
 	}
-
 	return clients, servers, context, nil
 }
