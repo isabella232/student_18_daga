@@ -379,7 +379,7 @@ func TestInitializeServerMessage(t *testing.T) {
 	}
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -404,7 +404,7 @@ func TestInitializeServerMessage(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 
 	//Normal execution
 	servMsg := servers[0].InitializeServerMessage(&clientMessage)
@@ -429,7 +429,7 @@ func TestServerProtocol(t *testing.T) {
 	}
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -454,7 +454,7 @@ func TestServerProtocol(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 	//Original hash for later test
 	hasher := sha512.New()
 	var writer io.Writer = hasher
@@ -564,7 +564,7 @@ func TestGenerateServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(1, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -588,7 +588,7 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 
 	//Create the initial server message
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
@@ -647,7 +647,7 @@ func TestVerifyServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(1, 3)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -671,7 +671,7 @@ func TestVerifyServerProof(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
@@ -800,7 +800,7 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(1, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _:= tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -825,7 +825,7 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 
 	proof, err := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
 	if err != nil || proof == nil {
@@ -867,7 +867,7 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(1, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -892,7 +892,7 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 
 	proof, _ := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
 
@@ -1004,7 +1004,7 @@ func TestToBytes_ServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(1, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, S := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -1029,7 +1029,7 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	//Assemble the client message
 	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: *c, t: *tclient, r: *r}}
+		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 

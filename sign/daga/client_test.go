@@ -66,31 +66,82 @@ func TestCreateRequest(t *testing.T) {
 	}
 }
 
+// GenerateProofCommitments creates and returns the client's commitments t
+// old implementation used for regression testing of the current implementation making use of the kyber.proof framework
+func generateProofCommitments(clientIndex int, context *authenticationContext, T0 kyber.Point, s kyber.Scalar) ([]kyber.Point, []kyber.Scalar, []kyber.Scalar) {
+	//Generates w randomly except for w[client.index] = 0
+	w := make([]kyber.Scalar, len(context.h))
+	for i := range w {
+		w[i] = suite.Scalar().Pick(suite.RandomStream())
+	}
+	w[clientIndex] = suite.Scalar().Zero()
+
+	//Generates random v (2 per client)
+	v := make([]kyber.Scalar, 2*len(context.h))
+	for i := range v {
+		v[i] = suite.Scalar().Pick(suite.RandomStream())
+	}
+
+	//Generates the commitments t (3 per clients)
+	t := make([]kyber.Point, 3*len(context.h))
+	for i := 0; i < len(context.h); i++ {
+		a := suite.Point().Mul(w[i], context.g.x[i])
+		b := suite.Point().Mul(v[2*i], nil)
+		t[3*i] = suite.Point().Add(a, b)
+
+		Sm := suite.Point().Mul(s, nil)
+		c := suite.Point().Mul(w[i], Sm)
+		d := suite.Point().Mul(v[2*i+1], nil)
+		t[3*i+1] = suite.Point().Add(c, d)
+
+		e := suite.Point().Mul(w[i], T0)
+		f := suite.Point().Mul(v[2*i+1], context.h[i])
+		t[3*i+2] = suite.Point().Add(e, f)
+	}
+
+	return t, v, w
+}
+
 func TestGenerateProofCommitments(t *testing.T) {
 	clients, _, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
 
 	// TODO here use previous's student code to regression test the new implementation (assuming his implementation was correct)
-	tproof, v, w := clients[0].GenerateProofCommitments(context, T0, s)
-	if tproof == nil {
-		t.Error("t is empty")
-	}
-	if v == nil {
-		t.Error("t is empty")  // QUESTION ... ^^ I'll make these tests pass but right after I'll rewrite them
-	}
-	if w == nil {
+	refCommits,_,_ := generateProofCommitments(0, context, T0, s)
+
+	// dummy channel to receive the commitments (they will be part of the returned proof)
+	// and dummy channel to send a dummy challenge as we are only interested in the commitments
+	// "push"/"pull" from the perspective of newClientProof()
+	pushCommitments := make(chan []kyber.Point)
+	pullChallenge := make(chan kyber.Scalar)
+	go func() {
+		<- pushCommitments
+		pullChallenge <- suite.Scalar().Pick(suite.RandomStream())
+	}()
+
+	proof, _ := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	commits := proof.t
+
+	if commits == nil {
 		t.Error("t is empty")
 	}
 
-	if len(*tproof) != 3*len(clients) {
-		t.Errorf("Wrong length of t: %d instead of %d", len(*tproof), 3*len(clients))
+	if len(commits) != 3*len(clients) || len(commits) != len(refCommits) {
+		t.Errorf("Wrong length of t: %d instead of %d", len(commits), 3*len(clients))
 	}
-	if len(*v) != 2*len(clients) {
-		t.Errorf("Wrong length of v: %d instead of %d", len(*v), 2*len(clients))
+
+	ok := func() bool {
+		for i,ref := range refCommits {
+			if !ref.Equal(commits[i]) {
+				return false
+			}
+		}
+		return true
 	}
-	if len(*w) != len(clients) {
-		t.Errorf("Wrong length of w: %d instead of %d", len(*w), len(clients))
+
+	if !ok() {
+		t.Error("regression, commitments differ from previous manual implementation")
 	}
 }
 
@@ -98,7 +149,7 @@ func TestGenerateProofResponses(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	_, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	_, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Dumb challenge generation
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -120,19 +171,19 @@ func TestGenerateProofResponses(t *testing.T) {
 		t.Error("Cannot generate proof responses")
 	}
 
-	if len(*c) != len(clients) {
-		t.Errorf("Wrong length of c: %d instead of %d", len(*c), len(clients))
+	if len(c) != len(clients) {
+		t.Errorf("Wrong length of c: %d instead of %d", len(c), len(clients))
 	}
-	if len(*r) != 2*len(clients) {
-		t.Errorf("Wrong length of r: %d instead of %d", len(*r), 2*len(clients))
+	if len(r) != 2*len(clients) {
+		t.Errorf("Wrong length of r: %d instead of %d", len(r), 2*len(clients))
 	}
 
-	for i, temp := range *c {
+	for i, temp := range c {
 		if temp == nil {
 			t.Errorf("nil in c at index %d", i)
 		}
 	}
-	for i, temp := range *r {
+	for i, temp := range r {
 		if temp == nil {
 			t.Errorf("nil in r at index %d", i)
 		}
@@ -179,7 +230,7 @@ func TestVerifyClientProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tproof, v, w := clients[0].GenerateProofCommitments(context, T0, s)
+	tproof, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Dumb challenge generation
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -202,7 +253,7 @@ func TestVerifyClientProof(t *testing.T) {
 	ClientMsg := authenticationMessage{
 		c: *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  clientProof{c: *c, cs: cs, r: *r, t: *tproof},
+		p0:  clientProof{c: c, cs: cs, r: r, t: tproof},
 	}
 
 	//Normal execution

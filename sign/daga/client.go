@@ -6,48 +6,8 @@ import (
 	"strconv"
 )
 
-
-// TODO use those for regression testing purposes of our implementation using proof framework
-//GenerateProofCommitments creates and returns the client's commitments t and the random wieghts w
-func (client *Client) GenerateProofCommitments(context *authenticationContext, T0 kyber.Point, s kyber.Scalar) (t *[]kyber.Point, v, w *[]kyber.Scalar) {
-	//Generates w randomly except for w[client.index] = 0
-	wtemp := make([]kyber.Scalar, len(context.h))
-	w = &wtemp
-	for i := range *w {
-		(*w)[i] = suite.Scalar().Pick(suite.RandomStream())
-	}
-	(*w)[client.index] = suite.Scalar().Zero()
-
-	//Generates random v (2 per client)
-	vtemp := make([]kyber.Scalar, 2*len(context.h))
-	v = &vtemp
-	for i := 0; i < len(*v); i++ {
-		(*v)[i] = suite.Scalar().Pick(suite.RandomStream())
-	}
-
-	//Generates the commitments t (3 per clients)
-	ttemp := make([]kyber.Point, 3*len(context.h))
-	t = &ttemp
-	for i := 0; i < len(context.h); i++ {
-		a := suite.Point().Mul((*w)[i], context.g.x[i])
-		b := suite.Point().Mul((*v)[2*i], nil)
-		(*t)[3*i] = suite.Point().Add(a, b)
-
-		Sm := suite.Point().Mul(s, nil)
-		c := suite.Point().Mul((*w)[i], Sm)
-		d := suite.Point().Mul((*v)[2*i+1], nil)
-		(*t)[3*i+1] = suite.Point().Add(c, d)
-
-		e := suite.Point().Mul((*w)[i], T0)
-		f := suite.Point().Mul((*v)[2*i+1], context.h[i])
-		(*t)[3*i+2] = suite.Point().Add(e, f)
-	}
-
-	return t, v, w
-}
-
 //GenerateProofResponses creates the responses to the challenge cs sent by the servers
-func (client *Client) GenerateProofResponses(context *authenticationContext, s kyber.Scalar, challenge *Challenge, v, w *[]kyber.Scalar) (c, r *[]kyber.Scalar, err error) {
+func (client *Client) GenerateProofResponses(context *authenticationContext, s kyber.Scalar, challenge *Challenge, v, w []kyber.Scalar) (c, r []kyber.Scalar, err error) {
 	//Check challenge signatures
 	msg, e := challenge.cs.MarshalBinary()
 	if e != nil {
@@ -61,28 +21,24 @@ func (client *Client) GenerateProofResponses(context *authenticationContext, s k
 	}
 
 	//Generates the c array
-	var ctemp []kyber.Scalar
-	for _, temp := range *w {
-		ctemp = append(ctemp, temp)
+	for _, temp := range w {
+		c = append(c, temp)
 	}
-	c = &ctemp
 	sum := suite.Scalar().Zero()
-	for _, i := range *w {
+	for _, i := range w {
 		sum = suite.Scalar().Add(sum, i)
 	}
-	(*c)[client.index] = suite.Scalar().Sub(challenge.cs, sum)
+	c[client.index] = suite.Scalar().Sub(challenge.cs, sum)
 
 	//Generates the responses
-	var rtemp []kyber.Scalar
-	for _, temp := range *v {
-		rtemp = append(rtemp, temp)
+	for _, temp := range v {
+		r = append(r, temp)
 	}
-	r = &rtemp
-	a := suite.Scalar().Mul((*c)[client.index], client.key.Private)
-	(*r)[2*client.index] = suite.Scalar().Sub((*v)[2*client.index], a)
+	a := suite.Scalar().Mul(c[client.index], client.key.Private)
+	r[2*client.index] = suite.Scalar().Sub(v[2*client.index], a)
 
-	b := suite.Scalar().Mul((*c)[client.index], s)
-	(*r)[2*client.index+1] = suite.Scalar().Sub((*v)[2*client.index+1], b)
+	b := suite.Scalar().Mul(c[client.index], s)
+	r[2*client.index+1] = suite.Scalar().Sub(v[2*client.index+1], b)
 
 	return c, r, nil
 }

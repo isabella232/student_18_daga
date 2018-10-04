@@ -463,6 +463,7 @@ func verifyServerProof(context *authenticationContext, i int, msg *ServerMessage
 	} else {
 		Tprevious = msg.tags[i-1]
 	}
+	// FIXME remember to use hashtwo when/where needed to keep things compatible with other implementations
 	hasher := suite.Hash()
 	Tprevious.MarshalTo(hasher)
 	msg.tags[i].MarshalTo(hasher)
