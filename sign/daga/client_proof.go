@@ -40,10 +40,10 @@ func newClientProverCtx(suite Suite, n int) *clientProverCtx {
 	// FIXME: see if/where I need to deep copy passed DATA !!
 	return &clientProverCtx{
 		SuiteProof:        newSuiteProof(suite),
-		commitsChan:       make(chan kyber.Point, n),  // Point FIFO of size n. Prover - Put() -> commitsChan -> commitments() - user-code
+		commitsChan:       make(chan kyber.Point, 3*n),  // Point FIFO of size n. Prover - Put() -> commitsChan -> commitments() - user-code
 		challengeChan:     make(chan kyber.Scalar),    // Scalar unbuffered chan. user-code - receiveChallenge() -> challengeChan -> Prover - PubRand()
 		subChallengesChan: make(chan []kyber.Scalar),  // []Scalar unbuffered chan. Prover - Put() -> subChallengesChan -> user-code - receiveChallenge()
-		responsesChan:     make(chan kyber.Scalar, n), // Scalar FIFO of size n. Prover - Put() -> responsesChan -> user-code - responses()
+		responsesChan:     make(chan kyber.Scalar, 2*n), // Scalar FIFO of size n. Prover - Put() -> responsesChan -> user-code - responses()
 	}
 }
 
@@ -142,11 +142,18 @@ func (cpCtx clientProverCtx) receiveChallenges(challenge kyber.Scalar) []kyber.S
 // TODO kind of copy pasted from hasprovercontext => see how/where to share code/helpers
 // TODO doc, not meant to be used by "user" code
 func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
+	// FIXME instead use type assertion as before and setbytes
 	if err := cpCtx.Read(&cipherStreamReader{cpCtx.RandomStream()}, message...); err != nil {
 		return fmt.Errorf("clientProverCtx.PriRand: error reading random stream: %v", err.Error())
 	}
 	return nil
 }
+
+// TODO FIXME maybe, pack the 2 channels in a new type and add methods NewTestProxy NewProxy etc..
+// for now only add two channels to the newClientProof function
+//type serverProxy struct {
+//	send
+//}
 
 /*clientProof stores the client's proof P as of "Syta - Identity Management Through Privacy Preserving Aut 4.3.7"
  */
@@ -157,13 +164,16 @@ type clientProof struct {
 	r  []kyber.Scalar
 }
 
-// FIXME name and interface
-// TODO two choices either have everything inside (pick server at random etc..)
-// TODO or have server "location/address whatever and channel" setup outside (need a chan to transmit server responses to
-// TODO or accept lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
-// TODO QUESTION attach it to a receiver ? (don't see the point but I have seen it in kyber)
+// FIXME names and interface
+// TODO decide communication with server
+// TODO lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
 // TODO doc, build the clientProof (as of DAGA paper) and return it to caller
-func prove(context authenticationContext, client Client, tagAndCommitments initialTagAndCommitments, s kyber.Scalar) (clientProof, error) {
+func newClientProof(context authenticationContext,
+					client Client,
+					tagAndCommitments initialTagAndCommitments,
+					s kyber.Scalar,
+					pushCommitments chan<- []kyber.Point,
+					pullChallenge <-chan kyber.Scalar) (clientProof, error) {
 	//construct the proof.Prover for client's PK and its proof.ProverContext
 	prover := newClientProver(context, client, tagAndCommitments, s)
 	proverCtx := newClientProverCtx(suite, len(context.g.x))
@@ -186,16 +196,11 @@ func prove(context authenticationContext, client Client, tagAndCommitments initi
 		P.t = commits
 	}
 
-	//	forward them to random remote server/verifier (over *anon.* circuit etc.. !!)
-	// TODO pick random server and find its location
-	// TODO establish anon circuit/channel to server (if I choose do this here, maybe better call user supplied lambda) separation of concerns !
-	// TODO encode and send commits
-	// QUESTION TODO FIXME, will need to have kind of a directory mapping servers to their IP/location don't currently know how this is addressed in cothority onet
-	// QUESTION can I have a quick intro on how I to do this using onet ? or should I do my own cuisine ?
+	//	forward them to random remote server/verifier (over *anon.* circuit etc.. concern of the caller code !!)
+	pushCommitments <- P.t
 
-	//	receive master challenge from remote server (over *anon.* circuit etc.. !!)
-	// TODO receive and decode master challenge (or call user supplied lambda interface whatever)
-	var challenge kyber.Scalar
+	//	receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code !!)
+	challenge := <- pullChallenge
 	P.cs = challenge
 
 	//	forward master challenge to Prover in order to continue the proof process, and receive the sub-challenges from Prover
@@ -208,8 +213,8 @@ func prove(context authenticationContext, client Client, tagAndCommitments initi
 		P.r = responses
 	}
 
-	// forward them to remote server  // TODO or not I think in fact, the responses are part of the clientProof part of authmessage M0 <- this one sent
-	// TODO (or call user supplied lambda or interface whatever)
+	// forward them to remote server
+	// TODO or not I think in fact, the responses are part of the clientProof part of authmessage M0 <- this one sent
 	return P, nil
 }
 

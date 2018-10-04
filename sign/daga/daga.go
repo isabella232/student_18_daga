@@ -1,6 +1,7 @@
 package daga
 
 // TODO decide slice assign vs append, are we chasing that kind of performance +  ?
+// TODO decide / review method vs functions + "granularity of parameters"
 
 // TODO quick documentation and DAGA description with links to relevant parts of the Syta papers
 // TODO see what to export and what not, for now everything private
@@ -179,7 +180,7 @@ func (c Client)  PublicKey() kyber.Point {
 
 // TODO doc, see if context big enough to transform it to *authenticationContext
 // #"network"
-func (c Client) newAuthenticationMessage(context authenticationContext) (*authenticationMessage, error) {
+func (c Client) NewAuthenticationMessage(context authenticationContext) (*authenticationMessage, error) {
 	// DAGA client Steps 1, 2, 3:
 	ts, s, err := newInitialTagAndCommitments(context.g.y, context.h[c.index])
 	if err != nil {
@@ -187,10 +188,19 @@ func (c Client) newAuthenticationMessage(context authenticationContext) (*authen
 		return nil, err
 	}
 
-	// TODO server selection and circuit establishment + way to give circuit access to prove() see TODOs in prove()
+	// QUESTION can I have a quick intro on how I to do this using onet ? or should I do my own cuisine ?
+	// QUESTION TODO FIXME, will need to have kind of a directory mapping servers to their IP/location don't currently know how this is addressed in cothority onet
+	// TODO server selection and circuit establishment
+	// TODO + way to give circuit access to newClientProof(), for now channels
+	// TODO pick random server and find its location
+	// TODO establish anon circuit/channel from/to server
+	// TODO code to encode/decode data
+	// TODO using the "function that returns channels" pattern
+	var pushCommitments chan []kyber.Point
+	var pullChallenge chan kyber.Scalar
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PK client, with one random server
-	if P, err := prove(context, c, *ts, s); err != nil { // TODO server communication not done
+	if P, err := newClientProof(context, c, *ts, s, pushCommitments, pullChallenge); err != nil {
 		// TODO log
 		return nil, err
 	} else {
@@ -214,7 +224,6 @@ func (c Client) newAuthenticationMessage(context authenticationContext) (*authen
 
 
 // FIXME clean those below when tests passes
-
 /*ECDSASign gnerates a Schnorr signature*/
 // QUESTION another WTF, why bring ECDSA here ? but ok keep for now .. => move to eddsa
 func ECDSASign(priv kyber.Scalar, msg []byte) (s []byte, err error) {
