@@ -108,7 +108,7 @@ func (client *Client) CreateRequest(context *ContextEd25519) (T0 kyber.Point, S 
 func (client *Client) GenerateProofCommitments(context *ContextEd25519, T0 kyber.Point, s kyber.Scalar) (t *[]kyber.Point, v, w *[]kyber.Scalar) {
 	//Generates w randomly except for w[client.index] = 0
 	wtemp := make([]kyber.Scalar, len(context.H))
-	w = &wtemp
+	w = &wtemp  // QUESTION WTF ??
 	for i := range *w {
 		(*w)[i] = suite.Scalar().Pick(suite.RandomStream())
 	}
@@ -117,7 +117,7 @@ func (client *Client) GenerateProofCommitments(context *ContextEd25519, T0 kyber
 	//Generates random v (2 per client)
 	vtemp := make([]kyber.Scalar, 2*len(context.H))
 	v = &vtemp
-	for i := 0; i < len(*v); i++ {
+	for i := 0; i < len(*v); i++ {  // QUESTION whaaaatTF ?
 		(*v)[i] = suite.Scalar().Pick(suite.RandomStream())
 	}
 
