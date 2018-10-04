@@ -387,23 +387,18 @@ func (server *Server) generateServerProof(context *authenticationContext, s kybe
 		Tprevious = msg.tags[len(msg.tags)-1]
 	}
 	//Generating the hash
-	hasher := sha512.New()
-	var writer io.Writer = hasher // QUESTION again..
-	//hash guarantees that no error are returned on write, so we do not check for error below // QUESTION agree so why check at other places ?
-	Tprevious.MarshalTo(writer)
-	T.MarshalTo(writer)
-	context.r[server.index].MarshalTo(writer)
-	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
-	msg.request.sCommits[server.index+2].MarshalTo(writer)
-	msg.request.sCommits[server.index+1].MarshalTo(writer)
-	t1.MarshalTo(writer)
-	t2.MarshalTo(writer)
-	t3.MarshalTo(writer)
+	hasher := suite.Hash()
+	Tprevious.MarshalTo(hasher)
+	T.MarshalTo(hasher)
+	context.r[server.index].MarshalTo(hasher)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(hasher)
+	msg.request.sCommits[server.index+2].MarshalTo(hasher)
+	msg.request.sCommits[server.index+1].MarshalTo(hasher)
+	t1.MarshalTo(hasher)
+	t2.MarshalTo(hasher)
+	t3.MarshalTo(hasher)
 	challenge := hasher.Sum(nil)
-
-	hasher = suite.Hash()
-	hasher.Write(challenge)
-	c := suite.Scalar().SetBytes(hasher.Sum(nil))
+	c := suite.Scalar().SetBytes(challenge)
 	//rand := suite.Cipher(challenge)
 	//c := suite.Scalar().Pick(rand)
 	//Step 3
@@ -468,24 +463,19 @@ func verifyServerProof(context *authenticationContext, i int, msg *ServerMessage
 	} else {
 		Tprevious = msg.tags[i-1]
 	}
-	hasher := sha512.New()
-	var writer io.Writer = hasher
-	Tprevious.MarshalTo(writer)
-	msg.tags[i].MarshalTo(writer)
-	context.r[index].MarshalTo(writer)
-	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
-	msg.request.sCommits[index+2].MarshalTo(writer)
-	msg.request.sCommits[index+1].MarshalTo(writer)
-	t1.MarshalTo(writer)
-	t2.MarshalTo(writer)
-	t3.MarshalTo(writer)
+	hasher := suite.Hash()
+	Tprevious.MarshalTo(hasher)
+	msg.tags[i].MarshalTo(hasher)
+	context.r[index].MarshalTo(hasher)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(hasher)
+	msg.request.sCommits[index+2].MarshalTo(hasher)
+	msg.request.sCommits[index+1].MarshalTo(hasher)
+	t1.MarshalTo(hasher)
+	t2.MarshalTo(hasher)
+	t3.MarshalTo(hasher)
 	challenge := hasher.Sum(nil)
 
-	hasher = suite.Hash()
-	hasher.Write(challenge)
-	//rand := suite.Cipher(challenge)
-	//c := suite.Scalar().Pick(rand)
-	c := suite.Scalar().SetBytes(hasher.Sum(nil))
+	c := suite.Scalar().SetBytes(challenge)
 
 	if !c.Equal(msg.proofs[i].c) {
 		return false

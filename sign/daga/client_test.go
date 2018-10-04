@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// FIXME review/see if the test are sound
+
 func TestNewClient(t *testing.T) {
 	//Normal execution
 	i := rand.Int()

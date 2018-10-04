@@ -676,12 +676,8 @@ func TestVerifyServerProof(t *testing.T) {
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
 	//Prepare the proof
-	hasher := sha512.New()
-	var writer io.Writer = hasher // ..
-	suite.Point().Mul(servers[0].private, servMsg.request.sCommits[0]).MarshalTo(writer)
-	hash := hasher.Sum(nil)
-	hasher = suite.Hash()
-	hasher.Write(hash)
+	hasher := suite.Hash()
+	suite.Point().Mul(servers[0].private, servMsg.request.sCommits[0]).MarshalTo(hasher)
 	//rand := suite.Cipher(hash)
 	secret := suite.Scalar().SetBytes(hasher.Sum(nil))
 
