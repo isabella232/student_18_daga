@@ -134,7 +134,7 @@ func newInitialTagAndCommitments(serverKeys []kyber.Point, clientGenerator kyber
 	Z := ephemeralKey.Public
 
 	//DAGA client Step 2: generate shared secret exponents with the servers
-	sharedSecrets := make([]kyber.Scalar, len(serverKeys))
+	sharedSecrets := make([]kyber.Scalar, 0, len(serverKeys))
 	for _, serverKey := range serverKeys {
 		// TODO ensure that this is working like I think its working..
 		hasher := suite.Hash()
