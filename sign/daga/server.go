@@ -288,13 +288,8 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 	}
 
 	//Step 2: Verify the correct behaviour of the client
-	// FIXME move to sha256 as in client !
-	hasher := sha512.New()
-	var writer io.Writer = hasher // same QUESTION WTF not needed
-	suite.Point().Mul(server.private, msg.request.sCommits[0]).MarshalTo(writer)
-	hash := hasher.Sum(nil)
-	hasher = suite.Hash()
-	hasher.Write(hash)
+	hasher := suite.Hash()
+	suite.Point().Mul(server.private, msg.request.sCommits[0]).MarshalTo(hasher)
 	s := suite.Scalar().SetBytes(hasher.Sum(nil))
 	//rand := suite.Cipher(hash)  // QUESTION here it is again logical but.. again WTF?
 	//s := suite.Scalar().Pick(rand)
