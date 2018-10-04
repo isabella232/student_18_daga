@@ -3,24 +3,22 @@ package daga
 import (
 	"crypto/sha512"
 	"fmt"
+	"github.com/dedis/kyber"
 	"io"
 	"strconv"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/random"
 )
 
 /*Server is used to store the server's private key and index.
 All the server's methods are attached to it */
 type Server struct {
-	private abstract.Scalar
+	private kyber.Scalar
 	index   int
-	r       abstract.Scalar //Per round secret
+	r       kyber.Scalar //Per round secret
 }
 
 /*Commitment stores the index of the server, the commitment value and the signature for the commitment*/
 type Commitment struct {
-	commit abstract.Point
+	commit kyber.Point
 	sig    serverSignature
 }
 
@@ -32,23 +30,23 @@ type serverSignature struct {
 
 /*ChallengeCheck stores all the information passed along the servers to check and sign the challenge*/
 type ChallengeCheck struct {
-	cs       abstract.Scalar
+	cs       kyber.Scalar
 	sigs     []serverSignature //Signatures for cs only
 	commits  []Commitment
-	openings []abstract.Scalar
+	openings []kyber.Scalar
 }
 
 /*Challenge stores the collectively generated challenge and the signatures of the servers
 This is the structure sent to the client*/
 type Challenge struct {
-	cs   abstract.Scalar
+	cs   kyber.Scalar
 	sigs []serverSignature
 }
 
 /*ServerMessage stores the message sent by a server to one or many others*/
 type ServerMessage struct {
-	request ClientMessage
-	tags    []abstract.Point
+	request authenticationMessage
+	tags    []kyber.Point
 	proofs  []serverProof
 	indexes []int
 	sigs    []serverSignature
@@ -56,35 +54,35 @@ type ServerMessage struct {
 
 /*serverProof stores a server proof of his computations*/
 type serverProof struct {
-	t1 abstract.Point
-	t2 abstract.Point
-	t3 abstract.Point
-	c  abstract.Scalar
-	r1 abstract.Scalar
-	r2 abstract.Scalar
+	t1 kyber.Point
+	t2 kyber.Point
+	t3 kyber.Point
+	c  kyber.Scalar
+	r1 kyber.Scalar
+	r2 kyber.Scalar
 }
 
 //CreateServer is used to initialize a new server with a given index
 //If no private key is given, a random one is chosen
-func CreateServer(i int, s abstract.Scalar) (server Server, err error) {
+func CreateServer(i int, s kyber.Scalar) (server Server, err error) {
 	if i < 0 {
 		return Server{}, fmt.Errorf("Invalid parameters")
 	}
 	if s == nil {
-		s = suite.Scalar().Pick(random.Stream)
+		s = suite.Scalar().Pick(suite.RandomStream())
 	}
 	return Server{index: i, private: s, r: nil}, nil
 }
 
 //GetPublicKey returns the public key associated with a server
-func (server *Server) GetPublicKey() abstract.Point {
-	return suite.Point().Mul(nil, server.private)
+func (server *Server) GetPublicKey() kyber.Point {
+	return suite.Point().Mul(server.private, nil)
 }
 
 /*GenerateCommitment creates the commitment and its opening for the distributed challenge generation*/
-func (server *Server) GenerateCommitment(context *ContextEd25519) (commit *Commitment, opening abstract.Scalar, err error) {
-	opening = suite.Scalar().Pick(random.Stream)
-	com := suite.Point().Mul(nil, opening)
+func (server *Server) GenerateCommitment(context *authenticationContext) (commit *Commitment, opening kyber.Scalar, err error) {
+	opening = suite.Scalar().Pick(suite.RandomStream())
+	com := suite.Point().Mul(opening, nil)
 	msg, err := com.MarshalBinary()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in conversion of commit: %s", err)
@@ -97,19 +95,19 @@ func (server *Server) GenerateCommitment(context *ContextEd25519) (commit *Commi
 }
 
 /*VerifyCommitmentSignature verifies that all the commitments are valid and correctly signed*/
-func VerifyCommitmentSignature(context *ContextEd25519, commits []Commitment) (err error) {
+func VerifyCommitmentSignature(context *authenticationContext, commits []Commitment) (err error) {
 	for i, com := range commits {
 		if i != com.sig.index {
 			return fmt.Errorf("Wrong index: got %d expected %d", com.sig.index, i)
 		}
-		//TODO: How to check that a point is on the curve?
+		// QUESTION FIXME: How to check that a point is on the curve?
 
 		//Convert the commitment and verify the signature
 		msg, e := com.commit.MarshalBinary()
 		if e != nil {
 			return fmt.Errorf("Error in conversion of commit for verification: %s", err)
 		}
-		err = ECDSAVerify(context.G.Y[i], msg, com.sig.sig)
+		err = ECDSAVerify(context.g.y[i], msg, com.sig.sig)
 		if err != nil {
 			return err
 		}
@@ -118,20 +116,20 @@ func VerifyCommitmentSignature(context *ContextEd25519, commits []Commitment) (e
 }
 
 /*CheckOpenings verifies each opening and returns the computed challenge*/
-func CheckOpenings(context *ContextEd25519, commits []Commitment, openings []abstract.Scalar) (cs abstract.Scalar, err error) {
+func CheckOpenings(context *authenticationContext, commits []Commitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
 	if context == nil {
 		return nil, fmt.Errorf("Empty context")
 	}
-	if len(commits) != len(context.G.Y) {
-		return nil, fmt.Errorf("Incorrect number of commits: got %d expected %d", len(commits), len(context.G.Y))
+	if len(commits) != len(context.g.y) {
+		return nil, fmt.Errorf("Incorrect number of commits: got %d expected %d", len(commits), len(context.g.y))
 	}
-	if len(openings) != len(context.G.Y) {
-		return nil, fmt.Errorf("Incorrect number of openings: got %d expected %d", len(openings), len(context.G.Y))
+	if len(openings) != len(context.g.y) {
+		return nil, fmt.Errorf("Incorrect number of openings: got %d expected %d", len(openings), len(context.g.y))
 	}
 
 	cs = suite.Scalar().Zero()
 	for i := 0; i < len(commits); i++ {
-		c := suite.Point().Mul(nil, openings[i])
+		c := suite.Point().Mul(openings[i], nil)
 		if !commits[i].commit.Equal(c) {
 			return nil, fmt.Errorf("Mismatch opening for server %d", i)
 		}
@@ -142,7 +140,7 @@ func CheckOpenings(context *ContextEd25519, commits []Commitment, openings []abs
 
 /*InitializeChallenge creates a Challenge structure from a challenge value
 It checks the openings before doing so*/
-func InitializeChallenge(context *ContextEd25519, commits []Commitment, openings []abstract.Scalar) (*ChallengeCheck, error) {
+func InitializeChallenge(context *authenticationContext, commits []Commitment, openings []kyber.Scalar) (*ChallengeCheck, error) {
 	if context == nil || commits == nil || openings == nil || len(commits) == 0 || len(openings) == 0 || len(commits) != len(openings) {
 		return nil, fmt.Errorf("Invalid inputs")
 	}
@@ -157,7 +155,7 @@ func InitializeChallenge(context *ContextEd25519, commits []Commitment, openings
 /*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
 It also adds the server's signature to the list if the round-robin is not completed (the challenge has not yet made it back to the leader)
 It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
-func (server *Server) CheckUpdateChallenge(context *ContextEd25519, challenge *ChallengeCheck) error {
+func (server *Server) CheckUpdateChallenge(context *authenticationContext, challenge *ChallengeCheck) error {
 	//Check the signatures and check for duplicates
 	msg, e := challenge.cs.MarshalBinary()
 	if e != nil {
@@ -170,7 +168,7 @@ func (server *Server) CheckUpdateChallenge(context *ContextEd25519, challenge *C
 		}
 		encountered[sig.index] = true
 
-		e = ECDSAVerify(context.G.Y[sig.index], msg, sig.sig)
+		e = ECDSAVerify(context.g.y[sig.index], msg, sig.sig)
 		if e != nil {
 			return fmt.Errorf("%s", e)
 		}
@@ -192,7 +190,7 @@ func (server *Server) CheckUpdateChallenge(context *ContextEd25519, challenge *C
 	}
 
 	//Add the server's signature to the list if it is not the last one
-	if len(challenge.sigs) == len(context.G.Y) {
+	if len(challenge.sigs) == len(context.g.y) {
 		return nil
 	}
 	sig, e := ECDSASign(server.private, msg)
@@ -206,19 +204,19 @@ func (server *Server) CheckUpdateChallenge(context *ContextEd25519, challenge *C
 
 /*FinalizeChallenge is used to convert the data passed between the servers into the challenge sent to the client
 It must be used after the leader got the message back and ran CheckUpdateChallenge*/
-func FinalizeChallenge(context *ContextEd25519, challenge *ChallengeCheck) (*Challenge, error) {
+func FinalizeChallenge(context *authenticationContext, challenge *ChallengeCheck) (*Challenge, error) {
 	if context == nil || challenge == nil {
 		return nil, fmt.Errorf("Invalid inputs")
 	}
-	if len(challenge.sigs) != len(context.G.Y) {
-		return nil, fmt.Errorf("Signature count does not match: got %d expected %d", len(challenge.sigs), len(context.G.Y))
+	if len(challenge.sigs) != len(context.g.y) {
+		return nil, fmt.Errorf("Signature count does not match: got %d expected %d", len(challenge.sigs), len(context.g.y))
 	}
 
 	return &Challenge{cs: challenge.cs, sigs: challenge.sigs}, nil
 }
 
 //InitializeServerMessage creates a ServerMessage from a ClientMessage to ease further processing
-func (server *Server) InitializeServerMessage(request *ClientMessage) (msg *ServerMessage) {
+func (server *Server) InitializeServerMessage(request *authenticationMessage) (msg *ServerMessage) {
 	if request == nil {
 		return nil
 	}
@@ -226,7 +224,7 @@ func (server *Server) InitializeServerMessage(request *ClientMessage) (msg *Serv
 }
 
 /*ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client*/
-func (server *Server) ServerProtocol(context *ContextEd25519, msg *ServerMessage) error {
+func (server *Server) ServerProtocol(context *authenticationContext, msg *ServerMessage) error {
 	//Step 1
 	//Verify that the message is correctly formed
 	if !ValidateClientMessage(&msg.request) {
@@ -237,7 +235,7 @@ func (server *Server) ServerProtocol(context *ContextEd25519, msg *ServerMessage
 	}
 
 	//Checks that not all servers already did the protocol
-	if len(msg.indexes) >= len(context.G.Y) {
+	if len(msg.indexes) >= len(context.g.y) {
 		return fmt.Errorf("Too many calls of the protocol")
 	}
 
@@ -262,7 +260,7 @@ func (server *Server) ServerProtocol(context *ContextEd25519, msg *ServerMessage
 
 			data = append(data, []byte(strconv.Itoa(msg.indexes[i]))...)
 
-			err = ECDSAVerify(context.G.Y[msg.sigs[i].index], data, msg.sigs[i].sig)
+			err = ECDSAVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
 			if err != nil {
 				return fmt.Errorf("Error in signature: "+strconv.Itoa(i)+"\n%s", err)
 			}
@@ -279,7 +277,7 @@ func (server *Server) ServerProtocol(context *ContextEd25519, msg *ServerMessage
 		for i, p := range msg.proofs {
 			var valid bool
 			if p.r2 == nil {
-				valid = verifyMisbehavingProof(context, i, &p, msg.request.sArray[0])
+				valid = verifyMisbehavingProof(context, i, &p, msg.request.sCommits[0])
 			} else {
 				valid = verifyServerProof(context, i, msg)
 			}
@@ -290,25 +288,29 @@ func (server *Server) ServerProtocol(context *ContextEd25519, msg *ServerMessage
 	}
 
 	//Step 2: Verify the correct behaviour of the client
+	// FIXME move to sha256 as in client !
 	hasher := sha512.New()
-	var writer io.Writer = hasher
-	suite.Point().Mul(msg.request.sArray[0], server.private).MarshalTo(writer)
+	var writer io.Writer = hasher // same QUESTION WTF not needed
+	suite.Point().Mul(server.private, msg.request.sCommits[0]).MarshalTo(writer)
 	hash := hasher.Sum(nil)
-	rand := suite.Cipher(hash)
-	s := suite.Scalar().Pick(rand)
-	var T abstract.Point
+	hasher = suite.Hash()
+	hasher.Write(hash)
+	s := suite.Scalar().SetBytes(hasher.Sum(nil))
+	//rand := suite.Cipher(hash)  // QUESTION here it is again logical but.. again WTF?
+	//s := suite.Scalar().Pick(rand)
+	var T kyber.Point
 	var proof *serverProof
 	//Detect a misbehaving client and generate the elements of the server's message accordingly
-	if !msg.request.sArray[server.index+2].Equal(suite.Point().Mul(msg.request.sArray[server.index+1], s)) {
+	if !msg.request.sCommits[server.index+2].Equal(suite.Point().Mul(s, msg.request.sCommits[server.index+1])) {
 		T = suite.Point().Null()
-		proof, e = server.generateMisbehavingProof(context, msg.request.sArray[0])
+		proof, e = server.generateMisbehavingProof(context, msg.request.sCommits[0])
 	} else {
 		inv := suite.Scalar().Inv(s)
 		exp := suite.Scalar().Mul(server.r, inv)
 		if len(msg.tags) == 0 {
-			T = suite.Point().Mul(msg.request.t0, exp)
+			T = suite.Point().Mul(exp, msg.request.t0)
 		} else {
-			T = suite.Point().Mul(msg.tags[len(msg.tags)-1], exp)
+			T = suite.Point().Mul(exp, msg.tags[len(msg.tags)-1])
 		}
 		proof, e = server.generateServerProof(context, s, T, msg)
 	}
@@ -348,7 +350,7 @@ func (server *Server) ServerProtocol(context *ContextEd25519, msg *ServerMessage
 }
 
 /*generateServerProof creates the server proof for its computations*/
-func (server *Server) generateServerProof(context *ContextEd25519, s abstract.Scalar, T abstract.Point, msg *ServerMessage) (proof *serverProof, err error) {
+func (server *Server) generateServerProof(context *authenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage) (proof *serverProof, err error) {
 	//Input validation
 	if context == nil {
 		return nil, fmt.Errorf("Empty context")
@@ -364,26 +366,26 @@ func (server *Server) generateServerProof(context *ContextEd25519, s abstract.Sc
 	}
 
 	//Step 1
-	v1 := suite.Scalar().Pick(random.Stream)
-	v2 := suite.Scalar().Pick(random.Stream)
+	v1 := suite.Scalar().Pick(suite.RandomStream())
+	v2 := suite.Scalar().Pick(suite.RandomStream())
 
-	var a abstract.Point
+	var a kyber.Point
 	if len(msg.tags) == 0 {
-		a = suite.Point().Mul(msg.request.t0, v1)
+		a = suite.Point().Mul(v1, msg.request.t0)
 	} else {
-		a = suite.Point().Mul(msg.tags[len(msg.tags)-1], v1)
+		a = suite.Point().Mul(v1, msg.tags[len(msg.tags)-1])
 	}
 
 	//exp := suite.Scalar().Neg(v2)
-	b := suite.Point().Mul(T, v2)
+	b := suite.Point().Mul(v2, T)
 	t1 := suite.Point().Sub(a, b)
 
-	t2 := suite.Point().Mul(nil, v1)
+	t2 := suite.Point().Mul(v1, nil)
 
-	t3 := suite.Point().Mul(msg.request.sArray[server.index+1], v2) //Accesses S[j-1]
+	t3 := suite.Point().Mul(v2, msg.request.sCommits[server.index+1]) //Accesses S[j-1]
 
 	//Step 2
-	var Tprevious abstract.Point
+	var Tprevious kyber.Point
 	if len(msg.tags) == 0 {
 		Tprevious = msg.request.t0
 	} else {
@@ -391,21 +393,24 @@ func (server *Server) generateServerProof(context *ContextEd25519, s abstract.Sc
 	}
 	//Generating the hash
 	hasher := sha512.New()
-	var writer io.Writer = hasher
-	//hash guarantees that no error are returned on write, so we do not check for error below
+	var writer io.Writer = hasher // QUESTION again..
+	//hash guarantees that no error are returned on write, so we do not check for error below // QUESTION agree so why check at other places ?
 	Tprevious.MarshalTo(writer)
 	T.MarshalTo(writer)
-	context.R[server.index].MarshalTo(writer)
-	suite.Point().Mul(nil, suite.Scalar().One()).MarshalTo(writer)
-	msg.request.sArray[server.index+2].MarshalTo(writer)
-	msg.request.sArray[server.index+1].MarshalTo(writer)
+	context.r[server.index].MarshalTo(writer)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
+	msg.request.sCommits[server.index+2].MarshalTo(writer)
+	msg.request.sCommits[server.index+1].MarshalTo(writer)
 	t1.MarshalTo(writer)
 	t2.MarshalTo(writer)
 	t3.MarshalTo(writer)
 	challenge := hasher.Sum(nil)
 
-	rand := suite.Cipher(challenge)
-	c := suite.Scalar().Pick(rand)
+	hasher = suite.Hash()
+	hasher.Write(challenge)
+	c := suite.Scalar().SetBytes(hasher.Sum(nil))
+	//rand := suite.Cipher(challenge)
+	//c := suite.Scalar().Pick(rand)
 	//Step 3
 	d := suite.Scalar().Mul(c, server.r)
 	r1 := suite.Scalar().Sub(v1, d)
@@ -425,7 +430,7 @@ func (server *Server) generateServerProof(context *ContextEd25519, s abstract.Sc
 }
 
 /*verifyServerProof verifies a server proof*/
-func verifyServerProof(context *ContextEd25519, i int, msg *ServerMessage) bool {
+func verifyServerProof(context *authenticationContext, i int, msg *ServerMessage) bool {
 	//Input checks
 	if context == nil || msg == nil {
 		return false
@@ -443,26 +448,26 @@ func verifyServerProof(context *ContextEd25519, i int, msg *ServerMessage) bool 
 	index := msg.indexes[i]
 
 	//Step 1
-	var a abstract.Point
+	var a kyber.Point
 	if i == 0 {
-		a = suite.Point().Mul(msg.request.t0, msg.proofs[i].r1)
+		a = suite.Point().Mul(msg.proofs[i].r1, msg.request.t0)
 	} else {
-		a = suite.Point().Mul(msg.tags[i-1], msg.proofs[i].r1)
+		a = suite.Point().Mul(msg.proofs[i].r1, msg.tags[i-1])
 	}
 	//exp := suite.Scalar().Neg(msg.proofs[i].r2)
-	b := suite.Point().Mul(msg.tags[i], msg.proofs[i].r2)
+	b := suite.Point().Mul(msg.proofs[i].r2, msg.tags[i])
 	t1 := suite.Point().Sub(a, b)
 
-	d := suite.Point().Mul(nil, msg.proofs[i].r1)
-	e := suite.Point().Mul(context.R[index], msg.proofs[i].c)
+	d := suite.Point().Mul(msg.proofs[i].r1, nil)
+	e := suite.Point().Mul(msg.proofs[i].c, context.r[index])
 	t2 := suite.Point().Add(d, e)
 
-	f := suite.Point().Mul(msg.request.sArray[index+1], msg.proofs[i].r2)
-	g := suite.Point().Mul(msg.request.sArray[index+2], msg.proofs[i].c)
+	f := suite.Point().Mul(msg.proofs[i].r2, msg.request.sCommits[index+1])
+	g := suite.Point().Mul(msg.proofs[i].c, msg.request.sCommits[index+2])
 	t3 := suite.Point().Add(f, g)
 
 	//Step 2
-	var Tprevious abstract.Point
+	var Tprevious kyber.Point
 	if i == 0 {
 		Tprevious = msg.request.t0
 	} else {
@@ -472,17 +477,20 @@ func verifyServerProof(context *ContextEd25519, i int, msg *ServerMessage) bool 
 	var writer io.Writer = hasher
 	Tprevious.MarshalTo(writer)
 	msg.tags[i].MarshalTo(writer)
-	context.R[index].MarshalTo(writer)
-	suite.Point().Mul(nil, suite.Scalar().One()).MarshalTo(writer)
-	msg.request.sArray[index+2].MarshalTo(writer)
-	msg.request.sArray[index+1].MarshalTo(writer)
+	context.r[index].MarshalTo(writer)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
+	msg.request.sCommits[index+2].MarshalTo(writer)
+	msg.request.sCommits[index+1].MarshalTo(writer)
 	t1.MarshalTo(writer)
 	t2.MarshalTo(writer)
 	t3.MarshalTo(writer)
 	challenge := hasher.Sum(nil)
 
-	rand := suite.Cipher(challenge)
-	c := suite.Scalar().Pick(rand)
+	hasher = suite.Hash()
+	hasher.Write(challenge)
+	//rand := suite.Cipher(challenge)
+	//c := suite.Scalar().Pick(rand)
+	c := suite.Scalar().SetBytes(hasher.Sum(nil))
 
 	if !c.Equal(msg.proofs[i].c) {
 		return false
@@ -491,8 +499,8 @@ func verifyServerProof(context *ContextEd25519, i int, msg *ServerMessage) bool 
 	return true
 }
 
-/*generateMisbehavingProof creates the proof of a misbehaving client*/
-func (server *Server) generateMisbehavingProof(context *ContextEd25519, Z abstract.Point) (proof *serverProof, err error) {
+/*generateMisbehavingProof creates the proof of a misbehaving client*/ // QUESTION server ? purpose of comment ?
+func (server *Server) generateMisbehavingProof(context *authenticationContext, Z kyber.Point) (proof *serverProof, err error) {
 	//Input checks
 	if context == nil {
 		return nil, fmt.Errorf("Empty context")
@@ -501,26 +509,28 @@ func (server *Server) generateMisbehavingProof(context *ContextEd25519, Z abstra
 		return nil, fmt.Errorf("Empty Z")
 	}
 
-	Zs := suite.Point().Mul(Z, server.private)
+	Zs := suite.Point().Mul(server.private, Z) // QUESTION secure (even if the function is called misbehaving whatever) ? ...+ TODO maybe I have missed other parts
 
 	//Step 1
-	v := suite.Scalar().Pick(random.Stream)
-	t1 := suite.Point().Mul(Z, v)
-	t2 := suite.Point().Mul(nil, v)
+	v := suite.Scalar().Pick(suite.RandomStream())
+	t1 := suite.Point().Mul(v, Z)
+	t2 := suite.Point().Mul(v, nil)
 
 	//Step 2
 	hasher := sha512.New()
 	var writer io.Writer = hasher
 	Zs.MarshalTo(writer)
 	Z.MarshalTo(writer)
-	context.G.Y[server.index].MarshalTo(writer)
-	suite.Point().Mul(nil, suite.Scalar().One()).MarshalTo(writer)
+	context.g.y[server.index].MarshalTo(writer)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
 	t1.MarshalTo(writer)
 	t2.MarshalTo(writer)
 	challenge := hasher.Sum(nil)
 
-	rand := suite.Cipher(challenge)
-	c := suite.Scalar().Pick(rand)
+	hasher = suite.Hash()
+	hasher.Write(challenge)
+	//rand := suite.Cipher(challenge)
+	c := suite.Scalar().SetBytes(hasher.Sum(nil))
 
 	//Step 3
 	a := suite.Scalar().Mul(c, server.private)
@@ -537,14 +547,14 @@ func (server *Server) generateMisbehavingProof(context *ContextEd25519, Z abstra
 	}, nil
 }
 
-/*verifyMisbehavingProof verifies a proof of a misbehaving client*/
-func verifyMisbehavingProof(context *ContextEd25519, i int, proof *serverProof, Z abstract.Point) bool {
+/*verifyMisbehavingProof verifies a proof of a misbehaving client*/ // QUESTION server ? ..
+func verifyMisbehavingProof(context *authenticationContext, i int, proof *serverProof, Z kyber.Point) bool {
 	//Input checks
 	if context == nil || proof == nil || Z == nil {
 		return false
 	}
 
-	if i < 0 || i >= len(context.G.Y) {
+	if i < 0 || i >= len(context.g.y) {
 		return false
 	}
 
@@ -559,12 +569,12 @@ func verifyMisbehavingProof(context *ContextEd25519, i int, proof *serverProof, 
 	}
 
 	//Step 1
-	a := suite.Point().Mul(Z, proof.r1)       //r1 = r
-	b := suite.Point().Mul(proof.t3, proof.c) //t3 = Zs
+	a := suite.Point().Mul(proof.r1, Z)       //r1 = r
+	b := suite.Point().Mul(proof.c, proof.t3) //t3 = Zs
 	t1 := suite.Point().Add(a, b)
 
-	d := suite.Point().Mul(nil, proof.r1) //r1 = r
-	e := suite.Point().Mul(context.G.Y[i], proof.c)
+	d := suite.Point().Mul(proof.r1, nil) //r1 = r
+	e := suite.Point().Mul(proof.c, context.g.y[i])
 	t2 := suite.Point().Add(d, e)
 
 	//Step 2
@@ -572,14 +582,17 @@ func verifyMisbehavingProof(context *ContextEd25519, i int, proof *serverProof, 
 	var writer io.Writer = hasher
 	proof.t3.MarshalTo(writer)
 	Z.MarshalTo(writer)
-	context.G.Y[i].MarshalTo(writer)
-	suite.Point().Mul(nil, suite.Scalar().One()).MarshalTo(writer)
+	context.g.y[i].MarshalTo(writer)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
 	t1.MarshalTo(writer)
 	t2.MarshalTo(writer)
 	challenge := hasher.Sum(nil)
 
-	rand := suite.Cipher(challenge)
-	c := suite.Scalar().Pick(rand)
+	hasher = suite.Hash()
+	hasher.Write(challenge)
+
+	//rand := suite.Cipher(challhasenge)
+	c := suite.Scalar().SetBytes(hasher.Sum(nil))
 
 	if !c.Equal(proof.c) {
 		return false
@@ -590,12 +603,13 @@ func verifyMisbehavingProof(context *ContextEd25519, i int, proof *serverProof, 
 
 /*GenerateNewRoundSecret creates a new secret for the server, erasing the previous one.
 It returns the commitment to that secret to be included in the context*/
-func (server *Server) GenerateNewRoundSecret() (R abstract.Point) {
-	server.r = suite.Scalar().Pick(random.Stream)
-	return suite.Point().Mul(nil, server.r)
+func (server *Server) GenerateNewRoundSecret() (R kyber.Point) {
+	server.r = suite.Scalar().Pick(suite.RandomStream()) // TODO see if used like a key...
+	return suite.Point().Mul(server.r, nil)
 }
 
 /*ToBytes is a helper function used to convert a ServerProof into []byte to be used in signatures*/
+// QUESTION WTF ? + DRY there should be another way or no ?
 func (proof *serverProof) ToBytes() (data []byte, err error) {
 	temp, e := proof.t1.MarshalBinary()
 	if e != nil {

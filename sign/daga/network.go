@@ -2,18 +2,19 @@ package daga
 
 import (
 	"fmt"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
+	"github.com/dedis/kyber"
 )
+
+// ......
 
 //Provides functions to help with JSON marshal/unmarshal
 
-/*NetPoint provides a JSON compatible representation of a abstract.Point*/
+/*NetPoint provides a JSON compatible representation of a kyber.Point*/
 type NetPoint struct {
 	Value []byte
 }
 
-/*NetScalar provides a JSON compatible representation of a abstract.Scalar*/
+/*NetScalar provides a JSON compatible representation of a kyber.Scalar*/
 type NetScalar struct {
 	Value []byte
 }
@@ -65,7 +66,7 @@ type NetClientProof struct {
 	R  []NetScalar
 }
 
-/*NetClientMessage provides a JSON compatible representation of the ClientMessage struct*/
+/*NetClientMessage provides a JSON compatible representation of the authenticationMessage struct*/
 type NetClientMessage struct {
 	Context NetContextEd25519
 	SArray  []NetPoint
@@ -92,7 +93,7 @@ type NetServerMessage struct {
 	Sigs    []NetServerSignature
 }
 
-func NetEncodePoint(point abstract.Point) (*NetPoint, error) {
+func NetEncodePoint(point kyber.Point) (*NetPoint, error) {
 	value, err := point.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("Encode error\n%s", err)
@@ -101,7 +102,7 @@ func NetEncodePoint(point abstract.Point) (*NetPoint, error) {
 	return &NetPoint{Value: value}, nil
 }
 
-func (netpoint *NetPoint) NetDecode() (abstract.Point, error) {
+func (netpoint *NetPoint) NetDecode() (kyber.Point, error) {
 	point := suite.Point().Null()
 	err := point.UnmarshalBinary(netpoint.Value)
 	if err != nil {
@@ -111,7 +112,7 @@ func (netpoint *NetPoint) NetDecode() (abstract.Point, error) {
 	return point, nil
 }
 
-func NetEncodeScalar(scalar abstract.Scalar) (*NetScalar, error) {
+func NetEncodeScalar(scalar kyber.Scalar) (*NetScalar, error) {
 	value, err := scalar.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("Encode error\n%s", err)
@@ -120,7 +121,7 @@ func NetEncodeScalar(scalar abstract.Scalar) (*NetScalar, error) {
 	return &NetScalar{Value: value}, nil
 }
 
-func (netscalar *NetScalar) NetDecode() (abstract.Scalar, error) {
+func (netscalar *NetScalar) NetDecode() (kyber.Scalar, error) {
 	scalar := suite.Scalar().Zero()
 	err := scalar.UnmarshalBinary(netscalar.Value)
 	if err != nil {
@@ -130,7 +131,7 @@ func (netscalar *NetScalar) NetDecode() (abstract.Scalar, error) {
 	return scalar, nil
 }
 
-func NetEncodePoints(points []abstract.Point) ([]NetPoint, error) {
+func NetEncodePoints(points []kyber.Point) ([]NetPoint, error) {
 	var netpoints []NetPoint
 	for i, p := range points {
 		temp, err := p.MarshalBinary()
@@ -142,8 +143,8 @@ func NetEncodePoints(points []abstract.Point) ([]NetPoint, error) {
 	return netpoints, nil
 }
 
-func NetDecodePoints(netpoints []NetPoint) ([]abstract.Point, error) {
-	var points []abstract.Point
+func NetDecodePoints(netpoints []NetPoint) ([]kyber.Point, error) {
+	var points []kyber.Point
 	if len(netpoints) == 0 {
 		return nil, fmt.Errorf("Empty array")
 	}
@@ -158,7 +159,7 @@ func NetDecodePoints(netpoints []NetPoint) ([]abstract.Point, error) {
 	return points, nil
 }
 
-func NetEncodeScalars(scalars []abstract.Scalar) ([]NetScalar, error) {
+func NetEncodeScalars(scalars []kyber.Scalar) ([]NetScalar, error) {
 	var netscalars []NetScalar
 	for i, s := range scalars {
 		temp, err := s.MarshalBinary()
@@ -170,8 +171,8 @@ func NetEncodeScalars(scalars []abstract.Scalar) ([]NetScalar, error) {
 	return netscalars, nil
 }
 
-func NetDecodeScalars(netscalars []NetScalar) ([]abstract.Scalar, error) {
-	var scalars []abstract.Scalar
+func NetDecodeScalars(netscalars []NetScalar) ([]kyber.Scalar, error) {
+	var scalars []kyber.Scalar
 	if len(netscalars) == 0 {
 		return nil, fmt.Errorf("Empty array")
 	}
@@ -186,16 +187,16 @@ func NetDecodeScalars(netscalars []NetScalar) ([]abstract.Scalar, error) {
 	return scalars, nil
 }
 
-func (members *Members) NetEncode() (*NetMembers, error) {
+func NetEncode(x,y []kyber.Point) (*NetMembers, error) {
 	netmembers := NetMembers{}
 
-	X, err := NetEncodePoints(members.X)
+	X, err := NetEncodePoints(x)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in X\n%s", err)
 	}
 	netmembers.X = X
 
-	Y, err := NetEncodePoints(members.Y)
+	Y, err := NetEncodePoints(y)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in Y\n%s", err)
 	}
@@ -204,40 +205,36 @@ func (members *Members) NetEncode() (*NetMembers, error) {
 	return &netmembers, nil
 }
 
-func (netmembers *NetMembers) NetDecode() (*Members, error) {
-	members := Members{}
-
+func NetDecode(netmembers NetMembers) ([]kyber.Point, []kyber.Point, error) {
 	X, err := NetDecodePoints(netmembers.X)
 	if err != nil {
-		return nil, fmt.Errorf("Decode error in X\n%s", err)
+		return nil, nil, fmt.Errorf("Decode error in X\n%s", err)
 	}
-	members.X = X
 
 	Y, err := NetDecodePoints(netmembers.Y)
 	if err != nil {
-		return nil, fmt.Errorf("Decode error in Y\n%s", err)
+		return nil, nil, fmt.Errorf("Decode error in Y\n%s", err)
 	}
-	members.Y = Y
 
-	return &members, nil
+	return X, Y, nil
 }
 
-func (context *ContextEd25519) NetEncode() (*NetContextEd25519, error) {
+func (context *authenticationContext) NetEncode() (*NetContextEd25519, error) {
 	netcontext := NetContextEd25519{}
 
-	G, err := context.G.NetEncode()
+	G, err := NetEncode(context.g.x, context.g.y)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error for members\n%s", err)
 	}
 	netcontext.G = *G
 
-	R, err := NetEncodePoints(context.R)
+	R, err := NetEncodePoints(context.r)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in R\n%s", err)
 	}
 	netcontext.R = R
 
-	H, err := NetEncodePoints(context.H)
+	H, err := NetEncodePoints(context.h)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in H\n%s", err)
 	}
@@ -246,26 +243,27 @@ func (context *ContextEd25519) NetEncode() (*NetContextEd25519, error) {
 	return &netcontext, nil
 }
 
-func (netcontext *NetContextEd25519) NetDecode() (*ContextEd25519, error) {
-	context := ContextEd25519{}
+func (netcontext *NetContextEd25519) NetDecode() (*authenticationContext, error) {
+	context := authenticationContext{}
 
-	G, err := netcontext.G.NetDecode()
+	X, Y, err := NetDecode(netcontext.G)
 	if err != nil {
 		return nil, fmt.Errorf("Decode error for members\n%s", err)
 	}
-	context.G = *G
+	context.g.x = X
+	context.g.y = Y
 
 	R, err := NetDecodePoints(netcontext.R)
 	if err != nil {
 		return nil, fmt.Errorf("Decode error in R\n%s", err)
 	}
-	context.R = R
+	context.r = R
 
 	H, err := NetDecodePoints(netcontext.H)
 	if err != nil {
 		return nil, fmt.Errorf("Decode error in H\n%s", err)
 	}
-	context.H = H
+	context.h = H
 
 	return &context, nil
 }
@@ -396,7 +394,7 @@ func (netchall *NetChallenge) NetDecode() (*Challenge, error) {
 	return &chall, nil
 }
 
-func (proof *ClientProof) NetEncode() (*NetClientProof, error) {
+func (proof *clientProof) NetEncode() (*NetClientProof, error) {
 	netproof := NetClientProof{}
 	cs, err := NetEncodeScalar(proof.cs)
 	if err != nil {
@@ -425,8 +423,8 @@ func (proof *ClientProof) NetEncode() (*NetClientProof, error) {
 	return &netproof, nil
 }
 
-func (netproof *NetClientProof) NetDecode() (*ClientProof, error) {
-	proof := ClientProof{}
+func (netproof *NetClientProof) NetDecode() (*clientProof, error) {
+	proof := clientProof{}
 	cs, err := netproof.Cs.NetDecode()
 	if err != nil {
 		return nil, fmt.Errorf("Decode error for cs\n%s", err)
@@ -454,16 +452,16 @@ func (netproof *NetClientProof) NetDecode() (*ClientProof, error) {
 	return &proof, nil
 }
 
-func (msg *ClientMessage) NetEncode() (*NetClientMessage, error) {
+func (msg *authenticationMessage) NetEncode() (*NetClientMessage, error) {
 	netmsg := NetClientMessage{}
 
-	context, err := msg.context.NetEncode()
+	context, err := msg.c.NetEncode()
 	if err != nil {
 		return nil, fmt.Errorf("Encode error for context\n%s", err)
 	}
 	netmsg.Context = *context
 
-	s, err := NetEncodePoints(msg.sArray)
+	s, err := NetEncodePoints(msg.sCommits)
 	if err != nil {
 		return nil, fmt.Errorf("Encode errof for sArray\n%s", err)
 	}
@@ -475,7 +473,7 @@ func (msg *ClientMessage) NetEncode() (*NetClientMessage, error) {
 	}
 	netmsg.T0 = *t0
 
-	proof, err := msg.proof.NetEncode()
+	proof, err := msg.p0.NetEncode()
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in proof\n%s", err)
 	}
@@ -484,20 +482,20 @@ func (msg *ClientMessage) NetEncode() (*NetClientMessage, error) {
 	return &netmsg, nil
 }
 
-func (netmsg *NetClientMessage) NetDecode() (*ClientMessage, error) {
-	msg := ClientMessage{}
+func (netmsg *NetClientMessage) NetDecode() (*authenticationMessage, error) {
+	msg := authenticationMessage{}
 
 	context, err := netmsg.Context.NetDecode()
 	if err != nil {
 		return nil, fmt.Errorf("Decode error for context\n%s", err)
 	}
-	msg.context = *context
+	msg.c = *context
 
 	s, err := NetDecodePoints(netmsg.SArray)
 	if err != nil {
 		return nil, fmt.Errorf("Decode errof for sArray\n%s", err)
 	}
-	msg.sArray = s
+	msg.sCommits = s
 
 	t0, err := netmsg.T0.NetDecode()
 	if err != nil {
@@ -509,7 +507,7 @@ func (netmsg *NetClientMessage) NetDecode() (*ClientMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Decode error in proof\n%s", err)
 	}
-	msg.proof = *proof
+	msg.p0 = *proof
 
 	return &msg, nil
 }

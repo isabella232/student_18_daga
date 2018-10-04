@@ -1,22 +1,60 @@
 package daga
 
 import (
-	"crypto/sha512"
 	"fmt"
-	"io"
-	"strconv"
 	"github.com/dedis/kyber"
+	"strconv"
 )
 
+
+// TODO use those for regression testing purposes of our implementation using proof framework
+//GenerateProofCommitments creates and returns the client's commitments t and the random wieghts w
+func (client *Client) GenerateProofCommitments(context *authenticationContext, T0 kyber.Point, s kyber.Scalar) (t *[]kyber.Point, v, w *[]kyber.Scalar) {
+	//Generates w randomly except for w[client.index] = 0
+	wtemp := make([]kyber.Scalar, len(context.h))
+	w = &wtemp
+	for i := range *w {
+		(*w)[i] = suite.Scalar().Pick(suite.RandomStream())
+	}
+	(*w)[client.index] = suite.Scalar().Zero()
+
+	//Generates random v (2 per client)
+	vtemp := make([]kyber.Scalar, 2*len(context.h))
+	v = &vtemp
+	for i := 0; i < len(*v); i++ {
+		(*v)[i] = suite.Scalar().Pick(suite.RandomStream())
+	}
+
+	//Generates the commitments t (3 per clients)
+	ttemp := make([]kyber.Point, 3*len(context.h))
+	t = &ttemp
+	for i := 0; i < len(context.h); i++ {
+		a := suite.Point().Mul((*w)[i], context.g.x[i])
+		b := suite.Point().Mul((*v)[2*i], nil)
+		(*t)[3*i] = suite.Point().Add(a, b)
+
+		Sm := suite.Point().Mul(s, nil)
+		c := suite.Point().Mul((*w)[i], Sm)
+		d := suite.Point().Mul((*v)[2*i+1], nil)
+		(*t)[3*i+1] = suite.Point().Add(c, d)
+
+		e := suite.Point().Mul((*w)[i], T0)
+		f := suite.Point().Mul((*v)[2*i+1], context.h[i])
+		(*t)[3*i+2] = suite.Point().Add(e, f)
+	}
+
+	return t, v, w
+}
+
 //GenerateProofResponses creates the responses to the challenge cs sent by the servers
-func (client *Client) GenerateProofResponses(context *ContextEd25519, s kyber.Scalar, challenge *Challenge, v, w *[]kyber.Scalar) (c, r *[]kyber.Scalar, err error) {
+func (client *Client) GenerateProofResponses(context *authenticationContext, s kyber.Scalar, challenge *Challenge, v, w *[]kyber.Scalar) (c, r *[]kyber.Scalar, err error) {
 	//Check challenge signatures
 	msg, e := challenge.cs.MarshalBinary()
 	if e != nil {
 		return nil, nil, fmt.Errorf("Error in challenge conversion: %s", e)
 	}
 	for _, sig := range challenge.sigs {
-		e = ECDSAVerify(context.G.Y[sig.index], msg, sig.sig)
+		e = ECDSAVerify(context.g.y[sig.index], msg, sig.sig)
 		if e != nil {
 			return nil, nil, fmt.Errorf("%s", e)
 		}
@@ -40,7 +78,7 @@ func (client *Client) GenerateProofResponses(context *ContextEd25519, s kyber.Sc
 		rtemp = append(rtemp, temp)
 	}
 	r = &rtemp
-	a := suite.Scalar().Mul((*c)[client.index], client.private)
+	a := suite.Scalar().Mul((*c)[client.index], client.key.Private)
 	(*r)[2*client.index] = suite.Scalar().Sub((*v)[2*client.index], a)
 
 	b := suite.Scalar().Mul((*c)[client.index], s)
@@ -50,67 +88,53 @@ func (client *Client) GenerateProofResponses(context *ContextEd25519, s kyber.Sc
 }
 
 /*verifyClientProof checks the validity of a client's proof*/
-func verifyClientProof(msg ClientMessage) bool {
+func verifyClientProof(msg authenticationMessage) bool {
 	check := ValidateClientMessage(&msg)
 	if !check {
 		return false
 	}
 
-	n := len(msg.context.G.X)
+	n := len(msg.c.g.x)
 
 	//Check the commitments
 	for i := 0; i < n; i++ {
-		a := suite.Point().Mul(msg.context.G.X[i], msg.proof.c[i])
-		b := suite.Point().Mul(nil, msg.proof.r[2*i])
+		a := suite.Point().Mul(msg.p0.c[i], msg.c.g.x[i])
+		b := suite.Point().Mul(msg.p0.r[2*i], nil)
 		ti0 := suite.Point().Add(a, b)
-		if !ti0.Equal(msg.proof.t[3*i]) {
+		if !ti0.Equal(msg.p0.t[3*i]) {
 			return false
 		}
 
-		c := suite.Point().Mul(msg.sArray[len(msg.sArray)-1], msg.proof.c[i])
-		d := suite.Point().Mul(nil, msg.proof.r[2*i+1])
+		c := suite.Point().Mul(msg.p0.c[i], msg.sCommits[len(msg.sCommits)-1])
+		d := suite.Point().Mul(msg.p0.r[2*i+1], nil)
 		ti10 := suite.Point().Add(c, d)
-		if !ti10.Equal(msg.proof.t[3*i+1]) {
+		if !ti10.Equal(msg.p0.t[3*i+1]) {
 			return false
 		}
 
-		e := suite.Point().Mul(msg.t0, msg.proof.c[i])
-		f := suite.Point().Mul(msg.context.H[i], msg.proof.r[2*i+1])
+		e := suite.Point().Mul(msg.p0.c[i], msg.t0)
+		f := suite.Point().Mul(msg.p0.r[2*i+1], msg.c.h[i])
 		ti11 := suite.Point().Add(e, f)
-		if !ti11.Equal(msg.proof.t[3*i+2]) {
+		if !ti11.Equal(msg.p0.t[3*i+2]) {
 			return false
 		}
 	}
 
 	//Check the challenge
 	cs := suite.Scalar().Zero()
-	for _, ci := range msg.proof.c {
+	for _, ci := range msg.p0.c {
 		cs = suite.Scalar().Add(cs, ci)
 	}
-	if !cs.Equal(msg.proof.cs) {
+	if !cs.Equal(msg.p0.cs) {
 		return false
 	}
 
 	return true
 }
 
-//AssembleMessage is used to build a Client Message from its various elemnts
-func (client *Client) AssembleMessage(context *ContextEd25519, S *[]kyber.Point, T0 kyber.Point, challenge *Challenge, t *[]kyber.Point, c, r *[]kyber.Scalar) (msg *ClientMessage) {
-	//Input checks
-	if context == nil || S == nil || T0 == nil || challenge == nil || t == nil || c == nil || r == nil {
-		return nil
-	}
-	if len(*S) == 0 || len(*t) == 0 || len(*c) == 0 || len(*r) == 0 {
-		return nil
-	}
-
-	proof := ClientProof{cs: challenge.cs, t: *t, c: *c, r: *r}
-	return &ClientMessage{context: *context, t0: T0, sArray: *S, proof: proof}
-}
-
 //GetFinalLinkageTag checks the server's signatures and proofs
 //It outputs the final linkage tag of the client
-func (client *Client) GetFinalLinkageTag(context *ContextEd25519, msg *ServerMessage) (Tf kyber.Point, err error) {
+func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
 	//Input checks
 	if context == nil || msg == nil {
 		return nil, fmt.Errorf("Invalid inputs")
@@ -136,7 +160,7 @@ func (client *Client) GetFinalLinkageTag(context *ContextEd25519, msg *ServerMes
 
 		data = append(data, []byte(strconv.Itoa(msg.indexes[i]))...)
 
-		err = ECDSAVerify(context.G.Y[msg.sigs[i].index], data, msg.sigs[i].sig)
+		err = ECDSAVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
 		if err != nil {
 			return nil, fmt.Errorf("Error in signature: "+strconv.Itoa(i)+"\n%s", err)
 		}
@@ -144,7 +168,7 @@ func (client *Client) GetFinalLinkageTag(context *ContextEd25519, msg *ServerMes
 		var valid bool
 		p := msg.proofs[i]
 		if p.r2 == nil {
-			valid = verifyMisbehavingProof(context, i, &p, msg.request.sArray[0])
+			valid = verifyMisbehavingProof(context, i, &p, msg.request.sCommits[0])
 		} else {
 			valid = verifyServerProof(context, i, msg)
 		}
@@ -157,16 +181,16 @@ func (client *Client) GetFinalLinkageTag(context *ContextEd25519, msg *ServerMes
 }
 
 /*ValidateClientMessage is an utility function to validate that a client message is correclty formed*/
-func ValidateClientMessage(msg *ClientMessage) bool {
+func ValidateClientMessage(msg *authenticationMessage) bool {
 	//Number of clients
-	i := len(msg.context.G.X)
+	i := len(msg.c.g.x)
 	//Number of servers
-	j := len(msg.context.G.Y)
+	j := len(msg.c.g.y)
 	//A commitment for each server exists and the second element is the generator S=(Z,g,S1,..,Sj)
-	if len(msg.sArray) != j+2 {
+	if len(msg.sCommits) != j+2 {
 		return false
 	}
-	if !msg.sArray[1].Equal(suite.Point().Mul(nil, suite.Scalar().One())) {
+	if !msg.sCommits[1].Equal(suite.Point().Mul(suite.Scalar().One(), nil)) {
 		return false
 	}
 	//T0 not empty
@@ -174,20 +198,20 @@ func ValidateClientMessage(msg *ClientMessage) bool {
 		return false
 	}
 	//Proof fields have the correct size
-	if len(msg.proof.c) != i || len(msg.proof.r) != 2*i || len(msg.proof.t) != 3*i || msg.proof.cs == nil {
+	if len(msg.p0.c) != i || len(msg.p0.r) != 2*i || len(msg.p0.t) != 3*i || msg.p0.cs == nil {
 		return false
 	}
 	return true
 }
 
 /*ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures*/
-func (msg *ClientMessage) ToBytes() (data []byte, err error) {
-	data, e := msg.context.ToBytes()
+func (msg *authenticationMessage) ToBytes() (data []byte, err error) {
+	data, e := msg.c.ToBytes()
 	if e != nil {
 		return nil, fmt.Errorf("Error in context: %s", e)
 	}
 
-	temp, e := PointArrayToBytes(&msg.sArray)
+	temp, e := PointArrayToBytes(&msg.sCommits)
 	if e != nil {
 		return nil, fmt.Errorf("Error in S: %s", e)
 	}
@@ -199,7 +223,7 @@ func (msg *ClientMessage) ToBytes() (data []byte, err error) {
 	}
 	data = append(data, temp...)
 
-	temp, e = msg.proof.ToBytes()
+	temp, e = msg.p0.ToBytes()
 	if e != nil {
 		return nil, fmt.Errorf("Error in proof: %s", e)
 	}
@@ -209,7 +233,7 @@ func (msg *ClientMessage) ToBytes() (data []byte, err error) {
 }
 
 /*ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures*/
-func (proof *ClientProof) ToBytes() (data []byte, err error) {
+func (proof *clientProof) ToBytes() (data []byte, err error) {
 	data, e := proof.cs.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("Error in cs: %s", e)

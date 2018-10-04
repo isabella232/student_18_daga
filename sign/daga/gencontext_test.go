@@ -1,11 +1,9 @@
 package daga
 
 import (
+	"github.com/dedis/kyber"
 	"math/rand"
 	"testing"
-
-	"gopkg.in/dedis/crypto.v0/abstract"
-	"gopkg.in/dedis/crypto.v0/random"
 )
 
 func TestGenerateTestContext(t *testing.T) {
@@ -23,11 +21,11 @@ func TestGenerateTestContext(t *testing.T) {
 		t.Error("Wrong clients length")
 	}
 
-	if len(context.H) != c {
+	if len(context.h) != c {
 		t.Error("Wrong H length")
 	}
 
-	if len(context.G.X) != c {
+	if len(context.g.x) != c {
 		t.Error("Wrong X length")
 	}
 
@@ -35,11 +33,11 @@ func TestGenerateTestContext(t *testing.T) {
 		t.Error("Wrong servers length")
 	}
 
-	if len(context.R) != s {
+	if len(context.r) != s {
 		t.Error("Wrong R length")
 	}
 
-	if len(context.G.Y) != s {
+	if len(context.g.y) != s {
 		t.Error("Wrong Y length")
 	}
 
@@ -77,9 +75,9 @@ func TestGenerateTestContext(t *testing.T) {
 func TestGenerateClientGenerator(t *testing.T) {
 	//Test correct execution of the function
 	index := rand.Int()
-	var commits []abstract.Point
+	var commits []kyber.Point
 	for i := 0; i < rand.Intn(10)+1; i++ {
-		commits = append(commits, suite.Point().Mul(nil, suite.Scalar().Pick(random.Stream)))
+		commits = append(commits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	}
 	h, err := GenerateClientGenerator(index, &commits)
 	if err != nil || h == nil {
@@ -97,7 +95,7 @@ func TestGenerateClientGenerator(t *testing.T) {
 		t.Errorf("Error in handling negative index: %d", index)
 	}
 
-	h, err = GenerateClientGenerator(index, new([]abstract.Point))
+	h, err = GenerateClientGenerator(index, new([]kyber.Point))
 	if h != nil || err == nil {
 		t.Errorf("Error in handling empty commits")
 	}

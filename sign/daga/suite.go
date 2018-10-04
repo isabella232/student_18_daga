@@ -13,16 +13,16 @@ import (
 	"reflect"
 )
 
-type SuiteEC struct {
+type suiteEC struct {
 	edwards25519.Curve  // twisted edwards curve used in Ed25519 (birationnaly equivalent to Curve25519 <== FIXME naming issue in kyber, the Curve25519 of kyber is the same as edwards25519 only allowing vartime ops
 }
 
-func newSuiteEC() Suite {
+func NewSuiteEC() Suite {
 	// QUESTION TODO ask if it is useful + return T or *T in interface var , what are the best practises and pitfalls to avoid ??
-	return new(SuiteEC)
+	return new(suiteEC)
 }
 
-func (s SuiteEC) newKey() kyber.Scalar {
+func (s suiteEC) newKey() kyber.Scalar {
 	return s.Curve.NewKey(s.RandomStream())
 }
 
@@ -30,21 +30,21 @@ func (s SuiteEC) newKey() kyber.Scalar {
 	this hash is used in DAGA to derive valid Scalars of the group used
 	// TODO doc
  */
-func (s SuiteEC) Hash() hash.Hash {
+func (s suiteEC) Hash() hash.Hash {
 	return sha256.New()
 }
 
-func (s SuiteEC) hashTwo() hash.Hash {
+func (s suiteEC) hashTwo() hash.Hash {
 	// FIXME
 	return nil
 }
 
-func (s SuiteEC) RandomStream() cipher.Stream {
+func (s suiteEC) RandomStream() cipher.Stream {
 	return random.New()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// QUESTION as an alternative to current construction SuiteProof, can just embedd edward's suite in SuiteEC and avoid code duplication that defines everything but I'm not fan of take everything even if not needed... ?
+// QUESTION as an alternative to current construction SuiteProof, can just embedd edward's suite in suiteEC and avoid code duplication that defines everything but I'm not fan of take everything even if not needed... ?
 // QUESTION I think my solution is more flexible too but maybe overkill, the last and best alternative is to clean other packages to decouple the functionality that they internally need from the functionality that they need but that is dictated by the user code
 // QUESTION ok I have no choice in fact, marshalling is internal to group.... why ?? => ok possible but now there is a little code duplication (New())
 // used to give to the proof framework the method it needs, satisfy both proof.Suite and daga.Suite

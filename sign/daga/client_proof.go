@@ -68,13 +68,12 @@ func (cpCtx clientProverCtx) Put(message interface{}) error {
 		cpCtx.responsesChan <- msg // block if chan full which should never happen (buffer should have the right size, #clients/predicates in the OrPred)
 		return nil
 	default:
-		return errors.New("clientProverCtx.Put: message from prover not of type kyber.Point neither kyber.Scalar nor []kyber.Scalar (" + fmt.Sprint("%T", message) + ")")
+		return errors.New("clientProverCtx.Put: message from prover not of type kyber.Point neither kyber.Scalar nor []kyber.Scalar (" + fmt.Sprintf("%T", message) + ")")
 	}
 }
 
 // retrieve the Prover's first message/commitments t=(t1.0, t1.10, t1.11,..., tn.0, tn.10, tn.11 )
 func (cpCtx clientProverCtx) commitments() ([]kyber.Point, error) {
-	// TODO DRY share "generic" helper with commitments method ?? func emptyFIFO(channel <-chan)
 	commitments := make([]kyber.Point, 0, cap(cpCtx.commitsChan))
 	for commit := range cpCtx.commitsChan {
 		// get commitment from Prover (via commitsChan channel via Put method)
@@ -91,7 +90,6 @@ func (cpCtx clientProverCtx) commitments() ([]kyber.Point, error) {
 
 // retrieve the Prover's responses r=(r1.0, r1.1,..., rn.0, rn.1)
 func (cpCtx clientProverCtx) responses() ([]kyber.Scalar, error) {
-	// TODO DRY share "generic" helper with commitments method ?? func emptyFIFO(channel <-chan)
 	responses := make([]kyber.Scalar, 0, cap(cpCtx.responsesChan))
 	for response := range cpCtx.responsesChan {
 		// get response from Prover (via responsesChan channel via Put method)
@@ -165,9 +163,9 @@ type clientProof struct {
 // TODO or accept lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
 // TODO QUESTION attach it to a receiver ? (don't see the point but I have seen it in kyber)
 // TODO doc, build the clientProof (as of DAGA paper) and return it to caller
-func prove(context authenticationContext, client client, tagAndCommitments initialTagAndCommitments) (clientProof, error) {
+func prove(context authenticationContext, client Client, tagAndCommitments initialTagAndCommitments, s kyber.Scalar) (clientProof, error) {
 	//construct the proof.Prover for client's PK and its proof.ProverContext
-	prover := newClientProver(context, client, tagAndCommitments)
+	prover := newClientProver(context, client, tagAndCommitments, s)
 	proverCtx := newClientProverCtx(suite, len(context.g.x))
 
 	//3-move interaction with server
@@ -215,8 +213,8 @@ func prove(context authenticationContext, client client, tagAndCommitments initi
 	return P, nil
 }
 
-// TODO doc, + see if can clean/lift a little the parameters
-func newClientProver(context authenticationContext, client client, tagAndCommitments initialTagAndCommitments) proof.Prover {
+// TODO doc, + see if can clean/lift a little the parameters + better name for s parameter throughout all methods
+func newClientProver(context authenticationContext, client Client, tagAndCommitments initialTagAndCommitments, s kyber.Scalar) proof.Prover {
 	// build the OR-predicate
 	andPreds := make([]proof.Predicate, 0, len(context.g.x))
 	choice := make(map[proof.Predicate]int, 1) // QUESTION maybe give sizes to the make calls or not..
@@ -242,7 +240,7 @@ func newClientProver(context authenticationContext, client client, tagAndCommitm
 		pval["X"+iStr] = pubKey
 		pval["H"+iStr] = context.h[i]
 		if i == client.index {
-			sval["s"+iStr] = tagAndCommitments.s
+			sval["s"+iStr] = s
 			sval["x"+iStr] = client.key.Private
 			pval["T0"+iStr] = tagAndCommitments.t0
 			pval["Sm"+iStr] = tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1]

@@ -10,6 +10,10 @@ import (
 	"github.com/dedis/student_18_daga/sign/daga"
 )
 
+var suite = daga.NewSuiteEC()
+
+
+// FIXME rewrite..
 func TestScenario(test *testing.T) {
 	//Number of clients
 	c := 20
@@ -20,13 +24,13 @@ func TestScenario(test *testing.T) {
 	var X []kyber.Point
 	var clients []daga.Client
 	for i := 0; i < c; i++ {
-		client, err := daga.CreateClient(i, nil)
+		client, err := daga.NewClient(i, nil)
 		if err != nil {
 			fmt.Printf("Cannot create clients:\n%s\n", err)
 			return
 		}
-		clients = append(clients, client)
-		X = append(X, client.GetPublicKey())
+		clients = append(clients, *client)
+		X = append(X, client.PublicKey())
 	}
 
 	//Generates servers
@@ -59,7 +63,11 @@ func TestScenario(test *testing.T) {
 		H = append(H, temp)
 	}
 
-	serviceContext := daga.aut{G: daga.Members{X: X, Y: Y}, R: R, H: H}
+	serviceContext, err := daga.NewAuthenticationContext(X, Y, R, H)
+	if err != nil {
+		fmt.Printf("Error in while creating context\n%s\n", err)
+		return
+	}
 
 	//Simulate the transfer of the context from the service to the client
 	//Encoding
@@ -87,9 +95,13 @@ func TestScenario(test *testing.T) {
 		return
 	}
 
+	X, Y = context.Members()
+
 	//Client's protocol
+	// FIXME port test to new kyber proof implementation
 	var i = rand.Intn(len(X))
-	T0, S, secret, err := clients[i].CreateRequest(context)
+	tagAndCommitments, s, err := newInitialTagAndCommitments(Y, context.h[clients[0].index])
+	T0, S := tagAndCommitments.t0, tagAndCommitments.sCommits
 	if err != nil {
 		fmt.Printf("Error when creating the request:\n%s\n", err)
 		return
@@ -123,6 +135,7 @@ func TestScenario(test *testing.T) {
 	}
 
 	//Server generation of the challenge upon receiving t
+	// FIXME if we want this to be a test at the very least don't assume that server and clients have same memory....
 	var j = rand.Intn(len(Y)) //Randomly selects the leader
 
 	//The commitments and the openings will be stored in the following array to ease their manipulation
@@ -130,9 +143,9 @@ func TestScenario(test *testing.T) {
 	var commits []daga.Commitment
 	var openings []kyber.Scalar
 	//Initialize both arrays
-	for num := 0; num < len(context.G.Y); num++ {
+	for num := 0; num < len(Y); num++ {
 		commits = append(commits, daga.Commitment{})
-		openings = append(openings, daga.Suite.Scalar().Zero())
+		openings = append(openings, suite.Scalar().Zero())
 	}
 
 	//The leader asks other servers to generates commitments by publishing its own signed commitment
@@ -299,8 +312,8 @@ func TestScenario(test *testing.T) {
 	//Each server receives the message
 	//then executes CheckUpdateChallenge
 	//and finally pass the challenge to the next one until it reaches the leader again
-	for shift := 1; shift <= len(context.G.Y); shift++ {
-		index := (j + shift) % (len(context.G.Y))
+	for shift := 1; shift <= len(Y); shift++ {
+		index := (j + shift) % (len(Y))
 		//Receive the previous message
 		var rcvChall daga.NetChallengeCheck
 		e := json.Unmarshal(netdata, &rcvChall)
@@ -459,7 +472,7 @@ func TestScenario(test *testing.T) {
 		return
 	} else {
 		//A Null value means that the authentication is rejected
-		if Tf.Equal(daga.Suite.Point().Null()) {
+		if Tf.Equal(suite.Point().Null()) {
 			fmt.Printf("Authentication rejected\n")
 			return
 		}
