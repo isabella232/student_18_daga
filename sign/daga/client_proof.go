@@ -1,27 +1,12 @@
 package daga
 
 import (
-	"crypto/cipher"
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/proof"
 	"strconv"
 )
-
-// cipherStreamReader adds a Read method onto a cipher.Stream,
-// so that it can be used as an io.Reader. (needed by PriRand())
-// TODO FIXME QUESTION copy pasted from hashProve => need to put it elsewhere in kyber to allow reusability !!
-type cipherStreamReader struct {
-	cipher.Stream
-}
-
-func (s *cipherStreamReader) Read(in []byte) (int, error) {
-	x := make([]byte, len(in))
-	s.XORKeyStream(x, x)
-	copy(in, x)
-	return len(in), nil
-}
 
 // Sigma-protocol proof.ProverContext used to conduct interactive proofs with a verifier over the network
 // TODO see if can make an interface from my API wrapper to put in kyber.proof
@@ -80,6 +65,7 @@ func (cpCtx clientProverCtx) commitments() ([]kyber.Point, error) {
 		commitments = append(commitments, commit)
 	} // blocks if chan empty (should not be a problem), (and until chan closed by sending side when done (in PubRand()))
 	// TODO maybe add a watchdog that will return/log an error if blocked too long  ? (because this should never happen !)
+	// TODO in fact good idea but not here, add a test case
 
 	if len(commitments) != cap(commitments) {
 		return nil, errors.New("clientProverCtx.commitments: received wrong number of commitments (" +
@@ -96,6 +82,7 @@ func (cpCtx clientProverCtx) responses() ([]kyber.Scalar, error) {
 		responses = append(responses, response)
 	} // blocks if chan empty (should not be a problem), (and until chan closed by sending side when done (when Prover.prove done))
 	// TODO maybe add a watchdog that will return an error if blocked too long  ? (because this should never happen !)
+	// TODO in fact good idea but not here, add a test case
 
 	if len(responses) != cap(responses) {
 		return nil, errors.New("clientProverCtx.responses: received wrong number of responses (" +
@@ -123,7 +110,7 @@ func (cpCtx clientProverCtx) PubRand(message ...interface{}) error {
 		scalar.Set(challenge)
 		return nil
 	default:
-		return errors.New("clientProverCtx.PubRand called with type " + fmt.Sprintf("%T", message) + " instead of kyber.Scalar")
+		return errors.New("clientProverCtx.PubRand called with type " + fmt.Sprintf("%T", message[0]) + " instead of kyber.Scalar")
 	}
 }
 
@@ -142,11 +129,15 @@ func (cpCtx clientProverCtx) receiveChallenges(challenge kyber.Scalar) []kyber.S
 // TODO kind of copy pasted from hasprovercontext => see how/where to share code/helpers
 // TODO doc, not meant to be used by "user" code
 func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
-	// FIXME instead use type assertion as before and setbytes
-	if err := cpCtx.Read(&cipherStreamReader{cpCtx.RandomStream()}, message...); err != nil {
-		return fmt.Errorf("clientProverCtx.PriRand: error reading random stream: %v", err.Error())
+	if len(message) > 0 {
+		switch scalar := message[0].(type) {
+		case kyber.Scalar:
+			scalar.SetInt64(42)//Pick(cpCtx.RandomStream())
+		default:
+			return errors.New("clientProverCtx.PriRand called with type " + fmt.Sprintf("%T", message[0]) + " instead of kyber.Scalar")
+		}
 	}
-	return nil
+	return errors.New("clientProverCtx.PriRand called with no arg, this is not expected")
 }
 
 // TODO FIXME maybe, pack the 2 channels in a new type and add methods NewTestProxy NewProxy etc..
@@ -201,6 +192,7 @@ func newClientProof(context authenticationContext,
 
 	//	receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code !!)
 	challenge := <- pullChallenge
+	// FIXME new Challenge struct in chan to add signature and then check signature
 	P.cs = challenge
 
 	//	forward master challenge to Prover in order to continue the proof process, and receive the sub-challenges from Prover
@@ -227,31 +219,31 @@ func newClientProver(context authenticationContext, client Client, tagAndCommitm
 	pval := make(map[string]kyber.Point, 1+4*len(context.g.x))
 	pval["G"] = suite.Point().Base()
 	//	build all the internal And predicates (one for each client in current auth. group
-	for i, pubKey := range context.g.x {
+	for k, pubKey := range context.g.x {
 		// client AndPred
-		iStr := strconv.Itoa(i)
+		kStr := strconv.Itoa(k)
 		//		i) client i’s linkage tag T0 is created with respect to his per-round generator hi
-		linkageTagValidPred := proof.Rep("T0"+iStr, "s"+iStr, "H"+iStr)
+		linkageTagValidPred := proof.Rep("T0"+kStr, "s"+kStr, "H"+kStr)
 		// 		ii)  S is a proper commitment to the product of all secrets that i shares with the servers
-		commitmentValidPred := proof.Rep("Sm"+iStr, "s"+iStr, "G")
+		commitmentValidPred := proof.Rep("Sm"+kStr, "s"+kStr, "G")
 		// 		iii) client i's private key xi corresponds to one of the public keys included in the group definition G
-		knowOnePrivateKeyPred := proof.Rep("X"+iStr, "x"+iStr, "G")
+		knowOnePrivateKeyPred := proof.Rep("X"+kStr, "x"+kStr, "G")
 
 		clientAndPred := proof.And(linkageTagValidPred, commitmentValidPred, knowOnePrivateKeyPred)
 
 		andPreds = append(andPreds, clientAndPred)
 
 		// build maps for both public and secret values needed to construct the Prover from the predicate
-		pval["X"+iStr] = pubKey
-		pval["H"+iStr] = context.h[i]
-		if i == client.index {
-			sval["s"+iStr] = s
-			sval["x"+iStr] = client.key.Private
-			pval["T0"+iStr] = tagAndCommitments.t0
-			pval["Sm"+iStr] = tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1]
+		pval["X"+kStr] = pubKey
+		pval["H"+kStr] = context.h[k]
+		if k == client.index {
+			sval["s"+kStr] = s
+			sval["x"+kStr] = client.key.Private
+			pval["T0"+kStr] = tagAndCommitments.t0
+			pval["Sm"+kStr] = tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1]
 		} else {
-			pval["T0"+iStr] = suite.Point().Pick(suite.RandomStream())
-			pval["Sm"+iStr] = suite.Point().Pick(suite.RandomStream())
+			pval["T0"+kStr] = suite.Point().Pick(suite.RandomStream())
+			pval["Sm"+kStr] = suite.Point().Pick(suite.RandomStream())
 		}
 	}
 	finalOrPred := proof.Or(andPreds...)

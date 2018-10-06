@@ -1,6 +1,7 @@
 package daga
 
 import (
+	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -67,19 +68,19 @@ func TestCreateRequest(t *testing.T) {
 }
 
 // GenerateProofCommitments creates and returns the client's commitments t
-// old implementation used for regression testing of the current implementation making use of the kyber.proof framework
+// TODO old implementation used for regression testing of the current implementation making use of the kyber.proof framework
 func generateProofCommitments(clientIndex int, context *authenticationContext, T0 kyber.Point, s kyber.Scalar) ([]kyber.Point, []kyber.Scalar, []kyber.Scalar) {
 	//Generates w randomly except for w[client.index] = 0
 	w := make([]kyber.Scalar, len(context.h))
 	for i := range w {
-		w[i] = suite.Scalar().Pick(suite.RandomStream())
+		w[i] = suite.Scalar().SetInt64(42)//Pick(suite.RandomStream())
 	}
 	w[clientIndex] = suite.Scalar().Zero()
 
 	//Generates random v (2 per client)
 	v := make([]kyber.Scalar, 2*len(context.h))
 	for i := range v {
-		v[i] = suite.Scalar().Pick(suite.RandomStream())
+		v[i] = suite.Scalar().SetInt64(42)//Pick(suite.RandomStream())
 	}
 
 	//Generates the commitments t (3 per clients)
@@ -102,12 +103,12 @@ func generateProofCommitments(clientIndex int, context *authenticationContext, T
 	return t, v, w
 }
 
-func TestGenerateProofCommitments(t *testing.T) {
+func TestGenerateProofCommitmentsAndResponses(t *testing.T) {
 	clients, _, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
 
-	// TODO here use previous's student code to regression test the new implementation (assuming his implementation was correct)
+	// QUESTION FIXME find way to give same random coins to both implementations to compare results, didn't manage to make seed() work....
 	refCommits,_,_ := generateProofCommitments(0, context, T0, s)
 
 	// dummy channel to receive the commitments (they will be part of the returned proof)
@@ -117,6 +118,7 @@ func TestGenerateProofCommitments(t *testing.T) {
 	pullChallenge := make(chan kyber.Scalar)
 	go func() {
 		<- pushCommitments
+		// TODO sign challenge
 		pullChallenge <- suite.Scalar().Pick(suite.RandomStream())
 	}()
 
@@ -127,7 +129,7 @@ func TestGenerateProofCommitments(t *testing.T) {
 		t.Error("t is empty")
 	}
 
-	if len(commits) != 3*len(clients) || len(commits) != len(refCommits) {
+	if len(commits) != 3*len(clients) {//|| len(commits) != len(refCommits) {
 		t.Errorf("Wrong length of t: %d instead of %d", len(commits), 3*len(clients))
 	}
 
@@ -140,130 +142,128 @@ func TestGenerateProofCommitments(t *testing.T) {
 		return true
 	}
 
+	fmt.Println(refCommits, "\n#######################################")
+	fmt.Println(commits)
+
 	if !ok() {
 		t.Error("regression, commitments differ from previous manual implementation")
 	}
 }
 
-func TestGenerateProofResponses(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	_, v, w := generateProofCommitments(0, context, T0, s)
 
-	//Dumb challenge generation
-	cs := suite.Scalar().Pick(suite.RandomStream())
-	msg, _ := cs.MarshalBinary()
-	var sigs []serverSignature
-	//Make each test server sign the challenge
-	for _, server := range servers {
-		sig, e := ECDSASign(server.private, msg)
-		if e != nil {
-			t.Errorf("Cannot sign the challenge for server %d", server.index)
-		}
-		sigs = append(sigs, serverSignature{index: server.index, sig: sig})
-	}
-	challenge := Challenge{cs: cs, sigs: sigs}
-
-	//Normal execution
-	c, r, err := clients[0].GenerateProofResponses(context, s, &challenge, v, w)
-	if err != nil {
-		t.Error("Cannot generate proof responses")
-	}
-
-	if len(c) != len(clients) {
-		t.Errorf("Wrong length of c: %d instead of %d", len(c), len(clients))
-	}
-	if len(r) != 2*len(clients) {
-		t.Errorf("Wrong length of r: %d instead of %d", len(r), 2*len(clients))
-	}
-
-	for i, temp := range c {
-		if temp == nil {
-			t.Errorf("nil in c at index %d", i)
-		}
-	}
-	for i, temp := range r {
-		if temp == nil {
-			t.Errorf("nil in r at index %d", i)
-		}
-	}
-
-	//Incorrect challenges
-	var fake kyber.Scalar
-	for {
-		fake = suite.Scalar().Pick(suite.RandomStream())
-		if !fake.Equal(cs) {
-			break
-		}
-	}
-	wrongChallenge := Challenge{cs: fake, sigs: sigs}
-	c, r, err = clients[0].GenerateProofResponses(context, s, &wrongChallenge, v, w)
-	if err == nil {
-		t.Error("Cannot verify the message")
-	}
-	if c != nil {
-		t.Error("c not nil on message error")
-	}
-	if r != nil {
-		t.Error("r not nil on message error")
-	}
-
-	//Signature modification
-	newsig := append([]byte("A"), sigs[0].sig...)
-	newsig = newsig[:len(sigs[0].sig)]
-	sigs[0].sig = newsig
-	SigChallenge := Challenge{cs: cs, sigs: sigs}
-	c, r, err = clients[0].GenerateProofResponses(context, s, &SigChallenge, v, w)
-	if err == nil {
-		t.Error("Cannot verify the message")
-	}
-	if c != nil {
-		t.Error("c not nil on signature error")
-	}
-	if r != nil {
-		t.Error("r not nil on signature error")
-	}
-}
+// TODO clean and merge with previous test + add new tests for sign/verify when done moving to EdDSA
+//func TestGenerateProofResponses(t *testing.T) {
+//	clients, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+//	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+//	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
+//	_, v, w := generateProofCommitments(0, context, T0, s)
+//
+//	//Dumb challenge generation
+//	cs := suite.Scalar().Pick(suite.RandomStream())
+//	msg, _ := cs.MarshalBinary()
+//	var sigs []serverSignature
+//	//Make each test server sign the challenge
+//	for _, server := range servers {
+//		sig, e := ECDSASign(server.private, msg)
+//		if e != nil {
+//			t.Errorf("Cannot sign the challenge for server %d", server.index)
+//		}
+//		sigs = append(sigs, serverSignature{index: server.index, sig: sig})
+//	}
+//	challenge := Challenge{cs: cs, sigs: sigs}
+//
+//	//Normal execution
+//	c, r, err := clients[0].GenerateProofResponses(context, s, &challenge, v, w)
+//	if err != nil {
+//		t.Error("Cannot generate proof responses")
+//	}
+//
+//	if len(c) != len(clients) {
+//		t.Errorf("Wrong length of c: %d instead of %d", len(c), len(clients))
+//	}
+//	if len(r) != 2*len(clients) {
+//		t.Errorf("Wrong length of r: %d instead of %d", len(r), 2*len(clients))
+//	}
+//
+//	for i, temp := range c {
+//		if temp == nil {
+//			t.Errorf("nil in c at index %d", i)
+//		}
+//	}
+//	for i, temp := range r {
+//		if temp == nil {
+//			t.Errorf("nil in r at index %d", i)
+//		}
+//	}
+//
+//	//Incorrect challenges
+//	var fake kyber.Scalar
+//	for {
+//		fake = suite.Scalar().Pick(suite.RandomStream())
+//		if !fake.Equal(cs) {
+//			break
+//		}
+//	}
+//	wrongChallenge := Challenge{cs: fake, sigs: sigs}
+//	c, r, err = clients[0].GenerateProofResponses(context, s, &wrongChallenge, v, w)
+//	if err == nil {
+//		t.Error("Cannot verify the message")
+//	}
+//	if c != nil {
+//		t.Error("c not nil on message error")
+//	}
+//	if r != nil {
+//		t.Error("r not nil on message error")
+//	}
+//
+//	//Signature modification
+//	newsig := append([]byte("A"), sigs[0].sig...)
+//	newsig = newsig[:len(sigs[0].sig)]
+//	sigs[0].sig = newsig
+//	SigChallenge := Challenge{cs: cs, sigs: sigs}
+//	c, r, err = clients[0].GenerateProofResponses(context, s, &SigChallenge, v, w)
+//	if err == nil {
+//		t.Error("Cannot verify the message")
+//	}
+//	if c != nil {
+//		t.Error("c not nil on signature error")
+//	}
+//	if r != nil {
+//		t.Error("r not nil on signature error")
+//	}
+//}
 
 func TestVerifyClientProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+	clients, _, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tproof, v, w := generateProofCommitments(0, context, T0, s)
 
-	//Dumb challenge generation
-	cs := suite.Scalar().Pick(suite.RandomStream())
-	msg, _ := cs.MarshalBinary()
-	var sigs []serverSignature
-	//Make each test server sign the challenge
-	for _, server := range servers {
-		sig, e := ECDSASign(server.private, msg)
-		if e != nil {
-			t.Errorf("Cannot sign the challenge for server %d", server.index)
-		}
-		sigs = append(sigs, serverSignature{index: server.index, sig: sig})
+	pushCommitments := make(chan []kyber.Point)
+	pullChallenge := make(chan kyber.Scalar)
+	go func() {
+		<- pushCommitments
+		// TODO sign challenge
+		//Dumb challenge generation
+		pullChallenge <- suite.Scalar().Pick(suite.RandomStream())
+	}()
+	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	if err != nil {
+		t.Error("newClientProof returned an error:", err)
 	}
-	challenge := Challenge{cs: cs, sigs: sigs}
 
-	//Generate the final proof
-	c, r, _ := clients[0].GenerateProofResponses(context, s, &challenge, v, w)
-
-	// TODO see what the fuck (if there was a good reason previously to create "new" context...)
-	ClientMsg := authenticationMessage{
+	clientMsg := authenticationMessage{
 		c: *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  clientProof{c: c, cs: cs, r: r, t: tproof},
+		p0:  proof,
 	}
 
 	//Normal execution
-	check := verifyClientProof(ClientMsg)
+	check := verifyClientProof(clientMsg)
 	if !check {
 		t.Error("Cannot verify client proof")
 	}
 
 	//Modify the value of some commitments
-	ScratchMsg := ClientMsg
+	ScratchMsg := clientMsg
 	i := rand.Intn(len(clients))
 	ttemp := ScratchMsg.p0.t[3*i].Clone()
 	ScratchMsg.p0.t[3*i] = suite.Point().Null()
