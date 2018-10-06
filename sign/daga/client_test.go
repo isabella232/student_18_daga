@@ -1,7 +1,6 @@
 package daga
 
 import (
-	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -67,49 +66,50 @@ func TestCreateRequest(t *testing.T) {
 	}
 }
 
-// GenerateProofCommitments creates and returns the client's commitments t
-// TODO old implementation used for regression testing of the current implementation making use of the kyber.proof framework
-func generateProofCommitments(clientIndex int, context *authenticationContext, T0 kyber.Point, s kyber.Scalar) ([]kyber.Point, []kyber.Scalar, []kyber.Scalar) {
-	//Generates w randomly except for w[client.index] = 0
-	w := make([]kyber.Scalar, len(context.h))
-	for i := range w {
-		w[i] = suite.Scalar().SetInt64(42)//Pick(suite.RandomStream())
-	}
-	w[clientIndex] = suite.Scalar().Zero()
-
-	//Generates random v (2 per client)
-	v := make([]kyber.Scalar, 2*len(context.h))
-	for i := range v {
-		v[i] = suite.Scalar().SetInt64(42)//Pick(suite.RandomStream())
-	}
-
-	//Generates the commitments t (3 per clients)
-	t := make([]kyber.Point, 3*len(context.h))
-	for i := 0; i < len(context.h); i++ {
-		a := suite.Point().Mul(w[i], context.g.x[i])
-		b := suite.Point().Mul(v[2*i], nil)
-		t[3*i] = suite.Point().Add(a, b)
-
-		Sm := suite.Point().Mul(s, nil)
-		c := suite.Point().Mul(w[i], Sm)
-		d := suite.Point().Mul(v[2*i+1], nil)
-		t[3*i+1] = suite.Point().Add(c, d)
-
-		e := suite.Point().Mul(w[i], T0)
-		f := suite.Point().Mul(v[2*i+1], context.h[i])
-		t[3*i+2] = suite.Point().Add(e, f)
-	}
-
-	return t, v, w
-}
+//// GenerateProofCommitments creates and returns the client's commitments t
+//// TODO old implementation used for regression testing of the current implementation making use of the kyber.proof framework (if useful.. my goal is not to test the proof framework which should be independently tested)
+//func generateProofCommitments(clientIndex int, context *authenticationContext, T0 kyber.Point, s kyber.Scalar) ([]kyber.Point, []kyber.Scalar, []kyber.Scalar) {
+//	//Generates w randomly except for w[client.index] = 0
+//	w := make([]kyber.Scalar, len(context.h))
+//	for i := range w {
+//		w[i] = suite.Scalar().SetInt64(42)//Pick(suite.RandomStream())
+//	}
+//	w[clientIndex] = suite.Scalar().Zero()
+//
+//	//Generates random v (2 per client)
+//	v := make([]kyber.Scalar, 2*len(context.h))
+//	for i := range v {
+//		v[i] = suite.Scalar().SetInt64(42)//Pick(suite.RandomStream())
+//	}
+//
+//	//Generates the commitments t (3 per clients)
+//	t := make([]kyber.Point, 3*len(context.h))
+//	for i := 0; i < len(context.h); i++ {
+//		a := suite.Point().Mul(w[i], context.g.x[i])
+//		b := suite.Point().Mul(v[2*i], nil)
+//		t[3*i] = suite.Point().Add(a, b)
+//
+//		// FIXME QUESTION : I put random points whereas he put always T0 and Sm ? who is right ?
+//		Sm := suite.Point().Mul(s, nil)
+//		c := suite.Point().Mul(w[i], Sm)
+//		d := suite.Point().Mul(v[2*i+1], nil)
+//		t[3*i+1] = suite.Point().Add(c, d)
+//
+//		e := suite.Point().Mul(w[i], T0)
+//		f := suite.Point().Mul(v[2*i+1], context.h[i])
+//		t[3*i+2] = suite.Point().Add(e, f)
+//	}
+//
+//	return t, v, w
+//}
 
 func TestGenerateProofCommitmentsAndResponses(t *testing.T) {
 	clients, _, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
+	//T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
 
 	// QUESTION FIXME find way to give same random coins to both implementations to compare results, didn't manage to make seed() work....
-	refCommits,_,_ := generateProofCommitments(0, context, T0, s)
+	//refCommits,_,_ := generateProofCommitments(0, context, T0, s)
 
 	// dummy channel to receive the commitments (they will be part of the returned proof)
 	// and dummy channel to send a dummy challenge as we are only interested in the commitments
@@ -133,21 +133,6 @@ func TestGenerateProofCommitmentsAndResponses(t *testing.T) {
 		t.Errorf("Wrong length of t: %d instead of %d", len(commits), 3*len(clients))
 	}
 
-	ok := func() bool {
-		for i,ref := range refCommits {
-			if !ref.Equal(commits[i]) {
-				return false
-			}
-		}
-		return true
-	}
-
-	fmt.Println(refCommits, "\n#######################################")
-	fmt.Println(commits)
-
-	if !ok() {
-		t.Error("regression, commitments differ from previous manual implementation")
-	}
 }
 
 

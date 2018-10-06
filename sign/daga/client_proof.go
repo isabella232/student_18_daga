@@ -132,7 +132,7 @@ func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
 	if len(message) > 0 {
 		switch scalar := message[0].(type) {
 		case kyber.Scalar:
-			scalar.SetInt64(42)//Pick(cpCtx.RandomStream())
+			scalar.Pick(cpCtx.RandomStream())
 		default:
 			return errors.New("clientProverCtx.PriRand called with type " + fmt.Sprintf("%T", message[0]) + " instead of kyber.Scalar")
 		}
@@ -242,6 +242,8 @@ func newClientProver(context authenticationContext, client Client, tagAndCommitm
 			pval["T0"+kStr] = tagAndCommitments.t0
 			pval["Sm"+kStr] = tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1]
 		} else {
+			// FIXME QUESTION how to properly simulate the other predicates ? other student set those always to the same and current user T0 and Sm
+			// I don't see why not set them to random points so for now I keep my interpretation
 			pval["T0"+kStr] = suite.Point().Pick(suite.RandomStream())
 			pval["Sm"+kStr] = suite.Point().Pick(suite.RandomStream())
 		}
