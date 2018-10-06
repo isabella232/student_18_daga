@@ -1,4 +1,5 @@
 package daga
+// TODO organize those in a "sub package" of daga "clientProof" and rename everything with better names
 
 import (
 	"errors"
@@ -7,6 +8,32 @@ import (
 	"github.com/dedis/kyber/proof"
 	"strconv"
 )
+
+// TODO verifier
+// Sigma-protocol proof.VerifierContext used to conduct interactive proofs with a prover over the network
+type clientVerifierCtx struct {
+	SuiteProof
+}
+
+// TODO doc
+// n = #clients in auth. group = #predicates in OrProof
+func newClientVerifierCtx(suite Suite) *clientVerifierCtx {
+	// FIXME: see if/where I need to deep copy passed DATA !!
+	return &clientVerifierCtx{
+		SuiteProof:        newSuiteProof(suite),
+	}
+}
+
+// satisfy the proof.VerifierContext interface, TODO doc, not meant to be used by "user" code
+func (cvCtx clientVerifierCtx) Get(message interface{}) error {
+
+	return nil
+}
+
+// satisfy the proof.VerifierContext interface, TODO doc, not meant to be used by "user" code
+func (cvCtx clientVerifierCtx) PubRand(message ...interface{}) error {
+	return nil
+}
 
 // Sigma-protocol proof.ProverContext used to conduct interactive proofs with a verifier over the network
 // TODO see if can make an interface from my API wrapper to put in kyber.proof
@@ -210,7 +237,39 @@ func newClientProof(context authenticationContext,
 	return P, nil
 }
 
+// TODO doc
+func newClientProofAndPred(k int) (clientAndPred proof.Predicate) {
+	// client AndPred
+	kStr := strconv.Itoa(k)
+	//		i) client i’s linkage tag T0 is created with respect to his per-round generator hi
+	linkageTagValidPred := proof.Rep("T0"+kStr, "s"+kStr, "H"+kStr)
+	// 		ii)  S is a proper commitment to the product of all secrets that i shares with the servers
+	commitmentValidPred := proof.Rep("Sm"+kStr, "s"+kStr, "G")
+	// 		iii) client i's private key xi corresponds to one of the public keys included in the group definition G
+	knowOnePrivateKeyPred := proof.Rep("X"+kStr, "x"+kStr, "G")
+
+	clientAndPred = proof.And(linkageTagValidPred, commitmentValidPred, knowOnePrivateKeyPred)
+	return
+}
+
+// TODO doc, + see if can clean/lift a little the parameters + QUESTION move where I'll put server related functions and structs since it will be the servers that will use it or ?
+func newClientVerifier(context authenticationContext) proof.Verifier {
+	// build the OR-predicate
+	andPreds := make([]proof.Predicate, 0, len(context.g.x))
+	for k, _ := range context.g.x {
+		andPreds = append(andPreds, newClientProofAndPred(k))
+	}
+	finalOrPred := proof.Or(andPreds...)
+	return finalOrPred.Verifier(newSuiteProof(suite), )
+}
+
 // TODO doc, + see if can clean/lift a little the parameters + better name for s parameter throughout all methods
+// FIXME small dilemna, here, as I first wrote I can build the prover (and naturally the predicate) in one pass
+// TODO but as I need to build the predicate only (not the additional maps etcc.) in order to build the Verifier
+// TODO I have 2 choices 1) keep same implementation => duplicate some code to build the predicate when constructing a verifier
+// TODO 				 2) have a new function create the predicate only and reuse it in both newClientProver and newClientVerifier
+// TODO						(means I need 2 loop to build the Prover...)
+// TODO 	for now I chose the code duplication since there is not much code to begin with.. and it is ~trivial
 func newClientProver(context authenticationContext, client Client, tagAndCommitments initialTagAndCommitments, s kyber.Scalar) proof.Prover {
 	// build the OR-predicate
 	andPreds := make([]proof.Predicate, 0, len(context.g.x))
@@ -220,18 +279,8 @@ func newClientProver(context authenticationContext, client Client, tagAndCommitm
 	pval["G"] = suite.Point().Base()
 	//	build all the internal And predicates (one for each client in current auth. group
 	for k, pubKey := range context.g.x {
-		// client AndPred
 		kStr := strconv.Itoa(k)
-		//		i) client i’s linkage tag T0 is created with respect to his per-round generator hi
-		linkageTagValidPred := proof.Rep("T0"+kStr, "s"+kStr, "H"+kStr)
-		// 		ii)  S is a proper commitment to the product of all secrets that i shares with the servers
-		commitmentValidPred := proof.Rep("Sm"+kStr, "s"+kStr, "G")
-		// 		iii) client i's private key xi corresponds to one of the public keys included in the group definition G
-		knowOnePrivateKeyPred := proof.Rep("X"+kStr, "x"+kStr, "G")
-
-		clientAndPred := proof.And(linkageTagValidPred, commitmentValidPred, knowOnePrivateKeyPred)
-
-		andPreds = append(andPreds, clientAndPred)
+		andPreds = append(andPreds, newClientProofAndPred(k))
 
 		// build maps for both public and secret values needed to construct the Prover from the predicate
 		pval["X"+kStr] = pubKey
@@ -244,6 +293,9 @@ func newClientProver(context authenticationContext, client Client, tagAndCommitm
 		} else {
 			// FIXME QUESTION how to properly simulate the other predicates ? other student set those always to the same and current user T0 and Sm
 			// I don't see why not set them to random points so for now I keep my interpretation
+			// Ok maybe I see, we need a convention with the verifier on what is being proven i.e. the predicate if we draw those point randomly
+			// we cannot expect the verifier to pick the same ones => either need way to give this additional information to verifier
+			// or always keep same point ! => keep same point + I kind of feel I was wrong an we NEED to keep same point
 			pval["T0"+kStr] = suite.Point().Pick(suite.RandomStream())
 			pval["Sm"+kStr] = suite.Point().Pick(suite.RandomStream())
 		}
