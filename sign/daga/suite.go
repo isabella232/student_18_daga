@@ -47,6 +47,8 @@ func (s suiteEC) RandomStream() cipher.Stream {
 // QUESTION as an alternative to current construction SuiteProof, can just embedd edward's suite in suiteEC and avoid code duplication that defines everything but I'm not fan of take everything even if not needed... ?
 // QUESTION I think my solution is more flexible too but maybe overkill, the last and best alternative is to clean other packages to decouple the functionality that they internally need from the functionality that they need but that is dictated by the user code
 // QUESTION ok I have no choice in fact, marshalling is internal to group.... why ?? => ok possible but now there is a little code duplication (New())
+// QUESTION TODO remove the "hack"/addition on suite, ask if possible to decouple the functions that are only needed internally by proof framework and the ones that come from user of framework
+// QUESTION TODO to avoid bringing the dependencies of proof into "user" code
 // used to give to the proof framework the method it needs, satisfy both proof.Suite and daga.Suite
 type SuiteProof struct {
 	Suite

@@ -213,15 +213,14 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 	}
 }
 
-
-
-
-
-
-
-
-
-
+// TODO doc + name + return value .. + make it a method of server ! (it is the servers that check the proof validity)
+func verifyAuthenticationMessage(msg authenticationMessage) bool {
+	if !ValidateClientMessage(&msg) {
+		return false
+	}
+	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
+	return verifyClientProof(msg.c, msg.p0, msg.initialTagAndCommitments)
+}
 
 // FIXME clean those below when tests passes
 /*ECDSASign gnerates a Schnorr signature*/

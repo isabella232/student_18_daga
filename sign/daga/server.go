@@ -267,8 +267,8 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 		}
 	}
 
-	// Check the client proof
-	if !verifyClientProof(msg.request) {
+	// Check the client message and proof
+	if !verifyAuthenticationMessage(msg.request) {
 		return fmt.Errorf("Invalid client's proof")
 	}
 

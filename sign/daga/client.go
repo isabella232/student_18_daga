@@ -43,51 +43,6 @@ func (client *Client) GenerateProofResponses(context *authenticationContext, s k
 	return c, r, nil
 }
 
-/*verifyClientProof checks the validity of a client's proof*/
-func verifyClientProof(msg authenticationMessage) bool {
-	check := ValidateClientMessage(&msg)
-	if !check {
-		return false
-	}
-
-	n := len(msg.c.g.x)
-
-	//Check the commitments
-	for i := 0; i < n; i++ {
-		a := suite.Point().Mul(msg.p0.c[i], msg.c.g.x[i])
-		b := suite.Point().Mul(msg.p0.r[2*i], nil)
-		ti0 := suite.Point().Add(a, b)
-		if !ti0.Equal(msg.p0.t[3*i]) {
-			return false
-		}
-
-		c := suite.Point().Mul(msg.p0.c[i], msg.sCommits[len(msg.sCommits)-1])
-		d := suite.Point().Mul(msg.p0.r[2*i+1], nil)
-		ti10 := suite.Point().Add(c, d)
-		if !ti10.Equal(msg.p0.t[3*i+1]) {
-			return false
-		}
-
-		e := suite.Point().Mul(msg.p0.c[i], msg.t0)
-		f := suite.Point().Mul(msg.p0.r[2*i+1], msg.c.h[i])
-		ti11 := suite.Point().Add(e, f)
-		if !ti11.Equal(msg.p0.t[3*i+2]) {
-			return false
-		}
-	}
-
-	//Check the challenge
-	cs := suite.Scalar().Zero()
-	for _, ci := range msg.p0.c {
-		cs = suite.Scalar().Add(cs, ci)
-	}
-	if !cs.Equal(msg.p0.cs) {
-		return false
-	}
-
-	return true
-}
-
 //GetFinalLinkageTag checks the server's signatures and proofs
 //It outputs the final linkage tag of the client
 func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
@@ -137,6 +92,7 @@ func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *Se
 }
 
 /*ValidateClientMessage is an utility function to validate that a client message is correclty formed*/
+// FIXME return error instead of bool
 func ValidateClientMessage(msg *authenticationMessage) bool {
 	//Number of clients
 	i := len(msg.c.g.x)
@@ -144,17 +100,21 @@ func ValidateClientMessage(msg *authenticationMessage) bool {
 	j := len(msg.c.g.y)
 	//A commitment for each server exists and the second element is the generator S=(Z,g,S1,..,Sj)
 	if len(msg.sCommits) != j+2 {
+		// TODO log something
 		return false
 	}
 	if !msg.sCommits[1].Equal(suite.Point().Mul(suite.Scalar().One(), nil)) {
+		// TODO log something
 		return false
 	}
 	//T0 not empty
 	if msg.t0 == nil {
+		// TODO log something
 		return false
 	}
 	//Proof fields have the correct size
 	if len(msg.p0.c) != i || len(msg.p0.r) != 2*i || len(msg.p0.t) != 3*i || msg.p0.cs == nil {
+		// TODO log something
 		return false
 	}
 	return true
