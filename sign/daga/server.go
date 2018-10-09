@@ -229,7 +229,7 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 
 	//Checks that not all servers already did the protocol
 	if len(msg.indexes) >= len(context.g.y) {
-		return fmt.Errorf("Too many calls of the protocol")
+		return fmt.Errorf("Too many calls of the protocol") // ... ok... smells like fish..
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
@@ -284,8 +284,6 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 	hasher := suite.Hash()
 	suite.Point().Mul(server.private, msg.request.sCommits[0]).MarshalTo(hasher)
 	s := suite.Scalar().SetBytes(hasher.Sum(nil))
-	//rand := suite.Cipher(hash)  // QUESTION here it is again logical but.. again WTF?
-	//s := suite.Scalar().Pick(rand)
 	var T kyber.Point
 	var proof *serverProof
 	//Detect a misbehaving client and generate the elements of the server's message accordingly
@@ -309,13 +307,13 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 	//Signs our message
 	temp, e := T.MarshalBinary()
 	if e != nil {
-		return fmt.Errorf("Error in T: %s", e)
+		return fmt.Errorf("error in T: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = proof.ToBytes()
 	if e != nil {
-		return fmt.Errorf("Error in proof: %s", e)
+		return fmt.Errorf("error in proof: %s", e)
 	}
 	data = append(data, temp...)
 

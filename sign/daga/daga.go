@@ -1,6 +1,5 @@
 package daga
 
-// TODO decide slice assign vs append, are we chasing that kind of performance +  ?
 // TODO decide / review method vs functions + "granularity of parameters"
 
 // TODO quick documentation and DAGA description with links to relevant parts of the Syta papers
@@ -26,9 +25,6 @@ type Suite interface {
 	kyber.Random
 	key.Generator // present since (e.g edwards25519) we need to take care while generating secrets, in order to avoid subgroup attacks
 	kyber.HashFactory
-	// TODO and maybe transform this suite concept/name into a daga interface and define methods needed by the algo to be implemented by the daga concrete implementations
-	// => answer: no they (DEDIS) don't view Suite like that (even if Suites are really that fundamentally/ or compatible understanding)
-	// FIXME "correct"/better names..
 	hashTwo() hash.Hash  // DAGA needs another hash function of different size (TODO see if it is the case for all groups/concrete implementations and how to remain generic)
 }
 
@@ -80,7 +76,7 @@ p0 // TODO doc
 */
 type authenticationMessage struct {
 	c authenticationContext
-	initialTagAndCommitments  // FIXME hahah I currently send the secrets
+	initialTagAndCommitments
 	p0 clientProof
 }
 
@@ -217,6 +213,7 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 
 // TODO doc + name + return value .. + make it a method of server ! (it is the servers that check the proof validity)
 func verifyAuthenticationMessage(msg authenticationMessage) bool {
+	// TODO FIXME see where ot put this one, just saw that serverprotocol calls validate then verify, but maybe other code expect verify to validate
 	if !ValidateClientMessage(&msg) {
 		return false
 	}
