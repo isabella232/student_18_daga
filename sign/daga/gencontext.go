@@ -3,6 +3,7 @@ package daga
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"io"
@@ -35,42 +36,53 @@ func GenerateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point
 }
 
 // QUESTION RHAAAAAAA why this not used in scenario test + why here + fuuuuck ..
-func generateTestContext(c, s int) (clients []Client, servers []Server, context *authenticationContext, err error) {
-	context = &authenticationContext{}
+func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, error) {
 	if c <= 0 {
-		return nil, nil, nil, fmt.Errorf("Invalid number of client asked: %d", c) // ...
+		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", c) // ...
 	}
 
 	if s <= 0 {
-		return nil, nil, nil, fmt.Errorf("Invalid number of client asked: %d", s)
+		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", s)
 	}
 
 	//Generates s servers
+	serverKeys := make([]kyber.Point, 0, s)
+	servers := make([]Server, 0, s)
 	for i := 0; i < s; i++ {
 		new := Server{index: i, private: suite.Scalar().Pick(suite.RandomStream())}
-		context.g.y = append(context.g.y, suite.Point().Mul(new.private, nil))
+		serverKeys = append(serverKeys, suite.Point().Mul(new.private, nil))
 		servers = append(servers, new)
 	}
 
-	//Generates the per-round secrets for the ServerSignature
+	//Generates the per-round secrets for the ServerSignature and keep track of the commits
+	perRoundSecretCommits := make([]kyber.Point, 0, s)
 	for i, serv := range servers {
-		context.r = append(context.r, serv.GenerateNewRoundSecret())
+		perRoundSecretCommits = append(perRoundSecretCommits, serv.GenerateNewRoundSecret())
 		servers[i] = serv
 	}
 
 	//Generates c clients with their per-round generators
+	clientKeys := make([]kyber.Point, 0, c)
+	clients := make([]Client, 0, c)
+	clientGenerators := make([]kyber.Point, 0, c)
 	for i := 0; i < c; i++ {
 		new, _ := NewClient(i, nil)
 
-		context.g.x = append(context.g.x, new.key.Public)
+		clientKeys = append(clientKeys, new.key.Public)
 		clients = append(clients, *new)
 
-		temp, err := GenerateClientGenerator(i, &context.r)
+		// TODO verify that the previous student's code (this one) is correct
+		generator, err := GenerateClientGenerator(i, &perRoundSecretCommits)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("Error in client's generators:\n%s", err)
+			return nil, nil, nil, errors.New("error while generating client's generators:\n" + err.Error())
 		}
 
-		context.h = append(context.h, temp)
+		clientGenerators = append(clientGenerators, generator)
 	}
-	return clients, servers, context, nil
+
+	if context, err := NewAuthenticationContext(clientKeys, serverKeys, perRoundSecretCommits, clientGenerators); err != nil {
+		return nil, nil, nil, errors.New("failed to create authenticationcontext: " + err.Error())
+	} else {
+		return clients, servers, context, nil
+	}
 }

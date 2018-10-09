@@ -10,8 +10,28 @@ import (
 	"strconv"
 )
 
-// TODO verifier
-// Sigma-protocol proof.VerifierContext used to conduct interactive proofs with a prover over the network
+/*Challenge stores the collectively generated challenge and the signatures of the servers
+This is the structure sent to the client*/
+type Challenge struct {
+	cs   kyber.Scalar
+	sigs []serverSignature
+}
+
+func (c Challenge) verifySignatures(serverKeys []kyber.Point) error {
+	//	verify challenge signatures
+	if msg, e := c.cs.MarshalBinary(); e == nil {
+		for _, sig := range c.sigs {
+			if e = ECDSAVerify(serverKeys[sig.index], msg, sig.sig); e != nil {
+				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.index) + ": " + e.Error())
+			}
+		}
+		return nil
+	} else {
+		return errors.New("Error while marshalling challenge: " + e.Error())
+	}
+}
+
+// Sigma-protocol proof.VerifierContext used to conduct interactive proofs with a prover
 type clientVerifierCtx struct {
 	SuiteProof
 	commitsChan       chan kyber.Point    // to give prover's commitments to the Verifier
@@ -80,7 +100,7 @@ func (cvCtx clientVerifierCtx) receiveResponses(responses []kyber.Scalar) error 
 			strconv.Itoa(len(responses)) + ") expected " + strconv.Itoa(cap(cvCtx.responsesChan)))
 	}
 
-	// finally Verifier calls get 2*n times to obtain the responses
+	// Verifier calls Get() 2*n times to obtain the responses
 	for _, response := range responses {
 		cvCtx.responsesChan <- response // blocks if chan full which never happen (buffer has the right size (2*#clients/predicates in the OrPred))
 	}
@@ -117,7 +137,7 @@ func (cvCtx clientVerifierCtx) PubRand(message ...interface{}) error {
 	return nil
 }
 
-// Sigma-protocol proof.ProverContext used to conduct interactive proofs with a verifier over the network
+// Sigma-protocol proof.ProverContext used to conduct interactive proofs with a verifier
 // TODO see if can make an interface from my API wrapper to put in kyber.proof
 // TODO doc, plus don't use the channels directly there are methods for that
 type clientProverCtx struct {
@@ -270,7 +290,7 @@ func newClientProof(context authenticationContext,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
 	pushCommitments chan<- []kyber.Point,
-	pullChallenge <-chan kyber.Scalar) (clientProof, error) {
+	pullChallenge <-chan Challenge) (clientProof, error) {
 	//construct the proof.Prover for client's PK and its proof.ProverContext
 	prover := newClientProver(context, tagAndCommitments, client, s)
 	proverCtx := newClientProverCtx(suite, len(context.g.x))
@@ -291,13 +311,17 @@ func newClientProof(context authenticationContext,
 		P.t = commits
 	}
 
+	// TODO pack those in a single step and maybe remove these channels and instead call userprovided function "sendCommitsReceiveChallenge"
+	// TODO but keep in mind that cannot accept challenge as parameter if asked by someone.. first the commitments should be sent to the servers
 	//	forward them to random remote server/verifier (over *anon.* circuit etc.. concern of the caller code !!)
 	pushCommitments <- P.t
-
 	//	receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code !!)
 	challenge := <-pullChallenge
-	// FIXME new Challenge struct in chan to add signature and then check signature here
-	P.cs = challenge
+	if err := challenge.verifySignatures(context.g.y); err != nil {
+		// TODO log
+		return clientProof{}, err
+	}
+	P.cs = challenge.cs
 
 	//	forward master challenge to running Prover in order to continue the proof process, and receive the sub-challenges from Prover
 	P.c = proverCtx.receiveChallenges(P.cs)

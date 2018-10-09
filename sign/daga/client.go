@@ -45,6 +45,7 @@ func (client *Client) GenerateProofResponses(context *authenticationContext, s k
 
 //GetFinalLinkageTag checks the server's signatures and proofs
 //It outputs the final linkage tag of the client
+// FIXME WTF client receiver .. ?
 func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
 	//Input checks
 	if context == nil || msg == nil {

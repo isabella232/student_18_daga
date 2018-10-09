@@ -36,13 +36,6 @@ type ChallengeCheck struct {
 	openings []kyber.Scalar
 }
 
-/*Challenge stores the collectively generated challenge and the signatures of the servers
-This is the structure sent to the client*/
-type Challenge struct {
-	cs   kyber.Scalar
-	sigs []serverSignature
-}
-
 /*ServerMessage stores the message sent by a server to one or many others*/
 type ServerMessage struct {
 	request authenticationMessage

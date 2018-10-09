@@ -52,7 +52,7 @@ type authenticationContext struct {
 }
 
 func NewAuthenticationContext(x, y, r, h []kyber.Point) (*authenticationContext, error) {
-	if (len(x) != len(h) || len(y) != len(r) || len(x) == 0 || len(y) == 0) {
+	if len(x) != len(h) || len(y) != len(r) || len(x) == 0 || len(y) == 0 {
 		return nil, errors.New("NewAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
 	return &authenticationContext{
@@ -181,6 +181,7 @@ func (c Client)  PublicKey() kyber.Point {
 // TODO doc, see if context big enough to transform it to *authenticationContext
 // #"network"
 func (c Client) NewAuthenticationMessage(context authenticationContext) (*authenticationMessage, error) {
+	// TODO think on where when how check context validity
 	// DAGA client Steps 1, 2, 3:
 	ts, s, err := newInitialTagAndCommitments(context.g.y, context.h[c.index])
 	if err != nil {
@@ -190,6 +191,7 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 
 	// QUESTION can I have a quick intro on how I to do this using onet ? or should I do my own cuisine ?
 	// QUESTION TODO FIXME, will need to have kind of a directory mapping servers to their IP/location don't currently know how this is addressed in cothority onet
+	// roster .toml (can I put it into context too)
 	// TODO server selection and circuit establishment
 	// TODO + way to give circuit access to newClientProof(), for now channels
 	// TODO pick random server and find its location
@@ -197,7 +199,7 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 	// TODO code to encode/decode data
 	// TODO using the "function that returns channels" pattern
 	var pushCommitments chan []kyber.Point
-	var pullChallenge chan kyber.Scalar
+	var pullChallenge chan Challenge
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PK client, with one random server
 	if P, err := newClientProof(context, c, *ts, s, pushCommitments, pullChallenge); err != nil {
@@ -222,15 +224,15 @@ func verifyAuthenticationMessage(msg authenticationMessage) bool {
 	return verifyClientProof(msg.c, msg.p0, msg.initialTagAndCommitments)
 }
 
-// FIXME clean those below when tests passes
 /*ECDSASign gnerates a Schnorr signature*/
-// QUESTION another WTF, why bring ECDSA here ? but ok keep for now .. => move to eddsa
+// QUESTION another WTF, why bring ECDSA here ? => move to eddsa
+// QUESTION ok I now understant why he didn't use eddsa, the implementation in kyber is unusable...pff
 func ECDSASign(priv kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
 	if priv == nil {
 		return nil, fmt.Errorf("Empty private key")
 	}
-	if msg == nil || len(msg) == 0 {
+	if len(msg) == 0 {
 		return nil, fmt.Errorf("Empty message")
 	}
 
@@ -242,7 +244,6 @@ func ECDSASign(priv kyber.Scalar, msg []byte) (s []byte, err error) {
 }
 
 /*ECDSAVerify checks if a Schnorr signature is valid*/
-// QUESTION same WTF as above
 func ECDSAVerify(public kyber.Point, msg, sig []byte) (err error) {
 	//Input checks
 	if public == nil {
