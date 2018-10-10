@@ -563,17 +563,52 @@ func TestVerifyServerProof(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	clientProof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
 		c: *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:  clientProof,
 	}
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
 	err = servers[0].ServerProtocol(context, &servMsg)
+	assert.NoError(t, err)
+	// TODO, I replaced the commented code below by the call above (which is perfectly sound) but this triggers new questions,
+	// TODO => serverprotocol => verifyserverproof, reorganize tests or rewrite everything to follow testing guidelines or make sure everything is in the right place
+	////Prepare the proof
+	//hasher := suite.Hash()
+	//suite.Point().Mul(servers[0].key.Private, servMsg.request.sCommits[0]).MarshalTo(hasher)
+	////rand := suite.Cipher(hash)
+	//secret := suite.Scalar().SetBytes(hasher.Sum(nil))
+	//
+	//inv := suite.Scalar().Inv(secret)
+	//exp := suite.Scalar().Mul(servers[0].r, inv)
+	//T := suite.Point().Mul(exp, tagAndCommitments.t0)
+	//
+	////Generate the proof
+	//proof, _ := servers[0].generateServerProof(context, secret, T, &servMsg)
+	//servMsg.proofs = append(servMsg.proofs, *proof)
+	//servMsg.tags = append(servMsg.tags, T)
+	//servMsg.indexes = append(servMsg.indexes, servers[0].index)
+	//
+	////Signs our message
+	//data, _ := servMsg.request.ToBytes()
+	//temp, _ := T.MarshalBinary()
+	//data = append(data, temp...)
+	//temp, _ = proof.ToBytes()
+	//data = append(data, temp...)
+	//data = append(data, []byte(strconv.Itoa(servers[0].index))...)
+	//sign, _ := ECDSASign(servers[0].key.Private, data)
+	//signature := serverSignature{sig: sign, index: servers[0].index}
+	//servMsg.sigs = append(servMsg.sigs, signature)
+	//
+	////Verify first server proof
+	//check := verifyServerProof(context, 0, &servMsg)
+	//if !check {
+	//	t.Error("Cannot verify first valid normal server proof")
+	//}
 
 	err = servers[1].ServerProtocol(context, &servMsg)
 	assert.NoError(t, err)
