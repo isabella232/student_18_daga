@@ -49,16 +49,17 @@ func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, 
 	serverKeys := make([]kyber.Point, 0, s)
 	servers := make([]Server, 0, s)
 	for i := 0; i < s; i++ {
-		new := Server{index: i, private: suite.Scalar().Pick(suite.RandomStream())}
-		serverKeys = append(serverKeys, suite.Point().Mul(new.private, nil))
+		new, _ := NewServer(i, nil)
+		serverKeys = append(serverKeys, new.PublicKey())
 		servers = append(servers, new)
 	}
 
 	//Generates the per-round secrets for the ServerSignature and keep track of the commits
 	perRoundSecretCommits := make([]kyber.Point, 0, s)
 	for i, serv := range servers {
-		perRoundSecretCommits = append(perRoundSecretCommits, serv.GenerateNewRoundSecret())
-		servers[i] = serv
+		R, server := generateNewRoundSecret(serv)
+		perRoundSecretCommits = append(perRoundSecretCommits, R)
+		servers[i] = server
 	}
 
 	//Generates c clients with their per-round generators

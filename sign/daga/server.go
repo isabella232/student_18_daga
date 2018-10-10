@@ -1,9 +1,12 @@
 package daga
 
+// FIXME audit/verify + change receivers pointer => value where possible
+
 import (
 	"crypto/sha512"
 	"fmt"
 	"github.com/dedis/kyber"
+	"github.com/dedis/kyber/util/key"
 	"io"
 	"strconv"
 )
@@ -11,7 +14,7 @@ import (
 /*Server is used to store the server's private key and index.
 All the server's methods are attached to it */
 type Server struct {
-	private kyber.Scalar
+	key key.Pair
 	index   int
 	r       kyber.Scalar //Per round secret
 }
@@ -57,32 +60,43 @@ type serverProof struct {
 
 //CreateServer is used to initialize a new server with a given index
 //If no private key is given, a random one is chosen
-func CreateServer(i int, s kyber.Scalar) (server Server, err error) {
+func NewServer(i int, s kyber.Scalar) (server Server, err error) {
 	if i < 0 {
-		return Server{}, fmt.Errorf("Invalid parameters")
+		return server, fmt.Errorf("invalid parameters")
 	}
+
+	var kp *key.Pair
 	if s == nil {
-		s = suite.Scalar().Pick(suite.RandomStream())
+		kp = key.NewKeyPair(suite)
+	} else {
+		// FIXME check if s is a proper secret (see small subgroup attacks on some groups/curves)... or remove this option ..or make it a proper secret..
+		kp = &key.Pair{
+			Private: s, // <- could (e.g. edwards25519) be attacked if not in proper form
+			Public:  suite.Point().Mul(s, nil),
+		}
 	}
-	return Server{index: i, private: s, r: nil}, nil
+	return Server{
+		index: i,
+		key: *kp,
+	}, nil
 }
 
 //GetPublicKey returns the public key associated with a server
-func (server *Server) GetPublicKey() kyber.Point {
-	return suite.Point().Mul(server.private, nil)
+func (server Server) PublicKey() kyber.Point {
+	return server.key.Public
 }
 
 /*GenerateCommitment creates the commitment and its opening for the distributed challenge generation*/
-func (server *Server) GenerateCommitment(context *authenticationContext) (commit *Commitment, opening kyber.Scalar, err error) {
+func (server Server) GenerateCommitment(context *authenticationContext) (commit *Commitment, opening kyber.Scalar, err error) {
 	opening = suite.Scalar().Pick(suite.RandomStream())
 	com := suite.Point().Mul(opening, nil)
 	msg, err := com.MarshalBinary()
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error in conversion of commit: %s", err)
+		return nil, nil, fmt.Errorf("error in conversion of commit: %s", err)
 	}
-	sig, err := ECDSASign(server.private, msg)
+	sig, err := ECDSASign(server.key.Private, msg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error in commit signature generation: %s", err)
+		return nil, nil, fmt.Errorf("error in commit signature generation: %s", err)
 	}
 	return &Commitment{sig: serverSignature{index: server.index, sig: sig}, commit: com}, opening, nil
 }
@@ -91,14 +105,15 @@ func (server *Server) GenerateCommitment(context *authenticationContext) (commit
 func VerifyCommitmentSignature(context *authenticationContext, commits []Commitment) (err error) {
 	for i, com := range commits {
 		if i != com.sig.index {
-			return fmt.Errorf("Wrong index: got %d expected %d", com.sig.index, i)
+			return fmt.Errorf("wrong index: got %d expected %d", com.sig.index, i)
 		}
-		// QUESTION FIXME: How to check that a point is on the curve?
+		// QUESTION FIXME: How to check that a point is on the curve? (don't remember why but the answer is you don't need if you use edwards curve25519)
+		// FIXME but still this is a valid concern since if we change the curve/suite_implementation we would like the code to remain correct or ?
 
 		//Convert the commitment and verify the signature
 		msg, e := com.commit.MarshalBinary()
 		if e != nil {
-			return fmt.Errorf("Error in conversion of commit for verification: %s", err)
+			return fmt.Errorf("error in conversion of commit for verification: %s", err)
 		}
 		err = ECDSAVerify(context.g.y[i], msg, com.sig.sig)
 		if err != nil {
@@ -111,20 +126,20 @@ func VerifyCommitmentSignature(context *authenticationContext, commits []Commitm
 /*CheckOpenings verifies each opening and returns the computed challenge*/
 func CheckOpenings(context *authenticationContext, commits []Commitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
 	if context == nil {
-		return nil, fmt.Errorf("Empty context")
+		return nil, fmt.Errorf("empty context")
 	}
 	if len(commits) != len(context.g.y) {
-		return nil, fmt.Errorf("Incorrect number of commits: got %d expected %d", len(commits), len(context.g.y))
+		return nil, fmt.Errorf("incorrect number of commits: got %d expected %d", len(commits), len(context.g.y))
 	}
 	if len(openings) != len(context.g.y) {
-		return nil, fmt.Errorf("Incorrect number of openings: got %d expected %d", len(openings), len(context.g.y))
+		return nil, fmt.Errorf("incorrect number of openings: got %d expected %d", len(openings), len(context.g.y))
 	}
 
 	cs = suite.Scalar().Zero()
 	for i := 0; i < len(commits); i++ {
 		c := suite.Point().Mul(openings[i], nil)
 		if !commits[i].commit.Equal(c) {
-			return nil, fmt.Errorf("Mismatch opening for server %d", i)
+			return nil, fmt.Errorf("mismatch opening for server %d", i)
 		}
 		cs = suite.Scalar().Add(cs, openings[i])
 	}
@@ -135,7 +150,7 @@ func CheckOpenings(context *authenticationContext, commits []Commitment, opening
 It checks the openings before doing so*/
 func InitializeChallenge(context *authenticationContext, commits []Commitment, openings []kyber.Scalar) (*ChallengeCheck, error) {
 	if context == nil || commits == nil || openings == nil || len(commits) == 0 || len(openings) == 0 || len(commits) != len(openings) {
-		return nil, fmt.Errorf("Invalid inputs")
+		return nil, fmt.Errorf("invalid inputs")
 	}
 	cs, err := CheckOpenings(context, commits, openings)
 	if err != nil {
@@ -148,16 +163,16 @@ func InitializeChallenge(context *authenticationContext, commits []Commitment, o
 /*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
 It also adds the server's signature to the list if the round-robin is not completed (the challenge has not yet made it back to the leader)
 It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
-func (server *Server) CheckUpdateChallenge(context *authenticationContext, challenge *ChallengeCheck) error {
+func (server Server) CheckUpdateChallenge(context *authenticationContext, challenge *ChallengeCheck) error {
 	//Check the signatures and check for duplicates
 	msg, e := challenge.cs.MarshalBinary()
 	if e != nil {
-		return fmt.Errorf("Error in challenge conversion: %s", e)
+		return fmt.Errorf("error in challenge conversion: %s", e)
 	}
 	encountered := map[int]bool{}
 	for _, sig := range challenge.sigs {
 		if encountered[sig.index] == true {
-			return fmt.Errorf("Duplicate signature")
+			return fmt.Errorf("duplicate signature")
 		}
 		encountered[sig.index] = true
 
@@ -179,14 +194,14 @@ func (server *Server) CheckUpdateChallenge(context *authenticationContext, chall
 	}
 	//Checks that the challenge values match
 	if !cs.Equal(challenge.cs) {
-		return fmt.Errorf("Challenge values does not match")
+		return fmt.Errorf("challenge values does not match")
 	}
 
 	//Add the server's signature to the list if it is not the last one
 	if len(challenge.sigs) == len(context.g.y) {
 		return nil
 	}
-	sig, e := ECDSASign(server.private, msg)
+	sig, e := ECDSASign(server.key.Private, msg)
 	if e != nil {
 		return e
 	}
@@ -197,19 +212,20 @@ func (server *Server) CheckUpdateChallenge(context *authenticationContext, chall
 
 /*FinalizeChallenge is used to convert the data passed between the servers into the challenge sent to the client
 It must be used after the leader got the message back and ran CheckUpdateChallenge*/
-func FinalizeChallenge(context *authenticationContext, challenge *ChallengeCheck) (*Challenge, error) {
+func FinalizeChallenge(context *authenticationContext, challenge *ChallengeCheck) (Challenge, error) {
 	if context == nil || challenge == nil {
-		return nil, fmt.Errorf("Invalid inputs")
+		return Challenge{}, fmt.Errorf("invalid inputs")
 	}
 	if len(challenge.sigs) != len(context.g.y) {
-		return nil, fmt.Errorf("Signature count does not match: got %d expected %d", len(challenge.sigs), len(context.g.y))
+		return Challenge{}, fmt.Errorf("signature count does not match: got %d expected %d", len(challenge.sigs), len(context.g.y))
 	}
 
-	return &Challenge{cs: challenge.cs, sigs: challenge.sigs}, nil
+	return Challenge{cs: challenge.cs, sigs: challenge.sigs}, nil
 }
 
 //InitializeServerMessage creates a ServerMessage from a ClientMessage to ease further processing
-func (server *Server) InitializeServerMessage(request *authenticationMessage) (msg *ServerMessage) {
+// FIXME QUESTION why receiver, where to put it and should I rename it
+func (server Server) InitializeServerMessage(request *authenticationMessage) (msg *ServerMessage) {
 	if request == nil {
 		return nil
 	}
@@ -217,37 +233,37 @@ func (server *Server) InitializeServerMessage(request *authenticationMessage) (m
 }
 
 /*ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client*/
-func (server *Server) ServerProtocol(context *authenticationContext, msg *ServerMessage) error {
+func (server Server) ServerProtocol(context *authenticationContext, msg *ServerMessage) error {
 	//Step 1
 	//Verify that the message is correctly formed
 	if !ValidateClientMessage(&msg.request) {
-		return fmt.Errorf("Invalid client's request")
+		return fmt.Errorf("invalid client's request")
 	}
 	if len(msg.indexes) != len(msg.proofs) || len(msg.proofs) != len(msg.tags) || len(msg.tags) != len(msg.sigs) {
-		return fmt.Errorf("Invalid message")
+		return fmt.Errorf("invalid message")
 	}
 
 	//Checks that not all servers already did the protocol
 	if len(msg.indexes) >= len(context.g.y) {
-		return fmt.Errorf("Too many calls of the protocol") // ... ok... smells like fish..
+		return fmt.Errorf("too many calls of the protocol") // ... ok... smells like fish..
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
 	data, e := msg.request.ToBytes()
 	if e != nil {
-		return fmt.Errorf("Error in request: %s", e)
+		return fmt.Errorf("error in request: %s", e)
 	}
 	if len(msg.indexes) != 0 {
 		for i := 0; i < len(msg.indexes); i++ {
 			temp, err := msg.tags[i].MarshalBinary()
 			if err != nil {
-				return fmt.Errorf("Error in tags: %s", err)
+				return fmt.Errorf("error in tags: %s", err)
 			}
 			data = append(data, temp...)
 
 			temp, err = msg.proofs[i].ToBytes()
 			if err != nil {
-				return fmt.Errorf("Error in proofs: %s", err)
+				return fmt.Errorf("error in proofs: %s", err)
 			}
 			data = append(data, temp...)
 
@@ -255,14 +271,14 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 
 			err = ECDSAVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
 			if err != nil {
-				return fmt.Errorf("Error in signature: "+strconv.Itoa(i)+"\n%s", err)
+				return fmt.Errorf("error in signature: "+strconv.Itoa(i)+"\n%s", err)
 			}
 		}
 	}
 
 	// Check the client message and proof
 	if !verifyAuthenticationMessage(msg.request) {
-		return fmt.Errorf("Invalid client's proof")
+		return fmt.Errorf("invalid client's proof")
 	}
 
 	//Check all the proofs
@@ -275,14 +291,14 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 				valid = verifyServerProof(context, i, msg)
 			}
 			if !valid {
-				return fmt.Errorf("Invalid server proof")
+				return fmt.Errorf("invalid server proof")
 			}
 		}
 	}
 
 	//Step 2: Verify the correct behaviour of the client
 	hasher := suite.Hash()
-	suite.Point().Mul(server.private, msg.request.sCommits[0]).MarshalTo(hasher)
+	suite.Point().Mul(server.key.Private, msg.request.sCommits[0]).MarshalTo(hasher)
 	s := suite.Scalar().SetBytes(hasher.Sum(nil))
 	var T kyber.Point
 	var proof *serverProof
@@ -319,9 +335,9 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 
 	data = append(data, []byte(strconv.Itoa(server.index))...)
 
-	sign, e := ECDSASign(server.private, data)
+	sign, e := ECDSASign(server.key.Private, data)
 	if e != nil {
-		return fmt.Errorf("Error in own signature: %s", e)
+		return fmt.Errorf("error in own signature: %s", e)
 	}
 
 	signature := serverSignature{sig: sign, index: server.index}
@@ -336,19 +352,19 @@ func (server *Server) ServerProtocol(context *authenticationContext, msg *Server
 }
 
 /*generateServerProof creates the server proof for its computations*/
-func (server *Server) generateServerProof(context *authenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage) (proof *serverProof, err error) {
+func (server Server) generateServerProof(context *authenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage) (proof *serverProof, err error) {
 	//Input validation
 	if context == nil {
-		return nil, fmt.Errorf("Empty context")
+		return nil, fmt.Errorf("empty context")
 	}
 	if s == nil {
-		return nil, fmt.Errorf("Empty s")
+		return nil, fmt.Errorf("empty s")
 	}
 	if T == nil {
-		return nil, fmt.Errorf("Empty T")
+		return nil, fmt.Errorf("empty T")
 	}
 	if msg == nil {
-		return nil, fmt.Errorf("Empty server message")
+		return nil, fmt.Errorf("empty server message")
 	}
 
 	//Step 1
@@ -477,16 +493,16 @@ func verifyServerProof(context *authenticationContext, i int, msg *ServerMessage
 }
 
 /*generateMisbehavingProof creates the proof of a misbehaving client*/ // QUESTION server ? purpose of comment ?
-func (server *Server) generateMisbehavingProof(context *authenticationContext, Z kyber.Point) (proof *serverProof, err error) {
+func (server Server) generateMisbehavingProof(context *authenticationContext, Z kyber.Point) (proof *serverProof, err error) {
 	//Input checks
 	if context == nil {
-		return nil, fmt.Errorf("Empty context")
+		return nil, fmt.Errorf("empty context")
 	}
 	if Z == nil {
-		return nil, fmt.Errorf("Empty Z")
+		return nil, fmt.Errorf("empty Z")
 	}
 
-	Zs := suite.Point().Mul(server.private, Z) // QUESTION secure (even if the function is called misbehaving whatever) ? ...+ TODO maybe I have missed other parts
+	Zs := suite.Point().Mul(server.key.Private, Z)
 
 	//Step 1
 	v := suite.Scalar().Pick(suite.RandomStream())
@@ -510,7 +526,7 @@ func (server *Server) generateMisbehavingProof(context *authenticationContext, Z
 	c := suite.Scalar().SetBytes(hasher.Sum(nil))
 
 	//Step 3
-	a := suite.Scalar().Mul(c, server.private)
+	a := suite.Scalar().Mul(c, server.key.Private)
 	r := suite.Scalar().Sub(v, a)
 
 	//Step 4
@@ -574,47 +590,47 @@ func verifyMisbehavingProof(context *authenticationContext, i int, proof *server
 	if !c.Equal(proof.c) {
 		return false
 	}
-
 	return true
 }
 
 /*GenerateNewRoundSecret creates a new secret for the server, erasing the previous one.
 It returns the commitment to that secret to be included in the context*/
-func (server *Server) GenerateNewRoundSecret() (R kyber.Point) {
-	server.r = suite.Scalar().Pick(suite.RandomStream()) // TODO see if used like a key...
-	return suite.Point().Mul(server.r, nil)
+func generateNewRoundSecret(server Server) (kyber.Point, Server) {
+	kp := key.NewKeyPair(suite)
+	server.r = kp.Private
+	return kp.Public, server
 }
 
 /*ToBytes is a helper function used to convert a ServerProof into []byte to be used in signatures*/
 // QUESTION WTF ? + DRY there should be another way or no ?
-func (proof *serverProof) ToBytes() (data []byte, err error) {
+func (proof serverProof) ToBytes() (data []byte, err error) {
 	temp, e := proof.t1.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in t1: %s", e)
+		return nil, fmt.Errorf("error in t1: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = proof.t2.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in t2: %s", e)
+		return nil, fmt.Errorf("error in t2: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = proof.t3.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in t3: %s", e)
+		return nil, fmt.Errorf("error in t3: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = proof.c.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in c: %s", e)
+		return nil, fmt.Errorf("error in c: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = proof.r1.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in r1: %s", e)
+		return nil, fmt.Errorf("error in r1: %s", e)
 	}
 	data = append(data, temp...)
 
@@ -622,7 +638,7 @@ func (proof *serverProof) ToBytes() (data []byte, err error) {
 	if proof.r2 != nil {
 		temp, e = proof.r2.MarshalBinary()
 		if e != nil {
-			return nil, fmt.Errorf("Error in r2: %s", e)
+			return nil, fmt.Errorf("error in r2: %s", e)
 		}
 		data = append(data, temp...)
 	}

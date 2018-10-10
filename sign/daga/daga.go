@@ -1,6 +1,7 @@
 package daga
 
 // TODO decide / review method vs functions + "granularity of parameters"
+// TODO FIXME how to securely erase secrets ?
 
 // TODO quick documentation and DAGA description with links to relevant parts of the Syta papers
 // TODO see what to export and what not, for now everything private

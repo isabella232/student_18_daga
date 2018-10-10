@@ -48,7 +48,7 @@ func signDummyChallenge(cs kyber.Scalar, servers []Server) Challenge {
 	var sigs []serverSignature
 	//Make each test server sign the challenge
 	for _, server := range servers {
-		sig, _ := ECDSASign(server.private, msg)
+		sig, _ := ECDSASign(server.key.Private, msg)
 		sigs = append(sigs, serverSignature{index: server.index, sig: sig})
 	}
 	return Challenge{cs: cs, sigs: sigs}

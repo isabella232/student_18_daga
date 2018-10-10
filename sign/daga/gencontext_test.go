@@ -66,7 +66,7 @@ func TestGenerateTestContext(t *testing.T) {
 	if servers[0].r == nil {
 		t.Error("Error in generation of r")
 	}
-	if servers[0].private == nil {
+	if servers[0].key.Private == nil {
 		t.Error("Error in generation of private")
 	}
 

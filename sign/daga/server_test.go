@@ -1,60 +1,51 @@
 package daga
 
 import (
+	"crypto/sha512"
 	"github.com/dedis/kyber"
+	"github.com/stretchr/testify/assert"
+	"io"
 	"math/rand"
 	"testing"
 )
 
-func TestCreateServer(t *testing.T) {
+func TestNewServer(t *testing.T) {
 	//Normal execution
 	i := rand.Int()
 	s := suite.Scalar().Pick(suite.RandomStream())
-	server, err := CreateServer(i, s)
-	if err != nil || server.index != i || !server.private.Equal(s) {
-		t.Error("Cannot initialize a new server with a given private key")
-	}
+	server, err := NewServer(i, s)
+	assert.NoError(t, err, "Cannot initialize a new server with a given private key")
+	assert.Equal(t, server.index, i, "Cannot initialize a new server with a given private key, wrong index")
+	assert.True(t, server.key.Private.Equal(s), "Cannot initialize a new server with a given private key, wrong key")
 
-	server, err = CreateServer(i, nil)
-	if err != nil {
-		t.Error("Cannot create a new server without a private key")
-	}
+	server, err = NewServer(i, nil)
+	assert.NoError(t, err, "Cannot create a new server without a private key")
+	assert.NotNil(t, server.key.Private, "Cannot create a new server without a private key")
 
 	//Invalid input
-	server, err = CreateServer(-2, s)
-	if err == nil {
-		t.Error("Wrong check: Invalid index")
-	}
+	server, err = NewServer(-2, s)
+	assert.Error(t, err, "Wrong check: Invalid index")
 }
 
 func TestGetPublicKey_Server(t *testing.T) {
-	server, _ := CreateServer(0, suite.Scalar().Pick(suite.RandomStream()))
-	P := server.GetPublicKey()
-	if P == nil {
-		t.Error("Cannot get public key")
-	}
+	server, _ := NewServer(0, suite.Scalar().Pick(suite.RandomStream()))
+	P := server.PublicKey()
+	assert.NotNil(t, P, "Cannot get public key")
 }
 
 func TestGenerateCommitment(t *testing.T) {
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+	_, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
 	//Normal execution
 	commit, opening, err := servers[0].GenerateCommitment(context)
+	assert.NoError(t, err, "Cannot generate a commitment")
+	assert.True(t, commit.commit.Equal(suite.Point().Mul(opening, nil)), "Cannot open the commitment")
 
-	if err != nil {
-		t.Error("Cannot generate a commitment")
-	}
-	if !commit.commit.Equal(suite.Point().Mul(opening, nil)) {
-		t.Error("Cannot open the commitment")
-	}
 	msg, err := commit.commit.MarshalBinary()
-	if err != nil {
-		t.Error("Invalid commitment")
-	}
-	err = ECDSAVerify(suite.Point().Mul(servers[0].private, nil), msg, commit.sig.sig)
-	if err != nil {
-		t.Error("Wrong signature")
-	}
+	assert.NoError(t, err, "failed to marshall commitment")
+
+	err = ECDSAVerify(servers[0].PublicKey(), msg, commit.sig.sig)
+	assert.NoError(t, err, "wrong commitment signature, failed to verify")
 }
 
 func TestVerifyCommitmentSignature(t *testing.T) {
@@ -62,36 +53,31 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 
 	//Generate commitments
 	var commits []Commitment
-	for i := 0; i < len(servers); i++ {
-		commit, _, _ := servers[i].GenerateCommitment(context)
+	for _, server := range servers {
+		commit, _, _ := server.GenerateCommitment(context)
 		commits = append(commits, *commit)
 	}
 
 	//Normal execution
 	err := VerifyCommitmentSignature(context, commits)
-	if err != nil {
-		t.Error("Cannot verify the signatures for a legit commit array")
-	}
+	assert.NoError(t, err, "Cannot verify the signatures for a legit commit array")
 
 	//Change a random index
 	i := rand.Intn(len(servers))
 	commits[i].sig.index = i + 1
 	err = VerifyCommitmentSignature(context, commits)
-	if err == nil {
-		t.Errorf("Cannot verify matching indexes for %d", i)
-	}
+	assert.Error(t, err, "Cannot verify matching indexes for %d", i)
+
 	commits[i].sig.index = i + 1
 
 	//Change a signature
-	//Code shown as not covered, but it does detect the modification and returns an error
+	//Code shown as not covered, but it does detect the modification and returns an error <- QUESTION ??
 	sig := commits[i].sig.sig
-	sig = append([]byte("A"), sig...)
-	sig = sig[:len(commits[i].sig.sig)]
+	sig = append(sig, []byte("A")...)
+	sig = sig[1:]
 	commits[i].sig.sig = sig
 	err = VerifyCommitmentSignature(context, commits)
-	if err == nil {
-		t.Errorf("Cannot verify signature for %d", i)
-	}
+	assert.Error(t, err, "Cannot verify signature for %d", i)
 }
 
 func TestCheckOpenings(t *testing.T) {
@@ -108,70 +94,47 @@ func TestCheckOpenings(t *testing.T) {
 
 	//Normal execution
 	cs, err := CheckOpenings(context, commits, openings)
-	if err != nil {
-		t.Error("Cannot check the openings")
-	}
+	assert.NoError(t, err, "Cannot check the openings")
+
 	challenge := suite.Scalar().Zero()
 	for _, temp := range openings {
 		challenge = suite.Scalar().Add(challenge, temp)
 	}
-	if !cs.Equal(challenge) {
-		t.Errorf("Wrong computation of challenge cs: %s instead of %s", cs, challenge)
-	}
+	assert.True(t, cs.Equal(challenge), "Wrong computation of challenge cs: %s instead of %s", cs, challenge)
 
 	//Empty inputs
 	cs, err = CheckOpenings(nil, commits, openings)
-	if err == nil {
-		t.Error("Wrong check: Empty context")
-	}
-	if cs != nil {
-		t.Error("cs not nil on empty context")
-	}
+	assert.Error(t, err, "Wrong check: Empty context")
+
+	assert.Nil(t, cs, "cs not nil on empty context")
+
 	cs, err = CheckOpenings(context, nil, openings)
-	if err == nil {
-		t.Error("Wrong check: Empty commits")
-	}
-	if cs != nil {
-		t.Error("cs not nil on empty commits")
-	}
+	assert.Error(t, err, "Wrong check: Empty commits")
+	assert.Nil(t, cs, "cs not nil on empty commits")
+
 	cs, err = CheckOpenings(context, commits, nil)
-	if err == nil {
-		t.Error("Wrong check: Empty openings")
-	}
-	if cs != nil {
-		t.Error("cs not nil on empty openings")
-	}
+	assert.Error(t, err, "Wrong check: Empty openings")
+	assert.Nil(t, cs, "cs not nil on empty openings")
 
 	//Change the length of the openings
 	CutOpenings := openings[:len(openings)-1]
 	cs, err = CheckOpenings(context, commits, CutOpenings)
-	if err == nil {
-		t.Error("Invalid length check on openings")
-	}
-	if cs != nil {
-		t.Error("cs not nil on opening length error")
-	}
+	assert.Error(t, err, "Invalid length check on openings")
+	assert.Nil(t, cs, "cs not nil on opening length error")
 
 	//Change the length of the commits
 	CutCommits := commits[:len(commits)-1]
 	cs, err = CheckOpenings(context, CutCommits, openings)
-	if err == nil {
-		t.Error("Invalid length check on comits")
-	}
-	if cs != nil {
-		t.Error("cs not nil on commit length error")
-	}
+	assert.Error(t, err, "Invalid length check on comits")
+	assert.Nil(t, cs, "cs not nil on commit length error")
+
 
 	//Change a random opening
 	i := rand.Intn(len(servers))
 	openings[i] = suite.Scalar().Zero()
 	cs, err = CheckOpenings(context, commits, openings)
-	if err == nil {
-		t.Error("Invalid opening check")
-	}
-	if cs != nil {
-		t.Error("cs not nil on opening error")
-	}
+	assert.Error(t, err, "Invalid opening check")
+	assert.Nil(t, cs, "cs not nil on opening error")
 }
 
 func TestInitializeChallenge(t *testing.T) {
@@ -188,36 +151,32 @@ func TestInitializeChallenge(t *testing.T) {
 
 	//Normal execution
 	challenge, err := InitializeChallenge(context, commits, openings)
-	if challenge == nil || err != nil {
-		t.Error("Cannot initialize challenge")
-	}
+	assert.NoError(t, err, "Cannot initialize challenge")
+	assert.NotNil(t, challenge, "Cannot initialize challenge")
 
 	//Empty inputs
 	challenge, err = InitializeChallenge(nil, commits, openings)
-	if err == nil || challenge != nil {
-		t.Error("Wrong check: Empty cs")
-	}
+	assert.Error(t, err, "Wrong check: Empty cs")
+	assert.Nil(t, challenge, "Wrong check: Empty cs")
+
 	challenge, err = InitializeChallenge(context, nil, openings)
-	if err == nil || challenge != nil {
-		t.Error("Wrong check: Empty commits")
-	}
+	assert.Error(t, err, "Wrong check: Empty commits")
+	assert.Nil(t, challenge, "Wrong check: Empty commits")
+
 	challenge, err = InitializeChallenge(context, commits, nil)
-	if err == nil || challenge != nil {
-		t.Error("Wrong check: Empty openings")
-	}
+	assert.Error(t, err, "Wrong check: Empty openings")
+	assert.Nil(t, challenge, "Wrong check: Empty openings")
 
 	//Mismatch length between commits and openings
 	challenge, err = InitializeChallenge(context, commits, openings[:len(openings)-2])
-	if err == nil || challenge != nil {
-		t.Error("Wrong check: Empty openings")
-	}
+	assert.Error(t, err, "Wrong check: Mismatched length between commits and openings")
+	assert.Nil(t, challenge, "Wrong check: Mismatched length between commits and openings")
 
 	//Change an opening
 	openings[0] = suite.Scalar().Zero()
 	challenge, err = InitializeChallenge(context, commits, openings[:len(openings)-2])
-	if err == nil || challenge != nil {
-		t.Error("Invalid opening check")
-	}
+	assert.Error(t, err, "Invalid opening check")
+	assert.Nil(t, challenge, "Invalid opening check")
 }
 
 func TestCheckUpdateChallenge(t *testing.T) {
@@ -238,28 +197,22 @@ func TestCheckUpdateChallenge(t *testing.T) {
 
 	//Normal execution
 	err := servers[0].CheckUpdateChallenge(context, challenge)
-	if err != nil {
-		t.Error("Cannot update the challenge")
-	}
-	if len(challenge.sigs) != 1 {
-		t.Error("Did not correctly add the signature")
-	}
+	assert.NoError(t, err, "Cannot update the challenge")
+	assert.Equal(t, len(challenge.sigs), 1, "Did not correctly add the signature")
 
 	//Duplicate signature
 	challenge.sigs = append(challenge.sigs, challenge.sigs[0])
 	err = servers[0].CheckUpdateChallenge(context, challenge)
-	if err == nil {
-		t.Error("Does not check for duplicates signatures")
-	}
+	assert.Error(t, err, "Does not check for duplicates signatures")
+
 	challenge.sigs = []serverSignature{challenge.sigs[0]}
 
 	//Altered signature
 	fake := append([]byte("A"), challenge.sigs[0].sig...)
 	challenge.sigs[0].sig = fake[:len(challenge.sigs[0].sig)]
 	err = servers[0].CheckUpdateChallenge(context, challenge)
-	if err == nil {
-		t.Error("Wrond check of signature")
-	}
+	assert.Error(t, err, "Wrond check of signature")
+
 	//Restore correct signature for the next tests
 	challenge.sigs = nil
 	servers[0].CheckUpdateChallenge(context, challenge)
@@ -267,40 +220,30 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	//Modify the challenge
 	challenge.cs = suite.Scalar().Zero()
 	err = servers[0].CheckUpdateChallenge(context, challenge)
-	if err == nil {
-		t.Error("Does not check the challenge")
-	}
+	assert.Error(t, err, "Does not check the challenge")
+
 	challenge.cs = cs
 
 	//Only appends if the challenge has not already done a round-robin
 	for _, server := range servers[1:] {
 		err = server.CheckUpdateChallenge(context, challenge)
-		if err != nil {
-			t.Errorf("Error during the round-robin at server %d", server.index)
-		}
+		assert.NoError(t, err, "Error during the round-robin at server %d", server.index)
 	}
 	err = servers[0].CheckUpdateChallenge(context, challenge)
-	if err != nil {
-		t.Error("Error when closing the loop of the round-robin")
-	}
-	if len(challenge.sigs) != len(servers) {
-		t.Errorf("Invalid number of signatures: %d instead of %d", len(challenge.sigs), len(servers))
-	}
+	assert.NoError(t, err, "Error when closing the loop of the round-robin")
+	assert.Equal(t, len(challenge.sigs), len(servers), "Invalid number of signatures: %d instead of %d", len(challenge.sigs), len(servers))
 
 	//Change a commitment
 	challenge.commits[0].commit = suite.Point().Mul(suite.Scalar().One(), nil)
 	err = servers[0].CheckUpdateChallenge(context, challenge)
-	if err == nil {
-		t.Error("Invalid commitment signature check")
-	}
+	assert.Error(t, err, "Invalid commitment signature check")
+
 	challenge.commits[0].commit = suite.Point().Mul(challenge.openings[0], nil)
 
 	//Change an opening
 	challenge.openings[0] = suite.Scalar().Zero()
 	err = servers[0].CheckUpdateChallenge(context, challenge)
-	if err == nil {
-		t.Error("Invalid opening check")
-	}
+	assert.Error(t, err, "Invalid opening check")
 }
 
 func TestFinalizeChallenge(t *testing.T) {
@@ -322,62 +265,53 @@ func TestFinalizeChallenge(t *testing.T) {
 	var err error
 	for _, server := range servers[1:] {
 		err = server.CheckUpdateChallenge(context, challenge)
-		if err != nil {
-			t.Errorf("Error during the round-robin at server %d", server.index)
-		}
+		assert.NoError(t, err, "Error during the round-robin at server %d", server.index)
 	}
 
 	//Normal execution
 	//Let's say that server 0 is the leader and received the message back
 	servers[0].CheckUpdateChallenge(context, challenge)
 	clientChallenge, err := FinalizeChallenge(context, challenge)
-	if err != nil {
-		t.Errorf("Error during finalization of the challenge")
-	}
+	assert.NoError(t, err, "Error during finalization of the challenge")
+
 	//Check cs value
-	if !clientChallenge.cs.Equal(challenge.cs) {
-		t.Errorf("cs values does not match")
-	}
+	assert.True(t, clientChallenge.cs.Equal(challenge.cs), "cs values does not match")
+
 	//Check number of signatures
-	if len(clientChallenge.sigs) != len(challenge.sigs) {
-		t.Errorf("Signature count does not match: got %d expected %d", len(clientChallenge.sigs), len(challenge.sigs))
-	}
+	assert.Equal(t, len(clientChallenge.sigs), len(challenge.sigs),"Signature count does not match: got %d expected %d", len(clientChallenge.sigs), len(challenge.sigs))
 
 	//Empty inputs
 	clientChallenge, err = FinalizeChallenge(nil, challenge)
-	if err == nil || clientChallenge != nil {
-		t.Errorf("Wrong check: Empty context")
-	}
+	assert.Error(t, err, "Wrong check: Empty context")
+	assert.Zero(t, clientChallenge, "Wrong check: Empty context")
+
 	clientChallenge, err = FinalizeChallenge(context, nil)
-	if err == nil || clientChallenge != nil {
-		t.Errorf("Wrong check: Empty challenge")
-	}
+	assert.Error(t, err, "Wrong check: Empty challenge")
+	assert.Zero(t, clientChallenge, "Wrong check: Empty challenge")
 
 	//Add a signature
 	challenge.sigs = append(challenge.sigs, challenge.sigs[0])
 	clientChallenge, err = FinalizeChallenge(context, challenge)
-	if err == nil || clientChallenge != nil {
-		t.Errorf("Wrong check: Higher signature count")
-	}
+	assert.Error(t, err, "Wrong check: Higher signature count")
+	assert.Zero(t, clientChallenge, "Wrong check: Higher signature count")
+
 	//Remove a signature
 	challenge.sigs = challenge.sigs[:len(challenge.sigs)-2]
 	clientChallenge, err = FinalizeChallenge(context, challenge)
-	if err == nil || clientChallenge != nil {
-		t.Errorf("Wrong check: Lower signature count")
-	}
+	assert.Error(t, err, "Wrong check: Lower signature count")
+	assert.Zero(t, clientChallenge, "Wrong check: Lower signature count")
 }
 
-/* TODO port to new implementation
+// TODO port to new implementation
 func TestInitializeServerMessage(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 2)
+	// TODO test for one server as we saw that it previously triggered an hidden bug
+	clients, servers, context, _ := generateTestContext(2, 2)
 	for _, server := range servers {
 		if server.r == nil {
 			t.Errorf("Error in r for server %d", server.index)
 		}
 	}
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -387,22 +321,23 @@ func TestInitializeServerMessage(t *testing.T) {
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
-
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
-
 	//Sign the challenge
 	for _, server := range servers {
 		server.CheckUpdateChallenge(context, challenge)
 	}
-
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
-
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
 
 	//Normal execution
 	servMsg := servers[0].InitializeServerMessage(&clientMessage)
@@ -412,22 +347,15 @@ func TestInitializeServerMessage(t *testing.T) {
 
 	//Empty request
 	servMsg = servers[0].InitializeServerMessage(nil)
-	if servMsg != nil {
-		t.Error("Wrong check: Empty request")
-	}
-
+	assert.Nil(t, servMsg,"Wrong check: Empty request")
 }
 
 func TestServerProtocol(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 2)
+	clients, servers, context, _ := generateTestContext(2, 2)
 	for _, server := range servers {
-		if server.r == nil {
-			t.Errorf("Error in r for server %d", server.index)
-		}
+		assert.NotNil(t, server.r, "Error in r for server %d", server.index)
 	}
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -437,22 +365,25 @@ func TestServerProtocol(t *testing.T) {
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
-
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
-
 	//Sign the challenge
 	for _, server := range servers {
 		server.CheckUpdateChallenge(context, challenge)
 	}
-
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
+
 	//Original hash for later test
 	hasher := sha512.New()
 	var writer io.Writer = hasher
@@ -464,70 +395,50 @@ func TestServerProtocol(t *testing.T) {
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
 	//Normal execution for correct client
-	err := servers[0].ServerProtocol(context, &servMsg)
-	if err != nil {
-		t.Errorf("Error in Server Protocol\n%s", err)
-	}
+	err = servers[0].ServerProtocol(context, &servMsg)
+	assert.NoError(t, err, "Error in Server Protocol\n%s", err)
 
 	err = servers[1].ServerProtocol(context, &servMsg)
-	if err != nil {
-		t.Errorf("Error in Server Protocol for server 1\n%s", err)
-	}
+	assert.NoError(t, err, "Error in Server Protocol for server 1\n%s", err)
 
 	//Check that elements were added to the message
-	if len(servMsg.indexes) != 2 {
-		t.Errorf("Incorrect number of elements added to the message: %d instead of 2", len(servMsg.indexes))
-	}
+	assert.Equal(t, 2, len(servMsg.indexes), "Incorrect number of elements added to the message: %d instead of 2", len(servMsg.indexes))
 
 	//Empty request
 	emptyMsg := ServerMessage{request: authenticationMessage{}, proofs: servMsg.proofs, tags: servMsg.tags, sigs: servMsg.sigs, indexes: servMsg.indexes}
 	err = servers[0].ServerProtocol(context, &emptyMsg)
-	if err == nil {
-		t.Error("Wrong check: Empty request")
-	}
+	assert.Error(t, err, "Wrong check: Empty request")
 
 	//Different lengths
 	wrongMsg := ServerMessage{request: clientMessage, proofs: servMsg.proofs, tags: servMsg.tags, sigs: servMsg.sigs, indexes: servMsg.indexes}
 	wrongMsg.indexes = wrongMsg.indexes[:len(wrongMsg.indexes)-2]
 	err = servers[0].ServerProtocol(context, &wrongMsg)
-	if err == nil {
-		t.Error("Wrong check: different field length of indexes")
-	}
+	assert.Error(t, err, "Wrong check: different field length of indexes")
 
 	wrongMsg = ServerMessage{request: clientMessage, proofs: servMsg.proofs, tags: servMsg.tags, sigs: servMsg.sigs, indexes: servMsg.indexes}
 	wrongMsg.tags = wrongMsg.tags[:len(wrongMsg.tags)-2]
 	err = servers[0].ServerProtocol(context, &wrongMsg)
-	if err == nil {
-		t.Error("Wrong check: different field length of tags")
-	}
+	assert.Error(t, err, "Wrong check: different field length of tags")
 
 	wrongMsg = ServerMessage{request: clientMessage, proofs: servMsg.proofs, tags: servMsg.tags, sigs: servMsg.sigs, indexes: servMsg.indexes}
 	wrongMsg.proofs = wrongMsg.proofs[:len(wrongMsg.proofs)-2]
 	err = servers[0].ServerProtocol(context, &wrongMsg)
-	if err == nil {
-		t.Error("Wrong check: different field length of proofs")
-	}
+	assert.Error(t, err, "Wrong check: different field length of proofs")
 
 	wrongMsg = ServerMessage{request: clientMessage, proofs: servMsg.proofs, tags: servMsg.tags, sigs: servMsg.sigs, indexes: servMsg.indexes}
 	wrongMsg.sigs = wrongMsg.sigs[:len(wrongMsg.sigs)-2]
 	err = servers[0].ServerProtocol(context, &wrongMsg)
-	if err == nil {
-		t.Error("Wrong check: different field length of signatures")
-	}
+	assert.Error(t, err, "Wrong check: different field length of signatures")
 
 	//Modify the client proof
 	wrongClient := ServerMessage{request: clientMessage, proofs: servMsg.proofs, tags: servMsg.tags, sigs: servMsg.sigs, indexes: servMsg.indexes}
 	wrongClient.request.p0 = clientProof{}
 	err = servers[0].ServerProtocol(context, &wrongMsg)
-	if err == nil {
-		t.Error("Wrong check: invalid client proof")
-	}
+	assert.Error(t, err, "Wrong check: invalid client proof")
 
 	//Too many calls
 	err = servers[0].ServerProtocol(context, &servMsg)
-	if err == nil {
-		t.Errorf("Wrong check: Too many calls")
-	}
+	assert.Error(t, err, "Wrong check: Too many calls")
 
 	//The client request is left untouched
 	hasher2 := sha512.New()
@@ -537,32 +448,23 @@ func TestServerProtocol(t *testing.T) {
 	hash2 := hasher2.Sum(nil)
 
 	for i := range hash {
-		if hash[i] != hash2[i] {
-			t.Error("Client's request modified")
-			break
-		}
+		assert.Equal(t, hash[i], hash2[i], "Client's request modified")
 	}
 
 	//Normal execution for misbehaving client
 	misbehavingMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 	misbehavingMsg.request.sCommits[2] = suite.Point().Null() //change the commitment for server 0
 	err = servers[0].ServerProtocol(context, &misbehavingMsg)
-	if err != nil {
-		t.Errorf("Error in Server Protocol for misbehaving client\n%s", err)
-	}
+	assert.NoError(t, err, "Error in Server Protocol for misbehaving client\n%s", err)
 
 	err = servers[1].ServerProtocol(context, &misbehavingMsg)
-	if err != nil {
-		t.Errorf("Error in Server Protocol for misbehaving client and server 1\n%s", err)
-	}
-
+	assert.NoError(t, err, "Error in Server Protocol for misbehaving client and server 1\n%s", err)
 }
 
 func TestGenerateServerProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 2)
+	clients, servers, context, _ := generateTestContext(2, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -572,21 +474,23 @@ func TestGenerateServerProof(t *testing.T) {
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
-
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
-
 	//Sign the challenge
 	for _, server := range servers {
 		server.CheckUpdateChallenge(context, challenge)
 	}
-
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
 
 	//Create the initial server message
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
@@ -594,7 +498,7 @@ func TestGenerateServerProof(t *testing.T) {
 	//Prepare the proof
 	hasher := sha512.New()
 	var writer io.Writer = hasher  // ...
-	suite.Point().Mul(servers[0].private, servMsg.request.sCommits[0]).MarshalTo(writer)
+	suite.Point().Mul(servers[0].key.Private, servMsg.request.sCommits[0]).MarshalTo(writer)
 	hash := hasher.Sum(nil)
 	hasher = suite.Hash()
 	hasher.Write(hash)
@@ -606,46 +510,40 @@ func TestGenerateServerProof(t *testing.T) {
 	T := suite.Point().Mul(exp, T0)
 
 	//Normal execution
-	proof, err := servers[0].generateServerProof(context, secret, T, &servMsg)
-	if err != nil || proof == nil {
-		t.Error("Cannot generate normal server proof")
-	}
+	serverProof, err := servers[0].generateServerProof(context, secret, T, &servMsg)
+	assert.NoError(t, err, "Cannot generate normal server proof")
+	assert.NotNil(t, serverProof, "Cannot generate normal server proof")
 
 	//Correct format
-	if proof.t1 == nil || proof.t2 == nil || proof.t3 == nil {
+	if serverProof.t1 == nil || serverProof.t2 == nil || serverProof.t3 == nil {
 		t.Error("Incorrect tags in proof")
 	}
-	if proof.c == nil {
-		t.Error("Incorrect challenge")
-	}
-	if proof.r1 == nil || proof.r2 == nil {
-		t.Error("Incorrect responses")
-	}
+	assert.NotNil(t, serverProof.c, "Incorrect challenge")
+
+	assert.NotNil(t, serverProof.r1, "Incorrect responses")
+	assert.NotNil(t, serverProof.r2, "Incorrect responses")
 
 	//Invalid inputs
-	proof, err = servers[0].generateServerProof(nil, secret, T, &servMsg)
-	if err == nil || proof != nil {
-		t.Error("Wrong check: Invalid context")
-	}
-	proof, err = servers[0].generateServerProof(context, nil, T, &servMsg)
-	if err == nil || proof != nil {
-		t.Error("Wrong check: Invalid secret")
-	}
-	proof, err = servers[0].generateServerProof(context, secret, nil, &servMsg)
-	if err == nil || proof != nil {
-		t.Error("Wrong check: Invalid tag")
-	}
-	proof, err = servers[0].generateServerProof(context, secret, T, nil)
-	if err == nil || proof != nil {
-		t.Error("Wrong check: Invalid Server Message")
-	}
+	serverProof, err = servers[0].generateServerProof(nil, secret, T, &servMsg)
+	assert.Error(t, err, "Wrong check: Invalid context")
+	assert.Nil(t, serverProof, "Wrong check: Invalid context")
+
+	serverProof, err = servers[0].generateServerProof(context, nil, T, &servMsg)
+	assert.Error(t, err, "Wrong check: Invalid secret")
+	assert.Nil(t, serverProof, "Wrong check: Invalid secret")
+
+	serverProof, err = servers[0].generateServerProof(context, secret, nil, &servMsg)
+	assert.Error(t, err, "Wrong check: Invalid tag")
+	assert.Nil(t, serverProof, "Wrong check: Invalid tag")
+
+	serverProof, err = servers[0].generateServerProof(context, secret, T, nil)
+	assert.Error(t, err, "Wrong check: Invalid Server Message")
+	assert.Nil(t, serverProof, "Wrong check: Invalid Server Message")
 }
 
 func TestVerifyServerProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 3)
+	clients, servers, context, _ := generateTestContext(2, rand.Intn(10)+2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -655,69 +553,35 @@ func TestVerifyServerProof(t *testing.T) {
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
-
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
-
 	//Normal execution
 	for _, server := range servers {
 		server.CheckUpdateChallenge(context, challenge)
 	}
-
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
-	//Prepare the proof
-	hasher := suite.Hash()
-	suite.Point().Mul(servers[0].private, servMsg.request.sCommits[0]).MarshalTo(hasher)
-	//rand := suite.Cipher(hash)
-	secret := suite.Scalar().SetBytes(hasher.Sum(nil))
+	err = servers[0].ServerProtocol(context, &servMsg)
 
-	inv := suite.Scalar().Inv(secret)
-	exp := suite.Scalar().Mul(servers[0].r, inv)
-	T := suite.Point().Mul(exp, T0)
-
-	//Generate the proof
-	proof, _ := servers[0].generateServerProof(context, secret, T, &servMsg)
-	servMsg.proofs = append(servMsg.proofs, *proof)
-	servMsg.tags = append(servMsg.tags, T)
-	servMsg.indexes = append(servMsg.indexes, servers[0].index)
-
-	//Signs our message
-	data, _ := servMsg.request.ToBytes()
-	temp, _ := T.MarshalBinary()
-	data = append(data, temp...)
-	temp, _ = proof.ToBytes()
-	data = append(data, temp...)
-	data = append(data, []byte(strconv.Itoa(servers[0].index))...)
-	sign, _ := ECDSASign(servers[0].private, data)
-	signature := serverSignature{sig: sign, index: servers[0].index}
-	servMsg.sigs = append(servMsg.sigs, signature)
-
-	///err := servers[1].ServerProtocol(context, &servMsg)
-	//if err != nil {
-	//	t.Errorf("Error in Server Protocol after proof\n%s", err)
-	//}
-
-	//Verify first server proof
-	check := verifyServerProof(context, 0, &servMsg)
-	if !check {
-		t.Error("Cannot verify first valid normal server proof")
-	}
-
-	servers[1].ServerProtocol(context, &servMsg)
+	err = servers[1].ServerProtocol(context, &servMsg)
+	assert.NoError(t, err)
+	// FIXME why invalid signature ?? seems here is another error in previous code
 
 	//Verify any server proof
-	check = verifyServerProof(context, 1, &servMsg)
-	if !check {
-		t.Error("Cannot verify valid normal server proof")
-	}
+	check := verifyServerProof(context, 1, &servMsg)
+	assert.True(t, check, "Cannot verify valid normal server proof")
 
 	saveProof := serverProof{c: servMsg.proofs[1].c,
 		t1: servMsg.proofs[1].t1,
@@ -730,75 +594,53 @@ func TestVerifyServerProof(t *testing.T) {
 	//Check inputs
 	servMsg.proofs[1].c = nil
 	check = verifyServerProof(context, 1, &servMsg)
-	if check {
-		t.Error("Error in challenge verification")
-	}
+	assert.False(t, check, "Error in challenge verification")
 	servMsg.proofs[1].c = saveProof.c
 
 	servMsg.proofs[1].t1 = nil
 	check = verifyServerProof(context, 1, &servMsg)
-	if check {
-		t.Error("Error in t1 verification")
-	}
+	assert.False(t, check, "Error in t1 verification")
 	servMsg.proofs[1].t1 = saveProof.t1
 
 	servMsg.proofs[1].t2 = nil
 	check = verifyServerProof(context, 1, &servMsg)
-	if check {
-		t.Error("Error in t2 verification")
-	}
+	assert.False(t, check, "Error in t2 verification")
 	servMsg.proofs[1].t2 = saveProof.t2
 
 	servMsg.proofs[1].t3 = nil
 	check = verifyServerProof(context, 1, &servMsg)
-	if check {
-		t.Error("Error in t3 verification")
-	}
+	assert.False(t, check, "Error in t3 verification")
 	servMsg.proofs[1].t3 = saveProof.t3
 
 	servMsg.proofs[1].r1 = nil
 	check = verifyServerProof(context, 1, &servMsg)
-	if check {
-		t.Error("Error in r1 verification")
-	}
+	assert.False(t, check, "Error in r1 verification")
 	servMsg.proofs[1].r1 = saveProof.r1
 
 	servMsg.proofs[1].r2 = nil
 	check = verifyServerProof(context, 1, &servMsg)
-	if check {
-		t.Error("Error in r2 verification")
-	}
+	assert.False(t, check, "Error in r2 verification")
 	servMsg.proofs[1].r2 = saveProof.r2
 
 	//Invalid context
 	check = verifyServerProof(nil, 1, &servMsg)
-	if check {
-		t.Error("Wrong check: Invalid context")
-	}
+	assert.False(t, check, "Wrong check: Invalid context")
 
 	//nil message
 	check = verifyServerProof(context, 1, nil)
-	if check {
-		t.Error("Wrong check: Invalid message")
-	}
+	assert.False(t, check, "Wrong check: Invalid message")
 
 	//Invalid value of i
 	check = verifyServerProof(context, 2, &servMsg)
-	if check {
-		t.Error("Wrong check: Invalid i value")
-	}
-	check = verifyServerProof(context, -2, &servMsg)
-	if check {
-		t.Error("Wrong check: Negative i value")
-	}
+	assert.False(t, check, "Wrong check: Invalid i value")
 
+	check = verifyServerProof(context, -2, &servMsg)
+	assert.False(t, check, "Wrong check: Negative i value")
 }
 
 func TestGenerateMisbehavingProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 2)
+	clients, servers, context, _ := generateTestContext(2, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _:= tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -810,7 +652,6 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	}
 
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
 
 	//Generate the challenge
 	for _, server := range servers {
@@ -819,53 +660,44 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
 
-	proof, err := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
-	if err != nil || proof == nil {
+	serverProof, err := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
+	if err != nil || serverProof == nil {
 		t.Error("Cannot generate misbehaving proof")
 	}
 
 	//Correct format
-	if proof.t1 == nil {
-		t.Error("t1 nil for misbehaving proof")
-	}
-	if proof.t2 == nil {
-		t.Error("t2 nil for misbehaving proof")
-	}
-	if proof.t3 == nil {
-		t.Error("t3 nil for misbehaving proof")
-	}
-	if proof.c == nil {
-		t.Error("c nil for misbehaving proof")
-	}
-	if proof.r1 == nil {
-		t.Error("r1 nil for misbehaving proof")
-	}
-	if proof.r2 != nil {
-		t.Error("r2 not nil for misbehaving proof")
-	}
+	assert.NotNil(t, serverProof.t1,"t1 nil for misbehaving proof")
+	assert.NotNil(t, serverProof.t2, "t2 nil for misbehaving proof")
+	assert.NotNil(t, serverProof.t3, "t3 nil for misbehaving proof")
+	assert.NotNil(t, serverProof.c , "c nil for misbehaving proof")
+	assert.NotNil(t, serverProof.r1 , "r1 nil for misbehaving proof")
+	assert.Nil(t, serverProof.r2 , "r2 not nil for misbehaving proof")
 
 	//Invalid inputs
-	proof, err = servers[0].generateMisbehavingProof(nil, clientMessage.sCommits[0])
-	if err == nil || proof != nil {
-		t.Error("Wrong check: Invalid context")
-	}
-	proof, err = servers[0].generateMisbehavingProof(context, nil)
-	if err == nil || proof != nil {
-		t.Error("Wrong check: Invalid Z")
-	}
+	serverProof, err = servers[0].generateMisbehavingProof(nil, clientMessage.sCommits[0])
+	assert.Error(t, err, "Wrong check: Invalid context")
+	assert.Nil(t, serverProof, "Wrong check: Invalid context")
+
+	serverProof, err = servers[0].generateMisbehavingProof(context, nil)
+	assert.Error(t, err, "Wrong check: Invalid Z")
+	assert.Nil(t, serverProof, "Wrong check: Invalid Z")
 }
 
 func TestVerifyMisbehavingProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 2)
+	clients, servers, context, _ := generateTestContext(2, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -877,7 +709,6 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	}
 
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
 
 	//Normal execution
 	for _, server := range servers {
@@ -886,46 +717,40 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	clientProof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  clientProof,
+	}
 
 	proof, _ := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
 
 	check := verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if !check {
-		t.Error("Cannot verify valid misbehaving proof")
-	}
+	assert.True(t, check, "Cannot verify valid misbehaving proof")
 
 	//Invalid inputs
 	check = verifyMisbehavingProof(nil, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Wrong check: Invalid context")
-	}
+	assert.False(t, check, "Wrong check: Invalid context")
 
 	check = verifyMisbehavingProof(context, 1, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Wrong check: Invalid index")
-	}
+	assert.False(t, check, "Wrong check: Invalid index")
+
 	check = verifyMisbehavingProof(context, -1, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Wrong check: Negative index")
-	}
+	assert.False(t, check, "Wrong check: Negative index")
 
 	check = verifyMisbehavingProof(context, 0, nil, clientMessage.sCommits[0])
-	if check {
-		t.Error("Wrong check: Missing proof")
-	}
+	assert.False(t, check, "Wrong check: Missing proof")
 
 	check = verifyMisbehavingProof(context, 0, proof, nil)
-	if check {
-		t.Error("Wrong check: Invalid Z")
-	}
+	assert.False(t, check, "Wrong check: Invalid Z")
 
 	//Modify proof values
-
 	proof, _ = servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
 	saveProof := serverProof{
 		c:  proof.c,
@@ -939,72 +764,51 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	//Check inputs
 	proof.c = nil
 	check = verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Error in challenge verification")
-	}
+	assert.False(t, check, "Error in challenge verification")
 	proof.c = saveProof.c
 
 	proof.t1 = nil
 	check = verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Error in t1 verification")
-	}
+	assert.False(t, check, "Error in t1 verification")
 	proof.t1 = saveProof.t1
 
 	proof.t2 = nil
 	check = verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Error in t2 verification")
-	}
+	assert.False(t, check, "Error in t2 verification")
 	proof.t2 = saveProof.t2
 
 	proof.t3 = nil
 	check = verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Error in t3 verification")
-	}
+	assert.False(t, check, "Error in t3 verification")
 	proof.t3 = saveProof.t3
 
 	proof.r1 = nil
 	check = verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Error in r1 verification")
-	}
+	assert.False(t, check, "Error in r1 verification")
 	proof.r1 = saveProof.r1
 
 	proof.r2 = suite.Scalar().One()
 	check = verifyMisbehavingProof(context, 0, proof, clientMessage.sCommits[0])
-	if check {
-		t.Error("Error in r2 verification")
-	}
+	assert.False(t, check, "Error in r2 verification")
 	proof.r2 = saveProof.r2
 	// TODO: Complete the tests
 }
-*/
+
 
 func TestGenerateNewRoundSecret(t *testing.T) {
 	_, servers, _, _ := generateTestContext(1, 1)
-	R := servers[0].GenerateNewRoundSecret()
-	if R == nil {
-		t.Error("Cannot generate new round secret")
-	}
-	if R.Equal(suite.Point().Mul(suite.Scalar().One(), nil)) {
-		t.Error("R is the generator")
-	}
-	if servers[0].r == nil {
-		t.Error("r was not saved to the server")
-	}
-	if !R.Equal(suite.Point().Mul(servers[0].r, nil)) {
-		t.Error("Mismatch between r and R")
-	}
+	R, server := generateNewRoundSecret(servers[0])
+	servers[0] = server
+	assert.NotNil(t, R, "Cannot generate new round secret")
+	assert.False(t, R.Equal(suite.Point().Mul(suite.Scalar().One(), nil)), "R is the generator")
+	assert.NotNil(t, servers[0].r, "r was not saved to the server")
+	assert.True(t, R.Equal(suite.Point().Mul(servers[0].r, nil)), "Mismatch between r and R")
 }
 
-/* TODO port to new implementation
 func TestToBytes_ServerProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(1, 2)
+	clients, servers, context, _ := generateTestContext(2, 2)
 	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
-	T0, S := tagAndCommitments.t0, tagAndCommitments.sCommits
-	tclient, v, w := generateProofCommitments(0, context, T0, s)
+	_, S := tagAndCommitments.t0, tagAndCommitments.sCommits
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -1016,7 +820,6 @@ func TestToBytes_ServerProof(t *testing.T) {
 	}
 
 	challenge, _ := InitializeChallenge(context, commits, openings)
-	cs := challenge.cs
 
 	//Create challenge
 	for _, server := range servers {
@@ -1025,11 +828,18 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
-	c, r, _ := clients[0].GenerateProofResponses(context, s, clientChallenge, v, w)
+	// setup test server "channels"
+	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientMessage := authenticationMessage{initialTagAndCommitments: *tagAndCommitments, c: *context,
-		p0: clientProof{cs: cs, c: c, t: tclient, r: r}}
+	clientProof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	clientMessage := authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  clientProof,
+	}
+
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
@@ -1037,14 +847,13 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	//Normal execution for correct proof
 	data, err := servMsg.proofs[0].ToBytes()
-	if err != nil || data == nil {
-		t.Error("Cannot convert normal proof")
-	}
+	assert.NoError(t, err, "Cannot convert normal proof")
+	assert.NotNil(t, data, "Cannot convert normal proof")
+
 	//Normal execution for correct misbehaving proof
 	proof, _ := servers[0].generateMisbehavingProof(context, S[0])
 	data, err = proof.ToBytes()
-	if err != nil || data == nil {
-		t.Error("Cannot convert misbehaving proof")
-	}
+	assert.NoError(t, err, "Cannot convert misbehaving proof")
+	assert.NotNil(t, data, "Cannot convert misbehaving proof")
 }
-*/
+
