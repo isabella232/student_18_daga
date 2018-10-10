@@ -12,7 +12,7 @@ func (client *Client) GenerateProofResponses(context *authenticationContext, s k
 	//Check challenge signatures
 	msg, e := challenge.cs.MarshalBinary()
 	if e != nil {
-		return nil, nil, fmt.Errorf("Error in challenge conversion: %s", e)
+		return nil, nil, fmt.Errorf("error in challenge conversion: %s", e)
 	}
 	for _, sig := range challenge.sigs {
 		e = ECDSAVerify(context.g.y[sig.index], msg, sig.sig)
@@ -57,19 +57,19 @@ func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *Se
 
 	data, e := msg.request.ToBytes()
 	if e != nil {
-		return nil, fmt.Errorf("Error in request: %s", e)
+		return nil, fmt.Errorf("error in request: %s", e)
 	}
 	for i := range msg.proofs {
 		//Signature check
 		temp, err := msg.tags[i].MarshalBinary()
 		if err != nil {
-			return nil, fmt.Errorf("Error in tags: %s", err)
+			return nil, fmt.Errorf("error in tags: %s", err)
 		}
 		data = append(data, temp...)
 
 		temp, err = msg.proofs[i].ToBytes()
 		if err != nil {
-			return nil, fmt.Errorf("Error in proofs: %s", err)
+			return nil, fmt.Errorf("error in proofs: %s", err)
 		}
 		data = append(data, temp...)
 
@@ -77,7 +77,7 @@ func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *Se
 
 		err = ECDSAVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
 		if err != nil {
-			return nil, fmt.Errorf("Error in signature: "+strconv.Itoa(i)+"\n%s", err)
+			return nil, fmt.Errorf("error in signature: "+strconv.Itoa(i)+"\n%s", err)
 		}
 
 		var valid bool
@@ -88,7 +88,7 @@ func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *Se
 			valid = verifyServerProof(context, i, msg)
 		}
 		if !valid {
-			return nil, fmt.Errorf("Invalid server proof")
+			return nil, fmt.Errorf("invalid server proof")
 		}
 	}
 
@@ -128,24 +128,24 @@ func ValidateClientMessage(msg *authenticationMessage) bool {
 func (msg *authenticationMessage) ToBytes() (data []byte, err error) {
 	data, e := msg.c.ToBytes()
 	if e != nil {
-		return nil, fmt.Errorf("Error in context: %s", e)
+		return nil, fmt.Errorf("error in context: %s", e)
 	}
 
 	temp, e := PointArrayToBytes(&msg.sCommits)
 	if e != nil {
-		return nil, fmt.Errorf("Error in S: %s", e)
+		return nil, fmt.Errorf("error in S: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = msg.t0.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in T0: %s", e)
+		return nil, fmt.Errorf("error in T0: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = msg.p0.ToBytes()
 	if e != nil {
-		return nil, fmt.Errorf("Error in proof: %s", e)
+		return nil, fmt.Errorf("error in proof: %s", e)
 	}
 	data = append(data, temp...)
 
@@ -156,24 +156,24 @@ func (msg *authenticationMessage) ToBytes() (data []byte, err error) {
 func (proof *clientProof) ToBytes() (data []byte, err error) {
 	data, e := proof.cs.MarshalBinary()
 	if e != nil {
-		return nil, fmt.Errorf("Error in cs: %s", e)
+		return nil, fmt.Errorf("error in cs: %s", e)
 	}
 
 	temp, e := PointArrayToBytes(&proof.t)
 	if e != nil {
-		return nil, fmt.Errorf("Error in t: %s", e)
+		return nil, fmt.Errorf("error in t: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = ScalarArrayToBytes(&proof.c)
 	if e != nil {
-		return nil, fmt.Errorf("Error in c: %s", e)
+		return nil, fmt.Errorf("error in c: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = ScalarArrayToBytes(&proof.r)
 	if e != nil {
-		return nil, fmt.Errorf("Error in r: %s", e)
+		return nil, fmt.Errorf("error in r: %s", e)
 	}
 	data = append(data, temp...)
 
