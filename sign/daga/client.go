@@ -1,6 +1,7 @@
 package daga
 
 import (
+	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"strconv"
@@ -46,10 +47,12 @@ func (client *Client) GenerateProofResponses(context *authenticationContext, s k
 //GetFinalLinkageTag checks the server's signatures and proofs
 //It outputs the final linkage tag of the client
 // FIXME WTF client receiver .. ?
+// FIXME QUESTION not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
+// but guess this won't do any harm
 func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
 	//Input checks
-	if context == nil || msg == nil {
-		return nil, fmt.Errorf("Invalid inputs")
+	if context == nil || msg == nil || len(msg.tags) == 0 {
+		return nil, errors.New("invalid inputs")
 	}
 
 	data, e := msg.request.ToBytes()

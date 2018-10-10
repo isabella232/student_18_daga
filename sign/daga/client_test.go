@@ -168,7 +168,7 @@ func TestVerifyClientProof(t *testing.T) {
 
 func TestGetFinalLinkageTag(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, 1/*rand.Intn(10)+1*/)
+	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -218,50 +218,22 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	servMsg.sigs[0].sig[0] = servMsg.sigs[0].sig[len(servMsg.sigs[0].sig)-1]
 	servMsg.sigs[0].sig = servMsg.sigs[0].sig[:len(servMsg.sigs[0].sig)-2]
 
-	//Normal execution for a misbehaving client
-	// TODO QUESTION make sense out of the following / see with Ewa Syta if I should implement the "expose misbehaving clients" extension
-	//Assemble the client message
+	//Misbehaving clients
+	// TODO add mutliple different scenarios
+	clients, servers, context, _ = generateTestContext(rand.Intn(10)+2, 1)
+	tagAndCommitments, s, _ = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
 	S := tagAndCommitments.sCommits
 
 	S[2] = suite.Point().Null()
-	// FIXME HERE I Guess that the previous student forgot to regenerate the proof using the wrong commitments and wrong secret !
-	// QUESTION : I was maybe a little hard with the previous student and this bug as it might be kind of a hole in the
-	// QUESTION DAGA paper itself, because I currently don't see how a client can generate a proof s.t. both the proof is accepted and
-	// QUESTION the client is flagged as misbehaving ..?
-	// => I see this can be the case when number servers > 1, when number servers = 1 the proof is rejected
-	// but we need to add another test case for a client that would send a request without knowing a shared secret with the server (= misbehaving)
-	// (this would be stupid since every one can derive a shared secret with a server, but need to be sure that our code is correct even in this case)
+	validChallenge = signDummyChallenge(cs, servers)
 	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
-	proof, _ = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	clientMessage = authenticationMessage{
 		c: *context,
 		initialTagAndCommitments: *tagAndCommitments,
 		p0:  proof,
 	}
-
-	// FIXME understand why this final test segfault when running all tests but pass when running only this test
-	// got it it was the state of the rand, when running only this one it was fine but when running all tests
-	// the rand returned s=1, meaning only one server
-	// => uncovered a hidden bug, + now ensure that there is at least 2 clients as in DAGA paper
-	// TODO remains to understand why s=1 is ko, I guess that somewhere there is an hidden assumption that s>1
-	// which is sound since if s=1 we are in a centralized setting and this is kind of out of the assumptions of the daga paper
-	// which expressly state that there should be at least one honest server
-
-	// ok got it, when more than one server the msg.tags not nil but when 1 server it is nil (AND wrong proof) and the
-	// 	return msg.tags[len(msg.tags)-1]
-	// has an index out of bound error !!
-	// TODO remains to know how to fix it in a way that is DAGA compliant, anyway I guess that there are lots of such bugs hidden in the server code.. I lost trust in this code long ago
-	// ok in fact this misbehaving client test is ~~utterly stupid~~(only when #server is 1, my apologies), by modifying the commits this will trigger the proof to be rejected by the Verifier
-	// up to now ok, but on invalid proof the serverProtocol returns an error BEFORE doing anything related to misbehaving clients !! and BEFORE setting anything
-	// in the tags slice => that is the very fundamental error and why the slice remains nil on s=1 AND misbehaving client
-	// so here it is another bug in previous student code
-	// QUESTION to Linus, are you still convinced I was wrong/lost time in vain while not listening on good advices ?
-	// (allowing these bugs to hit me in the face while doing other things later and being convinced that everything works because the "tests" are passing...)
-	// (by the way the tests ARE passing, as I told you just like the tests of previous student passed)
-	// there is now plenty of evidences of fishy things (both on the correctness and on the quality of the code) that I exposed during these 2 weeks
-	// (see the various QUESTION tag and wtfs and comments and notes)
-	// QUESTION to Linus can you at least acknowledge them ? and maybe update your unfair judgment of monday ?
-	// QUESTION to Linus should I continue my rewrite/audit or should I move on anyway ?
 
 	//Create the initial server message
 	servMsg = ServerMessage{
@@ -273,7 +245,72 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	}
 
 	//Run ServerProtocol on each server
-	// QUESTION need to clarify with Ewa Syta what is the correct thing to do for this scenario
+	for i := range servers {
+		err := servers[i].ServerProtocol(context, &servMsg)
+		assert.Error(t, err, "server %v returned no error while processing invalid auth. request", i)
+	}
+	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
+	assert.Error(t, err, "can extract final linkage tag for an invalid request, should have returned an error")
+	assert.Nil(t, Tf, "Tf not nil on error")
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// 1 server, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
+	//Assemble the client message
+	S = tagAndCommitments.sCommits
+	S[2] = suite.Point().Null()
+	tagAndCommitments.t0.Set(suite.Point().Null())
+	validChallenge = signDummyChallenge(cs, servers)
+	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
+	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, suite.Scalar().Zero(), pushCommitments, pullChallenge)
+	clientMessage = authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
+
+	//Create the initial server message
+	servMsg = ServerMessage{
+		request: clientMessage,
+		proofs: nil,
+		tags: nil,
+		sigs: nil,
+		indexes: nil,
+	}
+
+	//Run ServerProtocol on each server
+	for i := range servers {
+		err := servers[i].ServerProtocol(context, &servMsg)
+		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
+	}
+	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
+	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
+	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
+	clients, servers, context, _ = generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
+	//Assemble the client message
+	tagAndCommitments, s, _ = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	S = tagAndCommitments.sCommits
+	S[2] = suite.Point().Null()
+	validChallenge = signDummyChallenge(cs, servers)
+	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
+	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	clientMessage = authenticationMessage{
+		c: *context,
+		initialTagAndCommitments: *tagAndCommitments,
+		p0:  proof,
+	}
+
+	//Create the initial server message
+	servMsg = ServerMessage{
+		request: clientMessage,
+		proofs: nil,
+		tags: nil,
+		sigs: nil,
+		indexes: nil,
+	}
+
+	//Run ServerProtocol on each server
 	for i := range servers {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
