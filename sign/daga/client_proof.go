@@ -295,6 +295,14 @@ func newClientProof(context authenticationContext,
 	prover := newClientProver(context, tagAndCommitments, client, s)
 	proverCtx := newClientProverCtx(suite, len(context.g.x))
 
+	if len(context.g.x) <= 1 {
+		return clientProof{}, errors.New("there is only one client in the context, this means DAGA is pointless")
+		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
+		// in the context/OR-predicate, if this condition is not met there won't be an "subChallenges" to generate by the
+		// prover => he won't send them by calling Put, but we wait for them !!
+		// in case this assumption needs to be relaxed, a test should be added to the proverContext.receiveChallenges() method
+	}
+
 	//3-move interaction with server
 	//	start the proof.Prover and proof machinery in new goroutine
 	var P clientProof
