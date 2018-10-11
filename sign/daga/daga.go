@@ -256,6 +256,7 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 		// TODO log QUESTION can I have an intro on the logging practises at DEDIS
 		return nil, err
 	} else {
+		// DAGA client Step 5
 		M0 := authenticationMessage{
 			c:                        context,
 			initialTagAndCommitments: *TAndS,
@@ -272,13 +273,13 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 func verifyAuthenticationMessage(msg authenticationMessage) bool {
 	// FIXME return value make it return an error instead !
 	// TODO FIXME see where to put this one, just saw that serverprotocol calls validate then verify, but maybe other code expect verify to validate
-	if !ValidateClientMessage(&msg) {
+	if !validateClientMessage(msg) {
 		return false
 	}
 	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
 	// FIXME here challenge should be picked from server state IMO but QUESTION ask Ewa Syta !
 	// TODO resolve all these when building the actual service
-	return verifyClientProof(msg.c, msg.p0, msg.initialTagAndCommitments)
+	return verifyClientProof(msg.c, msg.p0, msg.initialTagAndCommitments) == nil
 }
 
 // Signs using schnorr signature scheme over the group of the Suite
@@ -321,25 +322,25 @@ func SchnorrVerify(public kyber.Point, msg, sig []byte) (err error) {
 /*ToBytes is a utility functton to convert a ContextEd25519 into []byte, used in signatures*/
 // QUESTION WTF no other way ?
 func (context *authenticationContext) ToBytes() (data []byte, err error) {
-	temp, e := PointArrayToBytes(&context.g.x)
+	temp, e := PointArrayToBytes(context.g.x)
 	if e != nil {
 		return nil, fmt.Errorf("Error in X: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(&context.g.y)
+	temp, e = PointArrayToBytes(context.g.y)
 	if e != nil {
 		return nil, fmt.Errorf("Error in Y: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(&context.h)
+	temp, e = PointArrayToBytes(context.h)
 	if e != nil {
 		return nil, fmt.Errorf("Error in H: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(&context.r)
+	temp, e = PointArrayToBytes(context.r)
 	if e != nil {
 		return nil, fmt.Errorf("Error in R: %s", e)
 	}
@@ -349,9 +350,9 @@ func (context *authenticationContext) ToBytes() (data []byte, err error) {
 }
 
 /*PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures*/
-// QUESTION same as above
-func PointArrayToBytes(array *[]kyber.Point) (data []byte, err error) {
-	for _, p := range *array {
+// QUESTION same as above + if this is the way to go make it a method of []kyber.Point for consistency
+func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
+	for _, p := range array {
 		temp, e := p.MarshalBinary()
 		if e != nil {
 			return nil, fmt.Errorf("Error in S: %s", e)
@@ -363,8 +364,8 @@ func PointArrayToBytes(array *[]kyber.Point) (data []byte, err error) {
 
 /*ScalarArrayToBytes is a utility function to convert a kyber.Scalar array into []byte, used in signatures*/
 // QUESTION same as above
-func ScalarArrayToBytes(array *[]kyber.Scalar) (data []byte, err error) {
-	for _, s := range *array {
+func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
+	for _, s := range array {
 		temp, e := s.MarshalBinary()
 		if e != nil {
 			return nil, fmt.Errorf("Error in S: %s", e)

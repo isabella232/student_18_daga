@@ -8,6 +8,7 @@ import (
 // ......
 
 //Provides functions to help with JSON marshal/unmarshal
+// TODO see if all these things are useful (aren't there builtins facilities in go/onet/cothority ?) and well written when building the protocols and services
 
 /*NetPoint provides a JSON compatible representation of a kyber.Point*/
 type NetPoint struct {
@@ -187,7 +188,7 @@ func NetDecodeScalars(netscalars []NetScalar) ([]kyber.Scalar, error) {
 	return scalars, nil
 }
 
-func NetEncode(x,y []kyber.Point) (*NetMembers, error) {
+func NetEncode(x, y []kyber.Point) (*NetMembers, error) {
 	netmembers := NetMembers{}
 
 	X, err := NetEncodePoints(x)
@@ -364,13 +365,13 @@ func (netchall *NetChallengeCheck) NetDecode() (*ChallengeCheck, error) {
 	return &chall, nil
 }
 
-func (chall *Challenge) NetEncode() (*NetChallenge, error) {
+func (c Challenge) NetEncode() (*NetChallenge, error) {
 	netchall := NetChallenge{}
-	for _, sig := range chall.sigs {
+	for _, sig := range c.sigs {
 		netchall.Sigs = append(netchall.Sigs, sig.netEncode())
 	}
 
-	cs, err := NetEncodeScalar(chall.cs)
+	cs, err := NetEncodeScalar(c.cs)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error for cs\n%s", err)
 	}

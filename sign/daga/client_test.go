@@ -1,4 +1,5 @@
 package daga
+
 // TODO consider moving the tests in another package (blackbox testing) sub-directory daga_tests
 
 import (
@@ -8,7 +9,7 @@ import (
 	"testing"
 )
 
-// FIXME review/see if the test are sound and correctly written
+// FIXME review/see if the test are sound and were correctly written
 func TestNewClient(t *testing.T) {
 	//Normal execution
 	i := rand.Int()
@@ -30,25 +31,25 @@ func TestNewInitialTagAndCommitments(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// normal execution
-	tagAndCommitments, s, err := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, S := tagAndCommitments.t0, tagAndCommitments.sCommits
-	assert.NoError(t, err, "Cannot create tag and commitments under regular context")
-	assert.NotNil(t, T0, "no error but T0 nil")
-	assert.NotNil(t, S, "no error but sCommits nil")
-	assert.NotNil(t, s,"no error but s nil")
+	assert.NotNil(t, T0, "T0 nil")
+	assert.NotNil(t, S, "sCommits nil")
+	assert.NotNil(t, s, "s nil")
 	assert.False(t, T0.Equal(suite.Point().Null()), "T0 is the null point")
 	assert.Equal(t, len(S), len(servers)+2, "S has the wrong length: %d instead of %d", len(S), len(servers)+2)
 	for i, temp := range S {
-		assert.False(t, temp.Equal(suite.Point().Null()),"Null point in sCommits at position %d", i)
+		assert.False(t, temp.Equal(suite.Point().Null()), "Null point in sCommits at position %d", i)
 	}
 }
+
 // test helper that sign returns a Challenge by signing the cs using the keys of the servers
 func signDummyChallenge(cs kyber.Scalar, servers []Server) Challenge {
 	msg, _ := cs.MarshalBinary()
 	var sigs []serverSignature
 	//Make each test server sign the challenge
 	for _, server := range servers {
-		sig, _ := ECDSASign(server.key.Private, msg)
+		sig, _ := SchnorrSign(server.key.Private, msg)
 		sigs = append(sigs, serverSignature{index: server.index, sig: sig})
 	}
 	return Challenge{cs: cs, sigs: sigs}
@@ -63,7 +64,7 @@ func newDummyServerChannels(challenge Challenge) (chan []kyber.Point, chan Chall
 	pushCommitments := make(chan []kyber.Point)
 	pullChallenge := make(chan Challenge)
 	go func() {
-		<- pushCommitments
+		<-pushCommitments
 		pullChallenge <- challenge
 	}()
 	return pushCommitments, pullChallenge
@@ -79,11 +80,10 @@ func TestNewClientProof(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
 
 	// normal execution, create client proof
-	tagAndCommitments, s, err := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
-
-	assert.NoError(t, err,"newClientProof returned an error on valid inputs")
-	commits, responses, subChallenges:= proof.t, proof.r, proof.c
+	assert.NoError(t, err, "newClientProof returned an error on valid inputs")
+	commits, responses, subChallenges := proof.t, proof.r, proof.c
 	// FIXME not sure whether these tests are pertinent or well written... they are testing the proof framework...not my code
 	assert.Equal(t, len(commits), 3*len(clients))
 	assert.Equal(t, len(subChallenges), len(clients))
@@ -101,7 +101,7 @@ func TestNewClientProof(t *testing.T) {
 	pushCommitments, pullChallenge = newDummyServerChannels(invalidChallenge)
 	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	commits, responses, subChallenges = proof.t, proof.r, proof.c
-	assert.Error(t, err,"newClientProof returned no error on invalid server inputs (altered challenge)")
+	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
 	assert.Equal(t, clientProof{}, proof, "proof not \"zero\" on error")
 
 	//Signature modification
@@ -115,11 +115,12 @@ func TestNewClientProof(t *testing.T) {
 
 	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	commits, responses, subChallenges = proof.t, proof.r, proof.c
-	assert.Error(t, err,"newClientProof returned no error on invalid server inputs (altered signature)")
+	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
 	assert.Equal(t, clientProof{}, proof, "proof not \"zero\" on error")
 }
 
 func TestVerifyClientProof(t *testing.T) {
+	// TODO maybe assemble a message using previous student code and verify with current code (but that would amount to testing the proof package)
 	// setup, test context, clients, servers
 	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 
@@ -129,17 +130,17 @@ func TestVerifyClientProof(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
 
 	// create valid proof and auth. message
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	proof, _ := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 
 	clientMsg := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Normal execution
-	assert.True(t, ValidateClientMessage(&clientMsg), "Cannot validate valid client message")
+	assert.True(t, validateClientMessage(clientMsg), "Cannot validate valid client message")
 	assert.True(t, verifyAuthenticationMessage(clientMsg), "Cannot verify valid client proof")
 
 	//Modify the value of some commitments
@@ -166,7 +167,7 @@ func TestVerifyClientProof(t *testing.T) {
 	assert.False(t, verifyAuthenticationMessage(scratchMsg), "Incorrect check of the challenge")
 }
 
-func TestGetFinalLinkageTag(t *testing.T) {
+func TestgetFinalLinkageTag(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
 	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
@@ -176,12 +177,12 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test authMsg M0 // TODO instead of these (above and below tests too) use NewAuthMessage (=> make new Auth message easily testable by adding server channels parameters)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	proof, _ := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Create the initial server message
@@ -194,22 +195,22 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	}
 
 	//Normal execution for a normal client
-	Tf, err := clients[0].GetFinalLinkageTag(context, &servMsg)
+	Tf, err := clients[0].getFinalLinkageTag(context, &servMsg)
 	assert.NoError(t, err, "Cannot extract final linkage tag")
 	assert.NotNil(t, Tf, "Cannot extract final linkage tag")
 
 	//Empty inputs
-	Tf, err = clients[0].GetFinalLinkageTag(nil, &servMsg)
+	Tf, err = clients[0].getFinalLinkageTag(nil, &servMsg)
 	assert.Error(t, err, "wrong check: Empty context")
 	assert.Nil(t, Tf, "wrong check: Empty context")
 
-	Tf, err = clients[0].GetFinalLinkageTag(context, nil)
+	Tf, err = clients[0].getFinalLinkageTag(context, nil)
 	assert.Error(t, err, "wrong check: Empty context")
 	assert.Nil(t, Tf, "wrong check: Empty context")
 
 	//Change a signature
 	servMsg.sigs[0].sig = append(servMsg.sigs[0].sig[1:], servMsg.sigs[0].sig[0])
-	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
 	assert.Error(t, err, "Invalid signature accepted")
 	assert.Nil(t, Tf, "Invalid signature accepted")
 
@@ -221,7 +222,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
 	clients, servers, context, _ = generateTestContext(rand.Intn(10)+2, 1)
-	tagAndCommitments, s, _ = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
 	S := tagAndCommitments.sCommits
 
@@ -230,17 +231,17 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
 	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	clientMessage = authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Create the initial server message
 	servMsg = ServerMessage{
 		request: clientMessage,
-		proofs: nil,
-		tags: nil,
-		sigs: nil,
+		proofs:  nil,
+		tags:    nil,
+		sigs:    nil,
 		indexes: nil,
 	}
 
@@ -249,7 +250,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.Error(t, err, "server %v returned no error while processing invalid auth. request", i)
 	}
-	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
 	assert.Error(t, err, "can extract final linkage tag for an invalid request, should have returned an error")
 	assert.Nil(t, Tf, "Tf not nil on error")
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -262,17 +263,17 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
 	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, suite.Scalar().Zero(), pushCommitments, pullChallenge)
 	clientMessage = authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Create the initial server message
 	servMsg = ServerMessage{
 		request: clientMessage,
-		proofs: nil,
-		tags: nil,
-		sigs: nil,
+		proofs:  nil,
+		tags:    nil,
+		sigs:    nil,
 		indexes: nil,
 	}
 
@@ -281,7 +282,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
-	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
 	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
 	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
 
@@ -289,24 +290,24 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
 	clients, servers, context, _ = generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 	//Assemble the client message
-	tagAndCommitments, s, _ = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	S = tagAndCommitments.sCommits
 	S[2] = suite.Point().Null()
 	validChallenge = signDummyChallenge(cs, servers)
 	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
 	proof, err = newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	clientMessage = authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Create the initial server message
 	servMsg = ServerMessage{
 		request: clientMessage,
-		proofs: nil,
-		tags: nil,
-		sigs: nil,
+		proofs:  nil,
+		tags:    nil,
+		sigs:    nil,
 		indexes: nil,
 	}
 
@@ -315,7 +316,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
-	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
 	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
 	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
 }
@@ -335,18 +336,17 @@ func TestValidateClientMessage(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test authMsg M0
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	proof, _ := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Normal execution
 	// TODO already tested somewhere above...
-	assert.True(t, verifyAuthenticationMessage(clientMessage),"Cannot verify valid client proof")
-
+	assert.True(t, verifyAuthenticationMessage(clientMessage), "Cannot verify valid client proof")
 
 	//Modifying the length of various elements
 	ScratchMsg := clientMessage
@@ -399,18 +399,18 @@ func TestToBytes_ClientMessage(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test authMsg M0  // TODO instead of these (above and below tests too) use NewAuthMessage (=> make new Auth message easily testable by adding server channels parameters)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	proof, _ := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Normal execution
 	data, err := clientMessage.ToBytes()
-	assert.NoError(t, err,"Cannot convert valid Client Message to bytes")
-	assert.NotNil(t, data,"Data is empty for a correct Client Message")
+	assert.NoError(t, err, "Cannot convert valid Client Message to bytes")
+	assert.NotNil(t, data, "Data is empty for a correct Client Message")
 }
 
 func TestToBytes_ClientProof(t *testing.T) {
@@ -423,11 +423,11 @@ func TestToBytes_ClientProof(t *testing.T) {
 	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test client proof
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	proof, _ := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 
 	//Normal execution
 	data, err := proof.ToBytes()
-	assert.NoError(t, err,"Cannot convert valid proof to bytes")
-	assert.NotNil(t, data,"Data is empty for a correct proof")
+	assert.NoError(t, err, "Cannot convert valid proof to bytes")
+	assert.NotNil(t, data, "Data is empty for a correct proof")
 }

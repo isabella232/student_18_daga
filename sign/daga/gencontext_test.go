@@ -79,23 +79,23 @@ func TestGenerateClientGenerator(t *testing.T) {
 	for i := 0; i < rand.Intn(10)+1; i++ {
 		commits = append(commits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	}
-	h, err := GenerateClientGenerator(index, &commits)
+	h, err := generateClientGenerator(index, &commits)
 	if err != nil || h == nil {
 		t.Errorf("Cannot generate generator with index: %d", index)
 	}
-	h, err = GenerateClientGenerator(0, &commits)
+	h, err = generateClientGenerator(0, &commits)
 	if err != nil || h == nil {
 		t.Error("Cannot generate generator with index 0")
 	}
 
 	//Test wrong execution of the function
 	neg := -rand.Int()
-	h, err = GenerateClientGenerator(neg, &commits)
+	h, err = generateClientGenerator(neg, &commits)
 	if h != nil || err == nil {
 		t.Errorf("Error in handling negative index: %d", index)
 	}
 
-	h, err = GenerateClientGenerator(index, new([]kyber.Point))
+	h, err = generateClientGenerator(index, new([]kyber.Point))
 	if h != nil || err == nil {
 		t.Errorf("Error in handling empty commits")
 	}

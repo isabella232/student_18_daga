@@ -14,9 +14,9 @@ import (
 /*Server is used to store the server's private key and index.
 All the server's methods are attached to it */
 type Server struct {
-	key key.Pair
-	index   int
-	r       kyber.Scalar //Per round secret
+	key   key.Pair
+	index int
+	r     kyber.Scalar //Per round secret
 }
 
 /*Commitment stores the index of the server, the commitment value and the signature for the commitment*/
@@ -77,7 +77,7 @@ func NewServer(i int, s kyber.Scalar) (server Server, err error) {
 	}
 	return Server{
 		index: i,
-		key: *kp,
+		key:   *kp,
 	}, nil
 }
 
@@ -94,7 +94,7 @@ func (server Server) GenerateCommitment(context *authenticationContext) (commit 
 	if err != nil {
 		return nil, nil, fmt.Errorf("error in conversion of commit: %s", err)
 	}
-	sig, err := ECDSASign(server.key.Private, msg)
+	sig, err := SchnorrSign(server.key.Private, msg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error in commit signature generation: %s", err)
 	}
@@ -115,7 +115,7 @@ func VerifyCommitmentSignature(context *authenticationContext, commits []Commitm
 		if e != nil {
 			return fmt.Errorf("error in conversion of commit for verification: %s", err)
 		}
-		err = ECDSAVerify(context.g.y[i], msg, com.sig.sig)
+		err = SchnorrVerify(context.g.y[i], msg, com.sig.sig)
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (server Server) CheckUpdateChallenge(context *authenticationContext, challe
 		}
 		encountered[sig.index] = true
 
-		e = ECDSAVerify(context.g.y[sig.index], msg, sig.sig)
+		e = SchnorrVerify(context.g.y[sig.index], msg, sig.sig)
 		if e != nil {
 			return fmt.Errorf("%s", e)
 		}
@@ -201,7 +201,7 @@ func (server Server) CheckUpdateChallenge(context *authenticationContext, challe
 	if len(challenge.sigs) == len(context.g.y) {
 		return nil
 	}
-	sig, e := ECDSASign(server.key.Private, msg)
+	sig, e := SchnorrSign(server.key.Private, msg)
 	if e != nil {
 		return e
 	}
@@ -236,7 +236,7 @@ func (server Server) InitializeServerMessage(request *authenticationMessage) (ms
 func (server Server) ServerProtocol(context *authenticationContext, msg *ServerMessage) error {
 	//Step 1
 	//Verify that the message is correctly formed
-	if !ValidateClientMessage(&msg.request) {
+	if !validateClientMessage(msg.request) {
 		return fmt.Errorf("invalid client's request")
 	}
 	if len(msg.indexes) != len(msg.proofs) || len(msg.proofs) != len(msg.tags) || len(msg.tags) != len(msg.sigs) {
@@ -269,7 +269,7 @@ func (server Server) ServerProtocol(context *authenticationContext, msg *ServerM
 
 			data = append(data, []byte(strconv.Itoa(msg.indexes[i]))...)
 
-			err = ECDSAVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
+			err = SchnorrVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
 			if err != nil {
 				return fmt.Errorf("error in signature: "+strconv.Itoa(i)+"\n%s", err)
 			}
@@ -335,7 +335,7 @@ func (server Server) ServerProtocol(context *authenticationContext, msg *ServerM
 
 	data = append(data, []byte(strconv.Itoa(server.index))...)
 
-	sign, e := ECDSASign(server.key.Private, data)
+	sign, e := SchnorrSign(server.key.Private, data)
 	if e != nil {
 		return fmt.Errorf("error in own signature: %s", e)
 	}

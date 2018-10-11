@@ -44,7 +44,7 @@ func TestGenerateCommitment(t *testing.T) {
 	msg, err := commit.commit.MarshalBinary()
 	assert.NoError(t, err, "failed to marshall commitment")
 
-	err = ECDSAVerify(servers[0].PublicKey(), msg, commit.sig.sig)
+	err = SchnorrVerify(servers[0].PublicKey(), msg, commit.sig.sig)
 	assert.NoError(t, err, "wrong commitment signature, failed to verify")
 }
 
@@ -127,7 +127,6 @@ func TestCheckOpenings(t *testing.T) {
 	cs, err = CheckOpenings(context, CutCommits, openings)
 	assert.Error(t, err, "Invalid length check on comits")
 	assert.Nil(t, cs, "cs not nil on commit length error")
-
 
 	//Change a random opening
 	i := rand.Intn(len(servers))
@@ -278,7 +277,7 @@ func TestFinalizeChallenge(t *testing.T) {
 	assert.True(t, clientChallenge.cs.Equal(challenge.cs), "cs values does not match")
 
 	//Check number of signatures
-	assert.Equal(t, len(clientChallenge.sigs), len(challenge.sigs),"Signature count does not match: got %d expected %d", len(clientChallenge.sigs), len(challenge.sigs))
+	assert.Equal(t, len(clientChallenge.sigs), len(challenge.sigs), "Signature count does not match: got %d expected %d", len(clientChallenge.sigs), len(challenge.sigs))
 
 	//Empty inputs
 	clientChallenge, err = FinalizeChallenge(nil, challenge)
@@ -311,7 +310,7 @@ func TestInitializeServerMessage(t *testing.T) {
 			t.Errorf("Error in r for server %d", server.index)
 		}
 	}
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -334,9 +333,9 @@ func TestInitializeServerMessage(t *testing.T) {
 	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Normal execution
@@ -347,7 +346,7 @@ func TestInitializeServerMessage(t *testing.T) {
 
 	//Empty request
 	servMsg = servers[0].InitializeServerMessage(nil)
-	assert.Nil(t, servMsg,"Wrong check: Empty request")
+	assert.Nil(t, servMsg, "Wrong check: Empty request")
 }
 
 func TestServerProtocol(t *testing.T) {
@@ -355,7 +354,7 @@ func TestServerProtocol(t *testing.T) {
 	for _, server := range servers {
 		assert.NotNil(t, server.r, "Error in r for server %d", server.index)
 	}
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -379,9 +378,9 @@ func TestServerProtocol(t *testing.T) {
 	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Original hash for later test
@@ -463,7 +462,7 @@ func TestServerProtocol(t *testing.T) {
 
 func TestGenerateServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(2, 2)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
 
 	//Generate a valid challenge
@@ -487,9 +486,9 @@ func TestGenerateServerProof(t *testing.T) {
 	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	//Create the initial server message
@@ -497,7 +496,7 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Prepare the proof
 	hasher := sha512.New()
-	var writer io.Writer = hasher  // ...
+	var writer io.Writer = hasher // ...
 	suite.Point().Mul(servers[0].key.Private, servMsg.request.sCommits[0]).MarshalTo(writer)
 	hash := hasher.Sum(nil)
 	hasher = suite.Hash()
@@ -543,7 +542,7 @@ func TestGenerateServerProof(t *testing.T) {
 
 func TestVerifyServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(2, rand.Intn(10)+2)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -566,9 +565,9 @@ func TestVerifyServerProof(t *testing.T) {
 	clientProof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  clientProof,
+		p0:                       clientProof,
 	}
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
@@ -675,7 +674,7 @@ func TestVerifyServerProof(t *testing.T) {
 
 func TestGenerateMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(2, 2)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -702,9 +701,9 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	proof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  proof,
+		p0:                       proof,
 	}
 
 	serverProof, err := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
@@ -713,12 +712,12 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	}
 
 	//Correct format
-	assert.NotNil(t, serverProof.t1,"t1 nil for misbehaving proof")
+	assert.NotNil(t, serverProof.t1, "t1 nil for misbehaving proof")
 	assert.NotNil(t, serverProof.t2, "t2 nil for misbehaving proof")
 	assert.NotNil(t, serverProof.t3, "t3 nil for misbehaving proof")
-	assert.NotNil(t, serverProof.c , "c nil for misbehaving proof")
-	assert.NotNil(t, serverProof.r1 , "r1 nil for misbehaving proof")
-	assert.Nil(t, serverProof.r2 , "r2 not nil for misbehaving proof")
+	assert.NotNil(t, serverProof.c, "c nil for misbehaving proof")
+	assert.NotNil(t, serverProof.r1, "r1 nil for misbehaving proof")
+	assert.Nil(t, serverProof.r2, "r2 not nil for misbehaving proof")
 
 	//Invalid inputs
 	serverProof, err = servers[0].generateMisbehavingProof(nil, clientMessage.sCommits[0])
@@ -732,7 +731,7 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 
 func TestVerifyMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(2, 2)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
 	var commits []Commitment
@@ -759,9 +758,9 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	clientProof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  clientProof,
+		p0:                       clientProof,
 	}
 
 	proof, _ := servers[0].generateMisbehavingProof(context, clientMessage.sCommits[0])
@@ -829,7 +828,6 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	// TODO: Complete the tests
 }
 
-
 func TestGenerateNewRoundSecret(t *testing.T) {
 	_, servers, _, _ := generateTestContext(1, 1)
 	R, server := generateNewRoundSecret(servers[0])
@@ -842,7 +840,7 @@ func TestGenerateNewRoundSecret(t *testing.T) {
 
 func TestToBytes_ServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(2, 2)
-	tagAndCommitments, s, _ := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
+	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	_, S := tagAndCommitments.t0, tagAndCommitments.sCommits
 
 	//Generate a valid challenge
@@ -870,11 +868,10 @@ func TestToBytes_ServerProof(t *testing.T) {
 	clientProof, err := newClientProof(*context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := authenticationMessage{
-		c: *context,
+		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:  clientProof,
+		p0:                       clientProof,
 	}
-
 
 	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
 
@@ -891,4 +888,3 @@ func TestToBytes_ServerProof(t *testing.T) {
 	assert.NoError(t, err, "Cannot convert misbehaving proof")
 	assert.NotNil(t, data, "Cannot convert misbehaving proof")
 }
-

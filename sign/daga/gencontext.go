@@ -9,16 +9,17 @@ import (
 	"io"
 )
 
-/*GenerateClientGenerator generates a per-round generator for a given client*/
-func GenerateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point, err error) {
+//generateClientGenerator generates a per-round generator for a given client
+func generateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point, err error) {
 	if index < 0 {
 		return nil, fmt.Errorf("Wrond index: %d", index)
 	}
 	if len(*commits) <= 0 {
 		return nil, fmt.Errorf("Wrong commits:\n%v", commits)
 	}
-
-	// QUESTION again WTF these 2 hashes ??
+	// QUESTION FIXME why sha3(sha512()) was previously used ?
+	// TODO remember that I didn't write it, see later when building service if correct etc..
+	// QUESTION should we ensure that no 2 client get same generator ?
 	hasher := sha512.New()
 	var writer io.Writer = hasher // ...
 	idb := make([]byte, 4)
@@ -30,12 +31,11 @@ func GenerateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point
 	hash := hasher.Sum(nil)
 	hasher = suite.Hash()
 	hasher.Write(hash)
-	//rand := suite.Cipher(hash)
 	gen = suite.Point().Mul(suite.Scalar().SetBytes(hasher.Sum(nil)), nil)
 	return
 }
 
-// QUESTION RHAAAAAAA why this not used in scenario test + why here + fuuuuck ..
+// creates a context to be used in the tests
 func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, error) {
 	if c <= 0 {
 		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", c) // ...
@@ -72,12 +72,10 @@ func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, 
 		clientKeys = append(clientKeys, new.key.Public)
 		clients = append(clients, *new)
 
-		// TODO verify that the previous student's code (this one) is correct
-		generator, err := GenerateClientGenerator(i, &perRoundSecretCommits)
+		generator, err := generateClientGenerator(i, &perRoundSecretCommits)
 		if err != nil {
 			return nil, nil, nil, errors.New("error while generating client's generators:\n" + err.Error())
 		}
-
 		clientGenerators = append(clientGenerators, generator)
 	}
 

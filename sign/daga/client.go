@@ -7,49 +7,12 @@ import (
 	"strconv"
 )
 
-//GenerateProofResponses creates the responses to the challenge cs sent by the servers
-func (client *Client) GenerateProofResponses(context *authenticationContext, s kyber.Scalar, challenge *Challenge, v, w []kyber.Scalar) (c, r []kyber.Scalar, err error) {
-	//Check challenge signatures
-	msg, e := challenge.cs.MarshalBinary()
-	if e != nil {
-		return nil, nil, fmt.Errorf("error in challenge conversion: %s", e)
-	}
-	for _, sig := range challenge.sigs {
-		e = ECDSAVerify(context.g.y[sig.index], msg, sig.sig)
-		if e != nil {
-			return nil, nil, fmt.Errorf("%s", e)
-		}
-	}
-
-	//Generates the c array
-	for _, temp := range w {
-		c = append(c, temp)
-	}
-	sum := suite.Scalar().Zero()
-	for _, i := range w {
-		sum = suite.Scalar().Add(sum, i)
-	}
-	c[client.index] = suite.Scalar().Sub(challenge.cs, sum)
-
-	//Generates the responses
-	for _, temp := range v {
-		r = append(r, temp)
-	}
-	a := suite.Scalar().Mul(c[client.index], client.key.Private)
-	r[2*client.index] = suite.Scalar().Sub(v[2*client.index], a)
-
-	b := suite.Scalar().Mul(c[client.index], s)
-	r[2*client.index+1] = suite.Scalar().Sub(v[2*client.index+1], b)
-
-	return c, r, nil
-}
-
-//GetFinalLinkageTag checks the server's signatures and proofs
-//It outputs the final linkage tag of the client
-// FIXME WTF client receiver .. ?
+// GetFinalLinkageTag checks the server's signatures and proofs
+// and outputs the final linkage tag of the client or an error
+// FIXME WTF client receiver .. ? => see if makes sense when building the protocol and services
 // FIXME QUESTION not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
-// but guess this won't do any harm
-func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
+// TODO but guess this won't do any harm, will need to decide when building the service
+func (c Client) getFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
 	//Input checks
 	if context == nil || msg == nil || len(msg.tags) == 0 {
 		return nil, errors.New("invalid inputs")
@@ -75,9 +38,9 @@ func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *Se
 
 		data = append(data, []byte(strconv.Itoa(msg.indexes[i]))...)
 
-		err = ECDSAVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
+		err = SchnorrVerify(context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
 		if err != nil {
-			return nil, fmt.Errorf("error in signature: "+strconv.Itoa(i)+"\n%s", err)
+			return nil, fmt.Errorf("error in signature: %d\n%s", i, err)
 		}
 
 		var valid bool
@@ -95,9 +58,9 @@ func (client *Client) GetFinalLinkageTag(context *authenticationContext, msg *Se
 	return msg.tags[len(msg.tags)-1], nil
 }
 
-/*ValidateClientMessage is an utility function to validate that a client message is correclty formed*/
+// ValidateClientMessage is an utility function to validate that a client message is correclty formed
 // FIXME return error instead of bool
-func ValidateClientMessage(msg *authenticationMessage) bool {
+func validateClientMessage(msg authenticationMessage) bool {
 	//Number of clients
 	i := len(msg.c.g.x)
 	//Number of servers
@@ -125,13 +88,13 @@ func ValidateClientMessage(msg *authenticationMessage) bool {
 }
 
 /*ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures*/
-func (msg *authenticationMessage) ToBytes() (data []byte, err error) {
+func (msg authenticationMessage) ToBytes() (data []byte, err error) {
 	data, e := msg.c.ToBytes()
 	if e != nil {
 		return nil, fmt.Errorf("error in context: %s", e)
 	}
 
-	temp, e := PointArrayToBytes(&msg.sCommits)
+	temp, e := PointArrayToBytes(msg.sCommits)
 	if e != nil {
 		return nil, fmt.Errorf("error in S: %s", e)
 	}
@@ -152,26 +115,26 @@ func (msg *authenticationMessage) ToBytes() (data []byte, err error) {
 	return data, nil
 }
 
-/*ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures*/
-func (proof *clientProof) ToBytes() (data []byte, err error) {
+//ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures
+func (proof clientProof) ToBytes() (data []byte, err error) {
 	data, e := proof.cs.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in cs: %s", e)
 	}
 
-	temp, e := PointArrayToBytes(&proof.t)
+	temp, e := PointArrayToBytes(proof.t)
 	if e != nil {
 		return nil, fmt.Errorf("error in t: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = ScalarArrayToBytes(&proof.c)
+	temp, e = ScalarArrayToBytes(proof.c)
 	if e != nil {
 		return nil, fmt.Errorf("error in c: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = ScalarArrayToBytes(&proof.r)
+	temp, e = ScalarArrayToBytes(proof.r)
 	if e != nil {
 		return nil, fmt.Errorf("error in r: %s", e)
 	}
