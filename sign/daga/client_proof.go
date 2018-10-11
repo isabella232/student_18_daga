@@ -309,7 +309,7 @@ type clientProof struct {
 }
 
 // builds a new clientProof (Step 4 of client's protocol) and returns it to caller
-func newClientProof(context authenticationContext,
+func newClientProof(context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
@@ -379,7 +379,7 @@ func newClientProof(context authenticationContext,
 }
 
 // verifyClientProof checks the validity of a client's clientProof
-func verifyClientProof(context authenticationContext,
+func verifyClientProof(context AuthenticationContext,
 	proof clientProof,
 	tagAndCommitments initialTagAndCommitments) error {
 
@@ -435,10 +435,10 @@ func verifyClientProof(context authenticationContext,
 // it is used by the kyber.proof framework to generate Provers and Verifiers.
 // see 4.3.7 Client’s Proof PKclient
 //
-// context the authenticationContext
+// context the AuthenticationContext
 //
 // tagAndCommitments the initialTagAndCommitments of a client (see initialTagAndCommitments)
-func newClientProofPred(context authenticationContext, tagAndCommitments initialTagAndCommitments) (proof.Predicate, map[string]kyber.Point) {
+func newClientProofPred(context AuthenticationContext, tagAndCommitments initialTagAndCommitments) (proof.Predicate, map[string]kyber.Point) {
 	// build the OR-predicate
 	andPreds := make([]proof.Predicate, 0, len(context.g.x))
 
@@ -474,10 +474,10 @@ func newClientProofPred(context authenticationContext, tagAndCommitments initial
 
 // returns a proof.Verifier for PKclient
 //
-// context the authenticationContext
+// context the AuthenticationContext
 //
 // tagAndCommitments the initialTagAndCommitments sent by the client that generated the proof we want to verify (see initialTagAndCommitments)
-func newClientVerifier(context authenticationContext, tagAndCommitments initialTagAndCommitments) proof.Verifier {
+func newClientVerifier(context AuthenticationContext, tagAndCommitments initialTagAndCommitments) proof.Verifier {
 	// build OR-predicate of the client proof, and the map of public values
 	finalOrPred, pval := newClientProofPred(context, tagAndCommitments)
 
@@ -487,14 +487,14 @@ func newClientVerifier(context authenticationContext, tagAndCommitments initialT
 
 // returns a proof.Prover for PKclient
 //
-// context the authenticationContext
+// context the AuthenticationContext
 //
 // tagAndCommitments the initialTagAndCommitments of the client (see initialTagAndCommitments)
 //
 // client the Client
 //
 // s the opening (multiplication of all shared secrets) of Sm (tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1])
-func newClientProver(context authenticationContext, tagAndCommitments initialTagAndCommitments, client Client, s kyber.Scalar) proof.Prover {
+func newClientProver(context AuthenticationContext, tagAndCommitments initialTagAndCommitments, client Client, s kyber.Scalar) proof.Prover {
 	// build OR-predicate of the client proof, and the map of public values
 	finalOrPred, pval := newClientProofPred(context, tagAndCommitments)
 

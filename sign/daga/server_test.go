@@ -34,7 +34,7 @@ func TestGetPublicKey_Server(t *testing.T) {
 }
 
 func TestGenerateCommitment(t *testing.T) {
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
+	_, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
 	//Normal execution
 	commit, opening, err := servers[0].GenerateCommitment(context)
@@ -49,7 +49,7 @@ func TestGenerateCommitment(t *testing.T) {
 }
 
 func TestVerifyCommitmentSignature(t *testing.T) {
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+	_, servers, context, _ := GenerateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
 	var commits []Commitment
@@ -81,7 +81,7 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 }
 
 func TestCheckOpenings(t *testing.T) {
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+	_, servers, context, _ := GenerateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
 	var commits []Commitment
@@ -137,7 +137,7 @@ func TestCheckOpenings(t *testing.T) {
 }
 
 func TestInitializeChallenge(t *testing.T) {
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+	_, servers, context, _ := GenerateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
 	var commits []Commitment
@@ -180,7 +180,7 @@ func TestInitializeChallenge(t *testing.T) {
 
 func TestCheckUpdateChallenge(t *testing.T) {
 	//The following tests need at least 2 servers
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+2)
+	_, servers, context, _ := GenerateTestContext(rand.Intn(10)+1, rand.Intn(10)+2)
 
 	//Generate commitments
 	var commits []Commitment
@@ -247,7 +247,7 @@ func TestCheckUpdateChallenge(t *testing.T) {
 
 func TestFinalizeChallenge(t *testing.T) {
 	//The following tests need at least 2 servers
-	_, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+2)
+	_, servers, context, _ := GenerateTestContext(rand.Intn(10)+1, rand.Intn(10)+2)
 
 	//Generate commitments
 	var commits []Commitment
@@ -304,7 +304,7 @@ func TestFinalizeChallenge(t *testing.T) {
 // TODO port to new implementation
 func TestInitializeServerMessage(t *testing.T) {
 	// TODO test for one server as we saw that it previously triggered an hidden bug
-	clients, servers, context, _ := generateTestContext(2, 2)
+	clients, servers, context, _ := GenerateTestContext(2, 2)
 	for _, server := range servers {
 		if server.r == nil {
 			t.Errorf("Error in r for server %d", server.index)
@@ -350,7 +350,7 @@ func TestInitializeServerMessage(t *testing.T) {
 }
 
 func TestServerProtocol(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(2, 2)
+	clients, servers, context, _ := GenerateTestContext(2, 2)
 	for _, server := range servers {
 		assert.NotNil(t, server.r, "Error in r for server %d", server.index)
 	}
@@ -461,7 +461,7 @@ func TestServerProtocol(t *testing.T) {
 }
 
 func TestGenerateServerProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(2, 2)
+	clients, servers, context, _ := GenerateTestContext(2, 2)
 	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	T0, _ := tagAndCommitments.t0, tagAndCommitments.sCommits
 
@@ -541,7 +541,7 @@ func TestGenerateServerProof(t *testing.T) {
 }
 
 func TestVerifyServerProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(2, rand.Intn(10)+2)
 	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
@@ -673,7 +673,7 @@ func TestVerifyServerProof(t *testing.T) {
 }
 
 func TestGenerateMisbehavingProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(2, 2)
+	clients, servers, context, _ := GenerateTestContext(2, 2)
 	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
@@ -730,7 +730,7 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 }
 
 func TestVerifyMisbehavingProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(2, 2)
+	clients, servers, context, _ := GenerateTestContext(2, 2)
 	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 
 	//Generate a valid challenge
@@ -829,8 +829,8 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 }
 
 func TestGenerateNewRoundSecret(t *testing.T) {
-	_, servers, _, _ := generateTestContext(1, 1)
-	R, server := generateNewRoundSecret(servers[0])
+	_, servers, _, _ := GenerateTestContext(1, 1)
+	R, server := GenerateNewRoundSecret(servers[0])
 	servers[0] = server
 	assert.NotNil(t, R, "Cannot generate new round secret")
 	assert.False(t, R.Equal(suite.Point().Mul(suite.Scalar().One(), nil)), "R is the generator")
@@ -839,7 +839,7 @@ func TestGenerateNewRoundSecret(t *testing.T) {
 }
 
 func TestToBytes_ServerProof(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(2, 2)
+	clients, servers, context, _ := GenerateTestContext(2, 2)
 	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	_, S := tagAndCommitments.t0, tagAndCommitments.sCommits
 

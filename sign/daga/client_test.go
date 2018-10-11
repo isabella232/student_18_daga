@@ -28,7 +28,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestNewInitialTagAndCommitments(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// normal execution
 	tagAndCommitments, s := newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
@@ -72,7 +72,7 @@ func newDummyServerChannels(challenge Challenge) (chan []kyber.Point, chan Chall
 
 func TestNewClientProof(t *testing.T) {
 	// setup, test context, clients, servers
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -122,7 +122,7 @@ func TestNewClientProof(t *testing.T) {
 func TestVerifyClientProof(t *testing.T) {
 	// TODO maybe assemble a message using previous student code and verify with current code (but that would amount to testing the proof package)
 	// setup, test context, clients, servers
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -167,9 +167,9 @@ func TestVerifyClientProof(t *testing.T) {
 	assert.False(t, verifyAuthenticationMessage(scratchMsg), "Incorrect check of the challenge")
 }
 
-func TestgetFinalLinkageTag(t *testing.T) {
+func TestGetFinalLinkageTag(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -195,22 +195,22 @@ func TestgetFinalLinkageTag(t *testing.T) {
 	}
 
 	//Normal execution for a normal client
-	Tf, err := clients[0].getFinalLinkageTag(context, &servMsg)
+	Tf, err := clients[0].GetFinalLinkageTag(context, &servMsg)
 	assert.NoError(t, err, "Cannot extract final linkage tag")
 	assert.NotNil(t, Tf, "Cannot extract final linkage tag")
 
 	//Empty inputs
-	Tf, err = clients[0].getFinalLinkageTag(nil, &servMsg)
+	Tf, err = clients[0].GetFinalLinkageTag(nil, &servMsg)
 	assert.Error(t, err, "wrong check: Empty context")
 	assert.Nil(t, Tf, "wrong check: Empty context")
 
-	Tf, err = clients[0].getFinalLinkageTag(context, nil)
+	Tf, err = clients[0].GetFinalLinkageTag(context, nil)
 	assert.Error(t, err, "wrong check: Empty context")
 	assert.Nil(t, Tf, "wrong check: Empty context")
 
 	//Change a signature
 	servMsg.sigs[0].sig = append(servMsg.sigs[0].sig[1:], servMsg.sigs[0].sig[0])
-	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
 	assert.Error(t, err, "Invalid signature accepted")
 	assert.Nil(t, Tf, "Invalid signature accepted")
 
@@ -221,7 +221,7 @@ func TestgetFinalLinkageTag(t *testing.T) {
 
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
-	clients, servers, context, _ = generateTestContext(rand.Intn(10)+2, 1)
+	clients, servers, context, _ = GenerateTestContext(rand.Intn(10)+2, 1)
 	tagAndCommitments, s = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
 	S := tagAndCommitments.sCommits
@@ -250,7 +250,7 @@ func TestgetFinalLinkageTag(t *testing.T) {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.Error(t, err, "server %v returned no error while processing invalid auth. request", i)
 	}
-	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
 	assert.Error(t, err, "can extract final linkage tag for an invalid request, should have returned an error")
 	assert.Nil(t, Tf, "Tf not nil on error")
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -282,13 +282,13 @@ func TestgetFinalLinkageTag(t *testing.T) {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
-	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
 	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
 	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
-	clients, servers, context, _ = generateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ = GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+2)
 	//Assemble the client message
 	tagAndCommitments, s = newInitialTagAndCommitments(context.g.y, context.h[clients[0].index])
 	S = tagAndCommitments.sCommits
@@ -316,7 +316,7 @@ func TestgetFinalLinkageTag(t *testing.T) {
 		err := servers[i].ServerProtocol(context, &servMsg)
 		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
-	Tf, err = clients[0].getFinalLinkageTag(context, &servMsg)
+	Tf, err = clients[0].GetFinalLinkageTag(context, &servMsg)
 	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
 	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
 }
@@ -328,7 +328,7 @@ func TestgetFinalLinkageTag(t *testing.T) {
 // or (but I won't lose more time on this) rewrite everything to follow best testing practises (more better named small tests for a start)
 func TestValidateClientMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+1, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -391,7 +391,7 @@ func TestValidateClientMessage(t *testing.T) {
 
 func TestToBytes_ClientMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -415,7 +415,7 @@ func TestToBytes_ClientMessage(t *testing.T) {
 
 func TestToBytes_ClientProof(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())

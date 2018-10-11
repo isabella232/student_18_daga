@@ -7,12 +7,14 @@ import (
 	"strconv"
 )
 
+// TODO make client an Interface to ease testing, but guess this is too late...
+
 // GetFinalLinkageTag checks the server's signatures and proofs
 // and outputs the final linkage tag of the client or an error
 // FIXME WTF client receiver .. ? => see if makes sense when building the protocol and services
 // FIXME QUESTION not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
 // TODO but guess this won't do any harm, will need to decide when building the service
-func (c Client) getFinalLinkageTag(context *authenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
+func (c Client) GetFinalLinkageTag(context *AuthenticationContext, msg *ServerMessage) (Tf kyber.Point, err error) {
 	//Input checks
 	if context == nil || msg == nil || len(msg.tags) == 0 {
 		return nil, errors.New("invalid inputs")

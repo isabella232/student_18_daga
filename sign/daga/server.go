@@ -87,7 +87,7 @@ func (server Server) PublicKey() kyber.Point {
 }
 
 /*GenerateCommitment creates the commitment and its opening for the distributed challenge generation*/
-func (server Server) GenerateCommitment(context *authenticationContext) (commit *Commitment, opening kyber.Scalar, err error) {
+func (server Server) GenerateCommitment(context *AuthenticationContext) (commit *Commitment, opening kyber.Scalar, err error) {
 	opening = suite.Scalar().Pick(suite.RandomStream())
 	com := suite.Point().Mul(opening, nil)
 	msg, err := com.MarshalBinary()
@@ -102,7 +102,7 @@ func (server Server) GenerateCommitment(context *authenticationContext) (commit 
 }
 
 /*VerifyCommitmentSignature verifies that all the commitments are valid and correctly signed*/
-func VerifyCommitmentSignature(context *authenticationContext, commits []Commitment) (err error) {
+func VerifyCommitmentSignature(context *AuthenticationContext, commits []Commitment) (err error) {
 	for i, com := range commits {
 		if i != com.sig.index {
 			return fmt.Errorf("wrong index: got %d expected %d", com.sig.index, i)
@@ -124,7 +124,7 @@ func VerifyCommitmentSignature(context *authenticationContext, commits []Commitm
 }
 
 /*CheckOpenings verifies each opening and returns the computed challenge*/
-func CheckOpenings(context *authenticationContext, commits []Commitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
+func CheckOpenings(context *AuthenticationContext, commits []Commitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
 	}
@@ -148,7 +148,7 @@ func CheckOpenings(context *authenticationContext, commits []Commitment, opening
 
 /*InitializeChallenge creates a Challenge structure from a challenge value
 It checks the openings before doing so*/
-func InitializeChallenge(context *authenticationContext, commits []Commitment, openings []kyber.Scalar) (*ChallengeCheck, error) {
+func InitializeChallenge(context *AuthenticationContext, commits []Commitment, openings []kyber.Scalar) (*ChallengeCheck, error) {
 	if context == nil || commits == nil || openings == nil || len(commits) == 0 || len(openings) == 0 || len(commits) != len(openings) {
 		return nil, fmt.Errorf("invalid inputs")
 	}
@@ -163,7 +163,7 @@ func InitializeChallenge(context *authenticationContext, commits []Commitment, o
 /*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
 It also adds the server's signature to the list if the round-robin is not completed (the challenge has not yet made it back to the leader)
 It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
-func (server Server) CheckUpdateChallenge(context *authenticationContext, challenge *ChallengeCheck) error {
+func (server Server) CheckUpdateChallenge(context *AuthenticationContext, challenge *ChallengeCheck) error {
 	//Check the signatures and check for duplicates
 	msg, e := challenge.cs.MarshalBinary()
 	if e != nil {
@@ -212,7 +212,7 @@ func (server Server) CheckUpdateChallenge(context *authenticationContext, challe
 
 /*FinalizeChallenge is used to convert the data passed between the servers into the challenge sent to the client
 It must be used after the leader got the message back and ran CheckUpdateChallenge*/
-func FinalizeChallenge(context *authenticationContext, challenge *ChallengeCheck) (Challenge, error) {
+func FinalizeChallenge(context *AuthenticationContext, challenge *ChallengeCheck) (Challenge, error) {
 	if context == nil || challenge == nil {
 		return Challenge{}, fmt.Errorf("invalid inputs")
 	}
@@ -233,7 +233,7 @@ func (server Server) InitializeServerMessage(request *authenticationMessage) (ms
 }
 
 /*ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client*/
-func (server Server) ServerProtocol(context *authenticationContext, msg *ServerMessage) error {
+func (server Server) ServerProtocol(context *AuthenticationContext, msg *ServerMessage) error {
 	//Step 1
 	//Verify that the message is correctly formed
 	if !validateClientMessage(msg.request) {
@@ -352,7 +352,7 @@ func (server Server) ServerProtocol(context *authenticationContext, msg *ServerM
 }
 
 /*generateServerProof creates the server proof for its computations*/
-func (server Server) generateServerProof(context *authenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage) (proof *serverProof, err error) {
+func (server Server) generateServerProof(context *AuthenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage) (proof *serverProof, err error) {
 	//Input validation
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
@@ -427,7 +427,7 @@ func (server Server) generateServerProof(context *authenticationContext, s kyber
 }
 
 /*verifyServerProof verifies a server proof*/
-func verifyServerProof(context *authenticationContext, i int, msg *ServerMessage) bool {
+func verifyServerProof(context *AuthenticationContext, i int, msg *ServerMessage) bool {
 	//Input checks
 	if context == nil || msg == nil {
 		return false
@@ -493,7 +493,7 @@ func verifyServerProof(context *authenticationContext, i int, msg *ServerMessage
 }
 
 /*generateMisbehavingProof creates the proof of a misbehaving client*/ // QUESTION server ? purpose of comment ?
-func (server Server) generateMisbehavingProof(context *authenticationContext, Z kyber.Point) (proof *serverProof, err error) {
+func (server Server) generateMisbehavingProof(context *AuthenticationContext, Z kyber.Point) (proof *serverProof, err error) {
 	//Input checks
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
@@ -541,7 +541,7 @@ func (server Server) generateMisbehavingProof(context *authenticationContext, Z 
 }
 
 /*verifyMisbehavingProof verifies a proof of a misbehaving client*/ // QUESTION server ? ..
-func verifyMisbehavingProof(context *authenticationContext, i int, proof *serverProof, Z kyber.Point) bool {
+func verifyMisbehavingProof(context *AuthenticationContext, i int, proof *serverProof, Z kyber.Point) bool {
 	//Input checks
 	if context == nil || proof == nil || Z == nil {
 		return false
@@ -595,7 +595,7 @@ func verifyMisbehavingProof(context *authenticationContext, i int, proof *server
 
 /*GenerateNewRoundSecret creates a new secret for the server, erasing the previous one.
 It returns the commitment to that secret to be included in the context*/
-func generateNewRoundSecret(server Server) (kyber.Point, Server) {
+func GenerateNewRoundSecret(server Server) (kyber.Point, Server) {
 	kp := key.NewKeyPair(suite)
 	server.r = kp.Private
 	return kp.Public, server

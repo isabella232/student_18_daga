@@ -10,11 +10,11 @@ import (
 )
 
 //generateClientGenerator generates a per-round generator for a given client
-func generateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point, err error) {
+func GenerateClientGenerator(index int, commits []kyber.Point) (gen kyber.Point, err error) {
 	if index < 0 {
 		return nil, fmt.Errorf("Wrond index: %d", index)
 	}
-	if len(*commits) <= 0 {
+	if len(commits) <= 0 {
 		return nil, fmt.Errorf("Wrong commits:\n%v", commits)
 	}
 	// QUESTION FIXME why sha3(sha512()) was previously used ?
@@ -25,7 +25,7 @@ func generateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point
 	idb := make([]byte, 4)
 	binary.BigEndian.PutUint32(idb, uint32(index)) // TODO verify
 	writer.Write(idb)
-	for _, R := range *commits {
+	for _, R := range commits {
 		R.MarshalTo(writer)
 	}
 	hash := hasher.Sum(nil)
@@ -36,7 +36,7 @@ func generateClientGenerator(index int, commits *[]kyber.Point) (gen kyber.Point
 }
 
 // creates a context to be used in the tests
-func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, error) {
+func GenerateTestContext(c, s int) ([]Client, []Server, *AuthenticationContext, error) {
 	if c <= 0 {
 		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", c) // ...
 	}
@@ -57,7 +57,7 @@ func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, 
 	//Generates the per-round secrets for the ServerSignature and keep track of the commits
 	perRoundSecretCommits := make([]kyber.Point, 0, s)
 	for i, serv := range servers {
-		R, server := generateNewRoundSecret(serv)
+		R, server := GenerateNewRoundSecret(serv)
 		perRoundSecretCommits = append(perRoundSecretCommits, R)
 		servers[i] = server
 	}
@@ -72,7 +72,7 @@ func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, 
 		clientKeys = append(clientKeys, new.key.Public)
 		clients = append(clients, *new)
 
-		generator, err := generateClientGenerator(i, &perRoundSecretCommits)
+		generator, err := GenerateClientGenerator(i, perRoundSecretCommits)
 		if err != nil {
 			return nil, nil, nil, errors.New("error while generating client's generators:\n" + err.Error())
 		}
@@ -80,7 +80,7 @@ func generateTestContext(c, s int) ([]Client, []Server, *authenticationContext, 
 	}
 
 	if context, err := NewAuthenticationContext(clientKeys, serverKeys, perRoundSecretCommits, clientGenerators); err != nil {
-		return nil, nil, nil, errors.New("failed to create authenticationcontext: " + err.Error())
+		return nil, nil, nil, errors.New("failed to create AuthenticationContext: " + err.Error())
 	} else {
 		return clients, servers, context, nil
 	}

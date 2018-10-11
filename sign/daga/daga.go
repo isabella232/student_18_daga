@@ -61,7 +61,7 @@ var suite = NewSuiteEC()
 //
 // h contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
 // TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
-type authenticationContext struct {
+type AuthenticationContext struct {
 	g struct {
 		x []kyber.Point
 		y []kyber.Point
@@ -79,11 +79,11 @@ type authenticationContext struct {
 // r the commitments of the servers to their unique per-round secrets
 //
 // h the unique per-round generators of the group associated to each clients
-func NewAuthenticationContext(x, y, r, h []kyber.Point) (*authenticationContext, error) {
+func NewAuthenticationContext(x, y, r, h []kyber.Point) (*AuthenticationContext, error) {
 	if len(x) != len(h) || len(y) != len(r) || len(x) == 0 || len(y) == 0 {
 		return nil, errors.New("NewAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
-	return &authenticationContext{
+	return &AuthenticationContext{
 		g: struct {
 			x []kyber.Point
 			y []kyber.Point
@@ -97,8 +97,13 @@ func NewAuthenticationContext(x, y, r, h []kyber.Point) (*authenticationContext,
 }
 
 // returns the public keys of the members of an authenticationContext, client keys in X and server keys in Y
-func (ac authenticationContext) Members() (X, Y []kyber.Point) {
+func (ac AuthenticationContext) Members() (X, Y []kyber.Point) {
 	return ac.g.x, ac.g.y
+}
+
+// returns the per-round generator of the clients for this authenticationContext
+func (ac AuthenticationContext) ClientsGenerators() []kyber.Point {
+	return ac.h
 }
 
 // authenticationMessage stores an authentication message request (M0)
@@ -115,7 +120,7 @@ func (ac authenticationContext) Members() (X, Y []kyber.Point) {
 // p0 is the client's proof that he correctly followed the protocol and
 // that he belongs to the authorized clients in the context. (see clientProof).
 type authenticationMessage struct {
-	c authenticationContext
+	c AuthenticationContext
 	initialTagAndCommitments
 	p0 clientProof
 }
@@ -236,9 +241,12 @@ func (c Client) PublicKey() kyber.Point {
 	return c.key.Public
 }
 
-func (c Client) NewAuthenticationMessage(context authenticationContext) (*authenticationMessage, error) {
+func (c Client) NewAuthenticationMessage(context AuthenticationContext,
+	pushCommitments chan<- []kyber.Point,
+	pullChallenge <-chan Challenge) (*authenticationMessage, error) {
 	// TODO see if context big enough to justify transforming the parameter into *authenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
+
 	// DAGA client Steps 1, 2, 3:
 	TAndS, s := newInitialTagAndCommitments(context.g.y, context.h[c.index])
 
@@ -248,8 +256,8 @@ func (c Client) NewAuthenticationMessage(context authenticationContext) (*authen
 	// TODO net encode/decode data (if needed/not provided by onet/cothority)
 	// TODO see cothority template, on reception of a challenge message (to define) from the network pipe it into the pullChallenge chan => register an handler that do that
 	// TODO  ''  , on reception of the commitments from the pushCommitments channel pipe them to the remote server over the network
-	var pushCommitments chan []kyber.Point
-	var pullChallenge chan Challenge
+	// TODO see relevant comments in newClientProof
+	// I'd say that these client stuff should not belong to kyber.daga
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
 	if P, err := newClientProof(context, c, *TAndS, s, pushCommitments, pullChallenge); err != nil {
@@ -321,7 +329,7 @@ func SchnorrVerify(public kyber.Point, msg, sig []byte) (err error) {
 
 /*ToBytes is a utility functton to convert a ContextEd25519 into []byte, used in signatures*/
 // QUESTION WTF no other way ?
-func (context *authenticationContext) ToBytes() (data []byte, err error) {
+func (context *AuthenticationContext) ToBytes() (data []byte, err error) {
 	temp, e := PointArrayToBytes(context.g.x)
 	if e != nil {
 		return nil, fmt.Errorf("Error in X: %s", e)

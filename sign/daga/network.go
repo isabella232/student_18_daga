@@ -220,7 +220,7 @@ func NetDecode(netmembers NetMembers) ([]kyber.Point, []kyber.Point, error) {
 	return X, Y, nil
 }
 
-func (context *authenticationContext) NetEncode() (*NetContextEd25519, error) {
+func (context *AuthenticationContext) NetEncode() (*NetContextEd25519, error) {
 	netcontext := NetContextEd25519{}
 
 	G, err := NetEncode(context.g.x, context.g.y)
@@ -244,8 +244,8 @@ func (context *authenticationContext) NetEncode() (*NetContextEd25519, error) {
 	return &netcontext, nil
 }
 
-func (netcontext *NetContextEd25519) NetDecode() (*authenticationContext, error) {
-	context := authenticationContext{}
+func (netcontext *NetContextEd25519) NetDecode() (*AuthenticationContext, error) {
+	context := AuthenticationContext{}
 
 	X, Y, err := NetDecode(netcontext.G)
 	if err != nil {
