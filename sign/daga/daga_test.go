@@ -7,24 +7,23 @@ import (
 )
 
 // TODO use assert
-
 func TestSchnorrSign(t *testing.T) {
 	priv := suite.Scalar().Pick(suite.RandomStream())
 
 	//Normal execution
-	sig, err := SchnorrSign(priv, []byte("Test String"))
+	sig, err := SchnorrSign(suite, priv, []byte("Test String"))
 	if err != nil || sig == nil {
 		t.Error("Cannot execute signature")
 	}
 
 	//Empty public key
-	sig, err = SchnorrSign(nil, []byte("Test String"))
+	sig, err = SchnorrSign(suite, nil, []byte("Test String"))
 	if err == nil || sig != nil {
 		t.Error("Empty public key is accepted")
 	}
 
 	//Empty message
-	sig, err = SchnorrSign(priv, nil)
+	sig, err = SchnorrSign(suite, priv, nil)
 	if err == nil || sig != nil {
 		t.Error("Empty message is accepted")
 	}
@@ -34,10 +33,10 @@ func TestSchnorrVerify(t *testing.T) {
 	//Correct signature
 	priv := suite.Scalar().Pick(suite.RandomStream())
 	msg := []byte("Test String")
-	sig, _ := SchnorrSign(priv, msg)
+	sig, _ := SchnorrSign(suite, priv, msg)
 
 	//Normal signature
-	check := SchnorrVerify(suite.Point().Mul(priv, nil), msg, sig)
+	check := SchnorrVerify(suite, suite.Point().Mul(priv, nil), msg, sig)
 	if check != nil {
 		t.Error("Cannot verify signatures")
 	}
@@ -46,7 +45,7 @@ func TestSchnorrVerify(t *testing.T) {
 	var fake []byte
 	copy(fake, msg)
 	fake = append(fake, []byte("A")...)
-	check = SchnorrVerify(suite.Point().Mul(priv, nil), fake, sig)
+	check = SchnorrVerify(suite, suite.Point().Mul(priv, nil), fake, sig)
 	if check == nil {
 		t.Error("Wrong check: Message edited")
 	}
@@ -54,37 +53,37 @@ func TestSchnorrVerify(t *testing.T) {
 	//Signature modification
 	newsig := append([]byte("A"), sig...)
 	newsig = newsig[:len(sig)]
-	check = SchnorrVerify(suite.Point().Mul(priv, nil), msg, newsig)
+	check = SchnorrVerify(suite, suite.Point().Mul(priv, nil), msg, newsig)
 	if check == nil {
 		t.Error("Wrong check: signature changed")
 	}
 
 	//Empty public key
-	check = SchnorrVerify(nil, msg, sig)
+	check = SchnorrVerify(suite, nil, msg, sig)
 	if check == nil {
 		t.Error("Wrong check: empty public key")
 	}
 
 	//Empty message
-	check = SchnorrVerify(suite.Point().Mul(priv, nil), nil, sig)
+	check = SchnorrVerify(suite, suite.Point().Mul(priv, nil), nil, sig)
 	if check == nil {
 		t.Error("Wrong check: empty message")
 	}
 
 	//0 length message
-	check = SchnorrVerify(suite.Point().Mul(priv, nil), []byte{}, sig)
+	check = SchnorrVerify(suite, suite.Point().Mul(priv, nil), []byte{}, sig)
 	if check == nil {
 		t.Error("Wrong check: 0 length message")
 	}
 
 	//Empty signature
-	check = SchnorrVerify(suite.Point().Mul(priv, nil), msg, nil)
+	check = SchnorrVerify(suite, suite.Point().Mul(priv, nil), msg, nil)
 	if check == nil {
 		t.Error("Wrong check: empty signature")
 	}
 
 	//0 length signature
-	check = SchnorrVerify(suite.Point().Mul(priv, nil), msg, []byte{})
+	check = SchnorrVerify(suite, suite.Point().Mul(priv, nil), msg, []byte{})
 	if check == nil {
 		t.Error("Wrong check: 0 length signature")
 	}
@@ -93,7 +92,7 @@ func TestSchnorrVerify(t *testing.T) {
 func TestToBytes(t *testing.T) {
 	c := rand.Intn(10) + 1
 	s := rand.Intn(10) + 1
-	_, _, context, _ := GenerateTestContext(c, s)
+	_, _, context, _ := GenerateTestContext(suite, c, s)
 	data, err := context.ToBytes()
 	if err != nil || data == nil || len(data) == 0 {
 		t.Error("Cannot convert valid context to bytes")

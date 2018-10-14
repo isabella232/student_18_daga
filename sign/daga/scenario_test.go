@@ -38,7 +38,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			fmt.Printf("Cannot json unmarshal the commitments t\n%s\n", err)
 			return
 		}
-		tserver, err := daga.NetDecodePoints(nett)
+		tserver, err := daga.NetDecodePoints(suite, nett)
 		if err != nil || tserver == nil {
 			fmt.Printf("Error in t decoding\n%s\n", err)
 			return
@@ -59,7 +59,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 
 		//The leader asks other servers to generates commitments by publishing its own signed commitment
-		comlead, openlead, err := servers[j].GenerateCommitment(&context)
+		comlead, openlead, err := daga.GenerateCommitment(suite, &context, servers[j])
 		if err != nil {
 			fmt.Printf("Error when generating the leader commitment at server %d\n%s\n", j, err)
 			return
@@ -86,7 +86,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			fmt.Printf("Error when json unmarshal the commitment of the leader %d\n%s\n", j, err)
 			return
 		}
-		_, err = rcvCom.NetDecode()
+		_, err = rcvCom.NetDecode(suite)
 		if err != nil {
 			fmt.Printf("Error when decoding the commitment of the leader %d\n%s\n", j, err)
 			return
@@ -97,7 +97,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			if num == j {
 				continue
 			}
-			com, open, e := server.GenerateCommitment(&context)
+			com, open, e := daga.GenerateCommitment(suite, &context, server)
 			if e != nil {
 				fmt.Printf("Error when generating the commitment at server %d\n%s\n", num, e)
 				return
@@ -124,7 +124,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 				fmt.Printf("Error when json unmarshal the commitment of server %d\n%s\n", num, e)
 				return
 			}
-			_, e = rcvCom.NetDecode()
+			_, e = rcvCom.NetDecode(suite)
 			if e != nil {
 				fmt.Printf("Error when decoding the commitment of server %d\n%s\n", num, e)
 				return
@@ -133,7 +133,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 
 		//Once the leader has received all the commitments, it checks that they are of correct form and their signatures are valid
-		err = daga.VerifyCommitmentSignature(&context, commits)
+		err = daga.VerifyCommitmentSignature(suite, &context, commits)
 		if err != nil {
 			fmt.Printf("Error when verifying the commitments\n%s\n", err)
 			return
@@ -158,7 +158,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			fmt.Printf("Error when json unmarshal the opening of the leader %d\n", j)
 			return
 		}
-		_, err = rcvOpen.NetDecode()
+		_, err = rcvOpen.NetDecode(suite)
 		if err != nil {
 			fmt.Printf("Error when decoding the opening of the leader %d\n", j)
 			return
@@ -189,7 +189,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 				return
 			}
 			//No need to check that this valkue is the same as the one before transfer, this is done in the test of the network functions in daga
-			_, e = rcvOpen.NetDecode()
+			_, e = rcvOpen.NetDecode(suite)
 			if e != nil {
 				fmt.Printf("Error when decoding the opening of server %d\n%s\n", num, e)
 				return
@@ -197,14 +197,14 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 
 		//After receiving all the openings, server j veerifies them and initializes the challenge structure
-		challenge, err := daga.InitializeChallenge(&context, commits, openings)
+		challenge, err := daga.InitializeChallenge(suite, &context, commits, openings)
 		if err != nil {
 			fmt.Printf("Error when initializing the challenge\n%s\n", err)
 			return
 		}
 
 		//Then it executes CheckUpdateChallenge
-		servers[j].CheckUpdateChallenge(&context, challenge)
+		daga.CheckUpdateChallenge(suite, &context, challenge, servers[j])
 
 		//Next it sends this message to the next server
 		sendChall, err := challenge.NetEncode()
@@ -231,14 +231,14 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 				fmt.Printf("Error when json unmarshal the challenge at server %d\n%s\n", index, e)
 				return
 			}
-			serverChallenge, e := rcvChall.NetDecode()
+			serverChallenge, e := rcvChall.NetDecode(suite)
 			if e != nil {
 				fmt.Printf("Error when decoding the challenge at server %d\n%s\n", index, e)
 				return
 			}
 
 			//Executes CheckUpdateChallenge
-			servers[index].CheckUpdateChallenge(&context, serverChallenge)
+			daga.CheckUpdateChallenge(suite, &context, serverChallenge, servers[index])
 
 			//Encode and transfer the challenge to the next server
 			sendservChall, e := serverChallenge.NetEncode()
@@ -261,14 +261,14 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			fmt.Printf("Error when json unmarshal the challenge back at the leader %d\n%s\n", j, err)
 			return
 		}
-		finalChallenge, err := rcvfinalChall.NetDecode()
+		finalChallenge, err := rcvfinalChall.NetDecode(suite)
 		if err != nil {
 			fmt.Printf("Error when decoding the challenge at the leader %d\n%s\n", j, err)
 			return
 		}
 
 		//It executes CheckUpdateChallenge to verify the correctness of the challenge
-		servers[j].CheckUpdateChallenge(&context, finalChallenge)
+		daga.CheckUpdateChallenge(suite, &context, finalChallenge, servers[j])
 
 		//Finalize the challenge before sending it to the client
 		clientChallenge, err := daga.FinalizeChallenge(&context, finalChallenge)
@@ -294,7 +294,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			fmt.Printf("Error when json unmarshal the challenge at client\n%s\n", err)
 			return
 		}
-		masterChallenge, err := rcvclientChall.NetDecode()
+		masterChallenge, err := rcvclientChall.NetDecode(suite)
 		if err != nil {
 			fmt.Printf("Error when decoding the challenge at client\n%s\n", err)
 			return
@@ -307,13 +307,14 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 
 // FIXME rewrite.. + again lots of redundant tests that add nothing except bullshitting the repo
 // TODO use assert..
+// FIXME move again in kyber/sign/daga nothing to do here
 func TestScenario(t *testing.T) {
-	// FIXME this is bullshit, in practise we cannot generate a context like that => another thing i'll have to do,
+	// FIXME remember to "implement" the context generation,
 	//Number of clients
 	c := 20
 	//Number of servers
 	s := 10
-	clients, servers, serviceContext, err := daga.GenerateTestContext(c, s)
+	clients, servers, serviceContext, err := daga.GenerateTestContext(suite, c, s)
 	if err != nil {
 		fmt.Printf("Error in while creating context\n%s\n", err)
 		return
@@ -339,7 +340,7 @@ func TestScenario(t *testing.T) {
 		fmt.Printf("Cannot json unmarshal the context\n%s\n", err)
 		return
 	}
-	context, err := netContext.NetDecode()
+	context, err := netContext.NetDecode(suite)
 	if err != nil {
 		fmt.Printf("Error in context decoding\n%s\n", err)
 		return
@@ -350,7 +351,7 @@ func TestScenario(t *testing.T) {
 	//Client's protocol
 	var i = rand.Intn(len(X))
 	pushCommitments, pullChallenge := testServerProtocolsOnClientRequests(*context, servers)
-	msg, err := clients[i].NewAuthenticationMessage(*context, pushCommitments, pullChallenge)
+	msg, err := daga.NewAuthenticationMessage(suite, *context, clients[i], pushCommitments, pullChallenge)
 	assert.NoError(t, err)
 
 	//Arbitrarily select a server to send the message to
@@ -374,25 +375,29 @@ func TestScenario(t *testing.T) {
 		fmt.Printf("Error when json unmarshal the client message\n%s\n", err)
 		return
 	}
-	_, err = rcvclientMsg.NetDecode()
+	_, err = rcvclientMsg.NetDecode(suite)
 	if err != nil {
 		fmt.Printf("Error when decoding the client message\n%s\n", err)
 		return
 	}
 
 	//This server initialize the server message with the request from the client
-	msgServ := servers[j].InitializeServerMessage(msg)
+	msgServ, err := daga.InitializeServerMessage(msg)
+	if err != nil {
+		fmt.Printf("Error when initializing the server message\n%s\n", err)
+		return
+	}
 
 	for shift := range servers {
 		index := (j + shift) % len(Y)
-		e := servers[index].ServerProtocol(context, msgServ)
+		e := daga.ServerProtocol(suite, context, msgServ, servers[index])
 		if e != nil {
 			fmt.Printf("Error in the server protocol at server %d, shift %d:\n%s\n", (j+shift)%len(Y), shift, e)
 			return
 		}
 		//The server pass the massage to the next one
 		//If this is the last server, it broadcasts it to all the servers and the client
-		sendservMsg, e := msgServ.NetEncode()
+		sendservMsg, e := msgServ.NetEncode(suite)
 		if e != nil {
 			fmt.Printf("Error when encoding the server message at server %d\n%s\n", index, e)
 			return
@@ -409,7 +414,7 @@ func TestScenario(t *testing.T) {
 			fmt.Printf("Error when json unmarshal the server message at server %d\n%s\n", index, e)
 			return
 		}
-		_, e = rcvservMsg.NetDecode()
+		_, e = rcvservMsg.NetDecode(suite)
 		if e != nil {
 			fmt.Printf("Error when decoding the server message at server %d\n%s\n", index, e)
 			return
@@ -419,7 +424,7 @@ func TestScenario(t *testing.T) {
 	//Once the message was completed by all the servers,
 	//it is sent back to the client.
 	//The clients then verifies the signatures then the proofs and gets its final linkage tag for this context
-	Tf, err := clients[i].GetFinalLinkageTag(context, msgServ)
+	Tf, err := daga.GetFinalLinkageTag(suite, context, *msgServ)
 	if err != nil {
 		fmt.Printf("Cannot verify server message:\n%s", err)
 		return

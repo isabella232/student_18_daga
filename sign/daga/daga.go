@@ -7,12 +7,15 @@ package daga
 // TODO QUESTION FIXME how to securely erase secrets ?
 // TODO see what to export and what not, for now mostly everything private
 import (
+	"crypto/sha512"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/sign/schnorr"
 	"github.com/dedis/kyber/util/key"
 	"hash"
+	"io"
 )
 
 // Suite represents the set of functionalities needed for the DAGA package to operate
@@ -31,10 +34,6 @@ type Suite interface {
 	// FIXME review where Hash2 should be called instead of Hash and how, I might have used Hash everywhere, bad
 	hashTwo() hash.Hash // DAGA needs another hash function (that can be of another size depending on the concrete groups used)
 }
-
-// TODO it is the user of our package that defines such a variable/suite
-// => will need to add a parameter to all daga functions and methods where needed
-var suite = NewSuiteEC()
 
 // AuthenticationContext holds all the constants of a particular DAGA authentication round.
 //
@@ -106,194 +105,10 @@ func (ac AuthenticationContext) ClientsGenerators() []kyber.Point {
 	return ac.h
 }
 
-// authenticationMessage stores an authentication message request (M0)
-// sent by a client to an arbitrarily chosen server (listed in the context).
-//
-// Upon receiving the client’s message, all servers collectively process M0
-// and either accept or reject the client's authentication request.
-//
-// c holds the authenticationContext used by the client to authenticate.
-//
-// initialTagAndCommitments contains the client's commitments to the secrets shared with all the servers
-// and the client's initial linkage tag (see initialTagAndCommitments).
-//
-// p0 is the client's proof that he correctly followed the protocol and
-// that he belongs to the authorized clients in the context. (see clientProof).
-type authenticationMessage struct {
-	c AuthenticationContext
-	initialTagAndCommitments
-	p0 clientProof
-}
-
-// initialTagAndCommitments stores :
-//
-// sCommits the client's commitments to the secrets shared with the servers.
-// that is a set of commitments sCommits = { Z, S0, .., Sj, .., Sm } s.t.
-// S0 = g, Sj = g^(∏sk : k=1..j) (see 4.3.5 client's protocol step 2-3).
-//
-// t0 the client's initial linkage tag. t0 = h^(∏sk : k=1..m)
-//
-// here above, (Z,z) is the client's ephemeral DH key pair, (see 4.3.5 client's protocol step 1)
-// and sk=Hash1(Yk^z)
-type initialTagAndCommitments struct {
-	sCommits []kyber.Point
-	t0       kyber.Point
-}
-
-// Client is used to store a client's key pair and index.
-type Client struct {
-	key   key.Pair
-	index int
-}
-
-// NewClient is used to initialize a new client with a given index
-// If no private key is given, a random one is chosen
-// TODO see how this i will be handled...when building the service/protocoles conodes etc..
-func NewClient(i int, s kyber.Scalar) (*Client, error) {
-	if i < 0 {
-		return nil, errors.New("invalid parameters, negative index")
-	}
-
-	var kp *key.Pair
-	if s == nil {
-		kp = key.NewKeyPair(suite)
-	} else {
-		// FIXME check if s is a proper secret (see small subgroup attacks on some groups/curves).
-		// FIXME .. or remove this option
-		// FIXME .. or make it a proper secret..
-		kp = &key.Pair{
-			Private: s, // <- could (e.g. edwards25519) be attacked if not in proper form
-			Public:  suite.Point().Mul(s, nil),
-		}
-	}
-
-	return &Client{
-		index: i,
-		key:   *kp,
-	}, nil
-}
-
-// TODO later add logging where needed/desired
-// TODO decide if better to make this function a method of client that accept context, or better add a method to client that use it internally
-// Returns a pointer to a newly allocated initialTagAndCommitments struct correctly initialized
-// and an opening s (product of all secrets that client shares with the servers) of Sm (that is needed later to build client's proof PKclient)
-// (i.e. performs client protocol Steps 1,2 and 3)
-//
-// serverKeys the public keys of the servers (of a particular authenticationContext)
-//
-// clientGenerator the client's per-round generator
-//
-func newInitialTagAndCommitments(serverKeys []kyber.Point, clientGenerator kyber.Point) (*initialTagAndCommitments, kyber.Scalar) {
-	// TODO parameter checking, what should we check ? assert that clientGenerator is indeed a generator of the group ?
-
-	//DAGA client Step 1: generate ephemeral DH key pair
-	ephemeralKey := key.NewKeyPair(suite)
-	z := ephemeralKey.Private // FIXME how to erase ?
-	Z := ephemeralKey.Public
-
-	//DAGA client Step 2: generate shared secret exponents with the servers
-	sharedSecrets := make([]kyber.Scalar, 0, len(serverKeys))
-	for _, serverKey := range serverKeys {
-		hasher := suite.Hash()
-		// QUESTION ask Ewa Syta
-		// can it be a problem if hash size = 256 > log(phi(group order = 2^252 + 27742317777372353535851937790883648493 prime))
-		// because it is currently the case, to me seems that by having a hash size greater than the number of phi(group order)
-		// it means that the resulting "pseudo random keys" will no longer have same uniform distribution since two keys can be = mod phi(group order).
-		// (to my understanding secrets distribution will not be uniform and that kind of violate random oracle model assumption)
-		// but since nothing is said about this concern in Curve25519 paper I'd say this is not an issue finally...
-		suite.Point().Mul(z, serverKey).MarshalTo(hasher)
-		hash := hasher.Sum(nil)
-		sharedSecret := suite.Scalar().SetBytes(hash)
-		// QUESTION FIXME mask the bits to avoid small subgroup attacks
-		// (but think how an attacker could obtain sP where P has small order.. maybe this is not possible and hence protection irrelevant,
-		// anyway to my understanding we lose nothing (security-wise) by always performing the bittwiddlings and we might lose security if we don't !
-		// relevant link/explanations https://crypto.stackexchange.com/questions/12425/why-are-the-lower-3-bits-of-curve25519-ed25519-secret-keys-cleared-during-creati
-		sharedSecrets = append(sharedSecrets, sharedSecret)
-	} // QUESTION don't understand why sha3(sha512) was done by previous student instead of sha256 in the first place...? => I use only one hash (sha256 for now)
-
-	//DAGA client Step 3: computes initial linkage tag and commitments to the shared secrets
-	//	Computes the value of the exponent for the initial linkage tag
-	exp := suite.Scalar().One()
-	for _, sharedSecret := range sharedSecrets {
-		exp.Mul(exp, sharedSecret)
-	}
-	T0 := suite.Point().Mul(exp, clientGenerator)
-
-	//	Computes the commitments to the shared secrets
-	S := make([]kyber.Point, 0, len(serverKeys)+2)
-	S = append(S, Z, suite.Point().Base()) // Z, S0=g
-	exp = sharedSecrets[0]                 // s1
-	for _, sharedSecret := range sharedSecrets[1:] /*s2..sm*/ {
-		S = append(S, suite.Point().Mul(exp, nil)) // S1..Sm-1
-		exp.Mul(exp, sharedSecret)
-	}
-	S = append(S, suite.Point().Mul(exp, nil) /*Sm*/)
-	s := exp
-
-	return &initialTagAndCommitments{
-		t0:       T0,
-		sCommits: S,
-	}, s
-}
-
-// Returns the client's DH public key
-func (c Client) PublicKey() kyber.Point {
-	return c.key.Public
-}
-
-func (c Client) NewAuthenticationMessage(context AuthenticationContext,
-	pushCommitments chan<- []kyber.Point,
-	pullChallenge <-chan Challenge) (*authenticationMessage, error) {
-	// TODO see if context big enough to justify transforming the parameter into *authenticationContext
-	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
-
-	// DAGA client Steps 1, 2, 3:
-	TAndS, s := newInitialTagAndCommitments(context.g.y, context.h[c.index])
-
-	// TODO server selection and circuit establishment (use roster infos etc..)
-	// TODO pick random server and find its location (use roster infos etc..)
-	// TODO establish circuit/channel from/to server => using onet/cothority facilities
-	// TODO net encode/decode data (if needed/not provided by onet/cothority)
-	// TODO see cothority template, on reception of a challenge message (to define) from the network pipe it into the pullChallenge chan => register an handler that do that
-	// TODO  ''  , on reception of the commitments from the pushCommitments channel pipe them to the remote server over the network
-	// TODO see relevant comments in newClientProof
-	// I'd say that these client stuff should not belong to kyber.daga
-
-	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
-	if P, err := newClientProof(context, c, *TAndS, s, pushCommitments, pullChallenge); err != nil {
-		// TODO log QUESTION can I have an intro on the logging practises at DEDIS
-		return nil, err
-	} else {
-		// DAGA client Step 5
-		M0 := authenticationMessage{
-			c:                        context,
-			initialTagAndCommitments: *TAndS,
-			p0:                       P,
-		}
-		return &M0, nil
-	}
-}
-
-// TODO add a server method that use it or in fact make it a server method ... !
-// Returns whether an authenticationMessage is valid or not, (well formed AND valid/accepted proof)
-//
-// msg the authenticationMessage to verify
-func verifyAuthenticationMessage(msg authenticationMessage) bool {
-	// FIXME return value make it return an error instead !
-	// TODO FIXME see where to put this one, just saw that serverprotocol calls validate then verify, but maybe other code expect verify to validate
-	if !validateClientMessage(msg) {
-		return false
-	}
-	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
-	// FIXME here challenge should be picked from server state IMO but QUESTION ask Ewa Syta !
-	// TODO resolve all these when building the actual service
-	return verifyClientProof(msg.c, msg.p0, msg.initialTagAndCommitments) == nil
-}
-
 // Signs using schnorr signature scheme over the group of the Suite
 // QUESTION to me this is a bad idea ?! better to have Sign be a required function listed in the Suite,
 // QUESTION where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..
-func SchnorrSign(private kyber.Scalar, msg []byte) (s []byte, err error) {
+func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
 	if private == nil {
 		return nil, errors.New("cannot sign, no private key provided")
@@ -311,7 +126,7 @@ func SchnorrSign(private kyber.Scalar, msg []byte) (s []byte, err error) {
 
 // SchnorrVerify checks if a Schnorr signature generated using SchnorrSign is valid and returns an error if it is not the case
 // QUESTION same as above
-func SchnorrVerify(public kyber.Point, msg, sig []byte) (err error) {
+func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error) {
 	//Input checks
 	if public == nil {
 		return fmt.Errorf("cannot verify, no public key provided")
@@ -327,28 +142,28 @@ func SchnorrVerify(public kyber.Point, msg, sig []byte) (err error) {
 	return err
 }
 
-/*ToBytes is a utility functton to convert a ContextEd25519 into []byte, used in signatures*/
+/*ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures*/
 // QUESTION WTF no other way ?
-func (context *AuthenticationContext) ToBytes() (data []byte, err error) {
-	temp, e := PointArrayToBytes(context.g.x)
+func (ac AuthenticationContext) ToBytes() (data []byte, err error) {
+	temp, e := PointArrayToBytes(ac.g.x)
 	if e != nil {
 		return nil, fmt.Errorf("Error in X: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(context.g.y)
+	temp, e = PointArrayToBytes(ac.g.y)
 	if e != nil {
 		return nil, fmt.Errorf("Error in Y: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(context.h)
+	temp, e = PointArrayToBytes(ac.h)
 	if e != nil {
 		return nil, fmt.Errorf("Error in H: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(context.r)
+	temp, e = PointArrayToBytes(ac.r)
 	if e != nil {
 		return nil, fmt.Errorf("Error in R: %s", e)
 	}
@@ -358,7 +173,7 @@ func (context *AuthenticationContext) ToBytes() (data []byte, err error) {
 }
 
 /*PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures*/
-// QUESTION same as above + if this is the way to go make it a method of []kyber.Point for consistency
+// QUESTION same as above + if this is the way to go make it a method of []kyber.Point for consistency and rename it marshalbinary
 func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	for _, p := range array {
 		temp, e := p.MarshalBinary()
@@ -381,4 +196,59 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 		data = append(data, temp...)
 	}
 	return data, nil
+}
+
+// TODO WTF, no other way ? + rename marshalbinary for consistency
+/*ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures*/
+func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
+	data, e := msg.c.ToBytes()
+	if e != nil {
+		return nil, fmt.Errorf("error in context: %s", e)
+	}
+
+	temp, e := PointArrayToBytes(msg.sCommits)
+	if e != nil {
+		return nil, fmt.Errorf("error in S: %s", e)
+	}
+	data = append(data, temp...)
+
+	temp, e = msg.t0.MarshalBinary()
+	if e != nil {
+		return nil, fmt.Errorf("error in T0: %s", e)
+	}
+	data = append(data, temp...)
+
+	temp, e = msg.p0.ToBytes()
+	if e != nil {
+		return nil, fmt.Errorf("error in proof: %s", e)
+	}
+	data = append(data, temp...)
+
+	return data, nil
+}
+
+//generateClientGenerator generates a per-round generator for a given client
+func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen kyber.Point, err error) {
+	if index < 0 {
+		return nil, fmt.Errorf("Wrond index: %d", index)
+	}
+	if len(commits) <= 0 {
+		return nil, fmt.Errorf("Wrong commits:\n%v", commits)
+	}
+	// QUESTION FIXME why sha3(sha512()) was previously used ?
+	// TODO remember that I didn't write it, see later when building service if correct etc..
+	// QUESTION should we ensure that no 2 client get same generator ?
+	hasher := sha512.New()
+	var writer io.Writer = hasher // ...
+	idb := make([]byte, 4)
+	binary.BigEndian.PutUint32(idb, uint32(index)) // TODO verify
+	writer.Write(idb)
+	for _, R := range commits {
+		R.MarshalTo(writer)
+	}
+	hash := hasher.Sum(nil)
+	hasher = suite.Hash()
+	hasher.Write(hash)
+	gen = suite.Point().Mul(suite.Scalar().SetBytes(hasher.Sum(nil)), nil)
+	return
 }

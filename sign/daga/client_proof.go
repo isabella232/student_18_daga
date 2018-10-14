@@ -18,11 +18,11 @@ type Challenge struct {
 }
 
 // verify all the signatures of the Challenge
-func (c Challenge) verifySignatures(serverKeys []kyber.Point) error {
+func (c Challenge) verifySignatures(suite Suite, serverKeys []kyber.Point) error {
 	//	verify challenge signatures
 	if msg, e := c.cs.MarshalBinary(); e == nil {
 		for _, sig := range c.sigs {
-			if e = SchnorrVerify(serverKeys[sig.index], msg, sig.sig); e != nil {
+			if e = SchnorrVerify(suite, serverKeys[sig.index], msg, sig.sig); e != nil {
 				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.index) + ": " + e.Error())
 			}
 		}
@@ -309,7 +309,7 @@ type clientProof struct {
 }
 
 // builds a new clientProof (Step 4 of client's protocol) and returns it to caller
-func newClientProof(context AuthenticationContext,
+func newClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
@@ -320,7 +320,7 @@ func newClientProof(context AuthenticationContext,
 	// TODO see later while building the protocols and services
 
 	if len(context.g.x) <= 1 {
-		return clientProof{}, errors.New("there is only one client in the context, this means DAGA is pointless")
+		return clientProof{}, errors.New("newClientProof: there is only one client in the context, this means DAGA is pointless")
 		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
 		// in the context/OR-predicate, if this condition is not met there won't be an "subChallenges" to generate by the
 		// prover => he won't send them by calling Put, but we wait for them !!
@@ -328,7 +328,7 @@ func newClientProof(context AuthenticationContext,
 	}
 
 	//construct the proof.Prover for client's PK predicate and its proof.ProverContext
-	prover := newClientProver(context, tagAndCommitments, client, s)
+	prover := newClientProver(suite, context, tagAndCommitments, client, s)
 	proverCtx := newClientProverCtx(suite, len(context.g.x))
 
 	//3-move interaction with server
@@ -342,7 +342,7 @@ func newClientProof(context AuthenticationContext,
 
 	//	get initial commitments from running Prover
 	if commits, err := proverCtx.commitments(); err != nil {
-		return clientProof{}, err
+		return clientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
 		P.t = commits
 	}
@@ -353,9 +353,9 @@ func newClientProof(context AuthenticationContext,
 	pushCommitments <- P.t
 	//	receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code / client setup!!)
 	challenge := <-pullChallenge
-	if err := challenge.verifySignatures(context.g.y); err != nil {
+	if err := challenge.verifySignatures(suite, context.g.y); err != nil {
 		// TODO log
-		return clientProof{}, err
+		return clientProof{}, errors.New("newClientProof:" + err.Error())
 	}
 	P.cs = challenge.cs
 
@@ -365,7 +365,7 @@ func newClientProof(context AuthenticationContext,
 	//	get final responses from Prover
 	if responses, err := proverCtx.responses(); err != nil {
 		// TODO onet.log something
-		return clientProof{}, err
+		return clientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
 		P.r = responses
 	}
@@ -373,26 +373,26 @@ func newClientProof(context AuthenticationContext,
 	//check return value of the now done proof.Prover
 	if proverErr != nil { // here no race, we are sure that Prover is done since responses() returns only after response chan is closed
 		// TODO onet.log something
-		return clientProof{}, proverErr
+		return clientProof{}, errors.New("newClientProof:" + proverErr.Error())
 	}
 	return P, nil
 }
 
 // verifyClientProof checks the validity of a client's clientProof
-func verifyClientProof(context AuthenticationContext,
+func verifyClientProof(suite Suite, context AuthenticationContext,
 	proof clientProof,
 	tagAndCommitments initialTagAndCommitments) error {
 
 	if len(context.g.x) <= 1 {
-		return errors.New("there is only one client in the context, this means DAGA is pointless")
+		return errors.New("verifyClientProof: there is only one client in the context, this means DAGA is pointless")
 		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
 		// in the context/OR-predicate, if this condition is not met there won't be any "subChallenges" to request by the
-		// verifier => he won't receive them by calling Get
+		// verifier => he won't call Get to receive them
 		// in case this assumption needs to be relaxed, a test should be added to the verifierContext.receiveChallenges() method
 	}
 
 	//construct the proof.Verifier for client's PK and its proof.VerifierContext
-	verifier := newClientVerifier(context, tagAndCommitments)
+	verifier := newClientVerifier(suite, context, tagAndCommitments)
 	verifierCtx := newClientVerifierCtx(suite, len(context.g.x))
 
 	//3-move interaction with client
@@ -407,7 +407,7 @@ func verifyClientProof(context AuthenticationContext,
 	commitments := proof.t
 	if err := verifierCtx.receiveCommitments(commitments); err != nil {
 		// TODO log
-		return errors.New("failed to verify proof: " + err.Error())
+		return errors.New("verifyClientProof:" + err.Error())
 	}
 
 	//	forward challenges to running Verifier
@@ -419,14 +419,14 @@ func verifyClientProof(context AuthenticationContext,
 	responses := proof.r
 	if err := verifierCtx.receiveResponses(responses); err != nil {
 		// TODO log
-		return errors.New("failed to verify proof: " + err.Error())
+		return errors.New("verifyClientProof:" + err.Error())
 	}
 
 	//wait for Verifier to be done and check return value of the now done proof.Verifier
 	verifierErr := <-verifierErrChan
 	if verifierErr != nil { // here no race, we are sure that Verifier is done since responses() returns only after response chan is closed
 		// TODO log
-		return errors.New("failed to verify proof: " + verifierErr.Error())
+		return errors.New("verifyClientProof:" + verifierErr.Error())
 	}
 	return nil
 }
@@ -438,7 +438,7 @@ func verifyClientProof(context AuthenticationContext,
 // context the AuthenticationContext
 //
 // tagAndCommitments the initialTagAndCommitments of a client (see initialTagAndCommitments)
-func newClientProofPred(context AuthenticationContext, tagAndCommitments initialTagAndCommitments) (proof.Predicate, map[string]kyber.Point) {
+func newClientProofPred(suite Suite, context AuthenticationContext, tagAndCommitments initialTagAndCommitments) (proof.Predicate, map[string]kyber.Point) {
 	// build the OR-predicate
 	andPreds := make([]proof.Predicate, 0, len(context.g.x))
 
@@ -477,9 +477,9 @@ func newClientProofPred(context AuthenticationContext, tagAndCommitments initial
 // context the AuthenticationContext
 //
 // tagAndCommitments the initialTagAndCommitments sent by the client that generated the proof we want to verify (see initialTagAndCommitments)
-func newClientVerifier(context AuthenticationContext, tagAndCommitments initialTagAndCommitments) proof.Verifier {
+func newClientVerifier(suite Suite, context AuthenticationContext, tagAndCommitments initialTagAndCommitments) proof.Verifier {
 	// build OR-predicate of the client proof, and the map of public values
-	finalOrPred, pval := newClientProofPred(context, tagAndCommitments)
+	finalOrPred, pval := newClientProofPred(suite, context, tagAndCommitments)
 
 	// retrieve sigma-protocol Verifier for the OR-predicate
 	return finalOrPred.Verifier(newSuiteProof(suite), pval)
@@ -494,19 +494,48 @@ func newClientVerifier(context AuthenticationContext, tagAndCommitments initialT
 // client the Client
 //
 // s the opening (multiplication of all shared secrets) of Sm (tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1])
-func newClientProver(context AuthenticationContext, tagAndCommitments initialTagAndCommitments, client Client, s kyber.Scalar) proof.Prover {
+func newClientProver(suite Suite, context AuthenticationContext, tagAndCommitments initialTagAndCommitments, client Client, s kyber.Scalar) proof.Prover {
 	// build OR-predicate of the client proof, and the map of public values
-	finalOrPred, pval := newClientProofPred(context, tagAndCommitments)
+	finalOrPred, pval := newClientProofPred(suite, context, tagAndCommitments)
 
 	// build map of secret values and choice needed to construct the Prover from the predicate
 	choice := map[proof.Predicate]int{
-		finalOrPred: client.index, // indicate to prover which clause is actually true
+		finalOrPred: client.Index(), // indicate to prover which clause is actually true
 	}
 	sval := map[string]kyber.Scalar{
 		"s":                              s,
-		"x" + strconv.Itoa(client.index): client.key.Private,
+		"x" + strconv.Itoa(client.Index()): client.PrivateKey(),
 	}
 	// retrieve sigma-protocol Prover for the OR-predicate
 	prover := finalOrPred.Prover(newSuiteProof(suite), sval, pval, choice)
 	return prover
+}
+
+//ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures
+func (proof clientProof) ToBytes() (data []byte, err error) {
+	// TODO WTF no other way ? + rename marshalbinary for consistency
+	data, e := proof.cs.MarshalBinary()
+	if e != nil {
+		return nil, fmt.Errorf("error in cs: %s", e)
+	}
+
+	temp, e := PointArrayToBytes(proof.t)
+	if e != nil {
+		return nil, fmt.Errorf("error in t: %s", e)
+	}
+	data = append(data, temp...)
+
+	temp, e = ScalarArrayToBytes(proof.c)
+	if e != nil {
+		return nil, fmt.Errorf("error in c: %s", e)
+	}
+	data = append(data, temp...)
+
+	temp, e = ScalarArrayToBytes(proof.r)
+	if e != nil {
+		return nil, fmt.Errorf("error in r: %s", e)
+	}
+	data = append(data, temp...)
+
+	return data, nil
 }

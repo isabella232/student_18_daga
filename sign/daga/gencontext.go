@@ -1,42 +1,13 @@
 package daga
 
 import (
-	"crypto/sha512"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
-	"io"
 )
 
-//generateClientGenerator generates a per-round generator for a given client
-func GenerateClientGenerator(index int, commits []kyber.Point) (gen kyber.Point, err error) {
-	if index < 0 {
-		return nil, fmt.Errorf("Wrond index: %d", index)
-	}
-	if len(commits) <= 0 {
-		return nil, fmt.Errorf("Wrong commits:\n%v", commits)
-	}
-	// QUESTION FIXME why sha3(sha512()) was previously used ?
-	// TODO remember that I didn't write it, see later when building service if correct etc..
-	// QUESTION should we ensure that no 2 client get same generator ?
-	hasher := sha512.New()
-	var writer io.Writer = hasher // ...
-	idb := make([]byte, 4)
-	binary.BigEndian.PutUint32(idb, uint32(index)) // TODO verify
-	writer.Write(idb)
-	for _, R := range commits {
-		R.MarshalTo(writer)
-	}
-	hash := hasher.Sum(nil)
-	hasher = suite.Hash()
-	hasher.Write(hash)
-	gen = suite.Point().Mul(suite.Scalar().SetBytes(hasher.Sum(nil)), nil)
-	return
-}
-
 // creates a context to be used in the tests
-func GenerateTestContext(c, s int) ([]Client, []Server, *AuthenticationContext, error) {
+func GenerateTestContext(suite Suite, c, s int) ([]Client, []Server, *AuthenticationContext, error) {
 	if c <= 0 {
 		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", c) // ...
 	}
@@ -49,7 +20,7 @@ func GenerateTestContext(c, s int) ([]Client, []Server, *AuthenticationContext, 
 	serverKeys := make([]kyber.Point, 0, s)
 	servers := make([]Server, 0, s)
 	for i := 0; i < s; i++ {
-		new, _ := NewServer(i, nil)
+		new, _ := NewServer(suite, i, nil)
 		serverKeys = append(serverKeys, new.PublicKey())
 		servers = append(servers, new)
 	}
@@ -57,7 +28,7 @@ func GenerateTestContext(c, s int) ([]Client, []Server, *AuthenticationContext, 
 	//Generates the per-round secrets for the ServerSignature and keep track of the commits
 	perRoundSecretCommits := make([]kyber.Point, 0, s)
 	for i, serv := range servers {
-		R, server := GenerateNewRoundSecret(serv)
+		R, server := GenerateNewRoundSecret(suite, serv)
 		perRoundSecretCommits = append(perRoundSecretCommits, R)
 		servers[i] = server
 	}
@@ -67,12 +38,12 @@ func GenerateTestContext(c, s int) ([]Client, []Server, *AuthenticationContext, 
 	clients := make([]Client, 0, c)
 	clientGenerators := make([]kyber.Point, 0, c)
 	for i := 0; i < c; i++ {
-		new, _ := NewClient(i, nil)
+		new, _ := NewClient(suite, i, nil)
 
-		clientKeys = append(clientKeys, new.key.Public)
-		clients = append(clients, *new)
+		clientKeys = append(clientKeys, new.PublicKey())
+		clients = append(clients, new)
 
-		generator, err := GenerateClientGenerator(i, perRoundSecretCommits)
+		generator, err := GenerateClientGenerator(suite, i, perRoundSecretCommits)
 		if err != nil {
 			return nil, nil, nil, errors.New("error while generating client's generators:\n" + err.Error())
 		}
