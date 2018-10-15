@@ -70,7 +70,7 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 // that he belongs to the authorized clients in the context. (see clientProof).
 type AuthenticationMessage struct {
 	c AuthenticationContext
-	initialTagAndCommitments  // FIXME try to make it private
+	initialTagAndCommitments
 	p0 clientProof
 }
 
