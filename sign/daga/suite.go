@@ -22,6 +22,8 @@ type suiteEC struct {
 }
 
 // Returns a new Suite backed by a suiteEC
+// TODO here add possibility to let user give me a suite that is suitable ^^
+// TODO => make suiteEC embed interfaces instead etc.. decide what I let in the hand of user (probably only Group provider or maybe radnom provider too)
 func NewSuiteEC() Suite {
 	return new(suiteEC)
 }

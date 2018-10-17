@@ -67,11 +67,11 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 // and the client's initial linkage tag (see initialTagAndCommitments).
 //
 // p0 is the client's proof that he correctly followed the protocol and
-// that he belongs to the authorized clients in the context. (see clientProof).
+// that he belongs to the authorized clients in the context. (see ClientProof).
 type AuthenticationMessage struct {
 	c AuthenticationContext
 	initialTagAndCommitments
-	p0 clientProof
+	p0 ClientProof
 }
 
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext, client Client,
@@ -80,12 +80,17 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext, client
 	// TODO see if context big enough to justify transforming the parameter into *authenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
+	// FIXME create a validate context helper
+	if len(context.h) <= client.Index() {
+		return nil, errors.New("context not valid, or wrong client index")
+	}
+
 	// DAGA client Steps 1, 2, 3:
 	TAndS, s := newInitialTagAndCommitments(suite, context.g.y, context.h[client.Index()])
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
 	if P, err := newClientProof(suite, context, client, *TAndS, s, pushCommitments, pullChallenge); err != nil {
-		// TODO log QUESTION can I have an intro on the logging practises at DEDIS
+		// TODO log QUESTION intro on the logging practises/conventions at DEDIS
 		return nil, err
 	} else {
 		// DAGA client Step 5
@@ -118,7 +123,7 @@ func validateClientMessage(suite Suite, msg AuthenticationMessage) error {
 	}
 	//Proof fields have the correct size
 	if len(msg.p0.c) != i || len(msg.p0.r) != 2*i || len(msg.p0.t) != 3*i || msg.p0.cs == nil {
-		return fmt.Errorf("validateClientMessage: malformed clientProof, %v", msg.p0)
+		return fmt.Errorf("validateClientMessage: malformed ClientProof, %v", msg.p0)
 	}
 	return nil
 }

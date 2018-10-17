@@ -79,19 +79,19 @@ func (s *server) SetRoundSecret(secret kyber.Scalar) {
 type ServerMessage struct {
 	request AuthenticationMessage
 	tags    []kyber.Point
-	proofs  []serverProof
+	proofs  []ServerProof
 	indexes []int
-	sigs    []serverSignature
+	sigs    []ServerSignature
 }
 
 /*Commitment stores the index of the server, the commitment value and the signature for the commitment*/
 type Commitment struct {
 	commit kyber.Point
-	serverSignature
+	ServerSignature
 }
 
-/*serverSignature stores a signature created by a server and the server's index*/
-type serverSignature struct {
+/*ServerSignature stores a signature created by a server and the server's index*/
+type ServerSignature struct {
 	index int
 	sig   []byte
 }
@@ -99,13 +99,13 @@ type serverSignature struct {
 /*ChallengeCheck stores all the information passed along the servers to check and sign the challenge*/
 type ChallengeCheck struct {
 	cs       kyber.Scalar
-	sigs     []serverSignature //Signatures for cs only
+	sigs     []ServerSignature //Signatures for cs only
 	commits  []Commitment
 	openings []kyber.Scalar
 }
 
-/*serverProof stores a server proof of his computations*/
-type serverProof struct {
+/*ServerProof stores a server proof of his computations*/
+type ServerProof struct {
 	t1 kyber.Point
 	t2 kyber.Point
 	t3 kyber.Point
@@ -127,7 +127,7 @@ func GenerateCommitment(suite Suite, context *AuthenticationContext, server Serv
 	if err != nil {
 		return nil, nil, fmt.Errorf("error in commit signature generation: %s", err)
 	}
-	return &Commitment{serverSignature: serverSignature{index: server.Index(), sig: sig}, commit: com}, opening, nil
+	return &Commitment{ServerSignature: ServerSignature{index: server.Index(), sig: sig}, commit: com}, opening, nil
 }
 
 /*VerifyCommitmentSignature verifies that all the commitments are valid and correctly signed*/
@@ -235,7 +235,7 @@ func CheckUpdateChallenge(suite Suite, context *AuthenticationContext, challenge
 	if e != nil {
 		return e
 	}
-	challenge.sigs = append(challenge.sigs, serverSignature{index: server.Index(), sig: sig})
+	challenge.sigs = append(challenge.sigs, ServerSignature{index: server.Index(), sig: sig})
 
 	return nil
 }
@@ -335,7 +335,7 @@ func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMess
 	suite.Point().Mul(server.PrivateKey(), msg.request.sCommits[0]).MarshalTo(hasher)
 	s := suite.Scalar().SetBytes(hasher.Sum(nil))
 	var T kyber.Point
-	var proof *serverProof
+	var proof *ServerProof
 	//Detect a misbehaving client and generate the elements of the server's message accordingly
 	if !msg.request.sCommits[server.Index()+2].Equal(suite.Point().Mul(s, msg.request.sCommits[server.Index()+1])) {
 		T = suite.Point().Null()
@@ -374,7 +374,7 @@ func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMess
 		return fmt.Errorf("error in own signature: %s", e)
 	}
 
-	signature := serverSignature{sig: sign, index: server.Index()}
+	signature := ServerSignature{sig: sign, index: server.Index()}
 
 	//Step 4: Form the new message
 	msg.tags = append(msg.tags, T)
@@ -386,7 +386,7 @@ func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMess
 }
 
 /*generateServerProof creates the server proof for its computations*/
-func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage, server Server) (proof *serverProof, err error) {
+func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage, server Server) (proof *ServerProof, err error) {
 	//Input validation
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
@@ -450,7 +450,7 @@ func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Sc
 	r2 := suite.Scalar().Sub(v2, e)
 
 	//Step 4
-	return &serverProof{
+	return &ServerProof{
 		t1: t1,
 		t2: t2,
 		t3: t3,
@@ -527,7 +527,7 @@ func verifyServerProof(suite Suite, context *AuthenticationContext, i int, msg *
 }
 
 /*generateMisbehavingProof creates the proof of a misbehaving client*/ // QUESTION server ? purpose of comment ?
-func generateMisbehavingProof(suite Suite, context *AuthenticationContext, Z kyber.Point, server Server) (proof *serverProof, err error) {
+func generateMisbehavingProof(suite Suite, context *AuthenticationContext, Z kyber.Point, server Server) (proof *ServerProof, err error) {
 	//Input checks
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
@@ -564,7 +564,7 @@ func generateMisbehavingProof(suite Suite, context *AuthenticationContext, Z kyb
 	r := suite.Scalar().Sub(v, a)
 
 	//Step 4
-	return &serverProof{
+	return &ServerProof{
 		t1: t1,
 		t2: t2,
 		t3: Zs,
@@ -575,7 +575,7 @@ func generateMisbehavingProof(suite Suite, context *AuthenticationContext, Z kyb
 }
 
 /*verifyMisbehavingProof verifies a proof of a misbehaving client*/ // QUESTION server ? ..
-func verifyMisbehavingProof(suite Suite, context *AuthenticationContext, i int, proof *serverProof, Z kyber.Point) bool {
+func verifyMisbehavingProof(suite Suite, context *AuthenticationContext, i int, proof *ServerProof, Z kyber.Point) bool {
 	//Input checks
 	if context == nil || proof == nil || Z == nil {
 		return false
@@ -629,7 +629,7 @@ func verifyMisbehavingProof(suite Suite, context *AuthenticationContext, i int, 
 
 /*ToBytes is a helper function used to convert a ServerProof into []byte to be used in signatures*/
 // QUESTION WTF ? + DRY there should be another way or no ?
-func (proof serverProof) ToBytes() (data []byte, err error) {
+func (proof ServerProof) ToBytes() (data []byte, err error) {
 	temp, e := proof.t1.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in t1: %s", e)

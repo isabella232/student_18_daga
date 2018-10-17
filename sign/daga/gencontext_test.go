@@ -11,7 +11,7 @@ func TestGenerateTestContext(t *testing.T) {
 	//Randomly choses the number of clients and servers in [1,10]
 	c := rand.Intn(10) + 1
 	s := rand.Intn(10) + 1
-	clients, servers, context, err := GenerateTestContext(suite, c, s)
+	clients, servers, context, err := generateTestContext(suite, c, s)
 
 	if err != nil || clients == nil || servers == nil || context == nil {
 		t.Error("Impossible to generate context")
@@ -43,23 +43,23 @@ func TestGenerateTestContext(t *testing.T) {
 	}
 
 	//Testing invalid values
-	a, b, d, err := GenerateTestContext(suite, 0, s)
+	a, b, d, err := generateTestContext(suite, 0, s)
 	if a != nil || b != nil || d != nil || err == nil {
 		t.Error("Wrong handling of 0 clients")
 	}
 
-	a, b, d, err = GenerateTestContext(suite, c, 0)
+	a, b, d, err = generateTestContext(suite, c, 0)
 	if a != nil || b != nil || d != nil || err == nil {
 		t.Error("Wrong handling of 0 servers")
 	}
 
 	neg := -rand.Int()
-	a, b, d, err = GenerateTestContext(suite, neg, s)
+	a, b, d, err = generateTestContext(suite, neg, s)
 	if a != nil || b != nil || d != nil || err == nil {
 		t.Errorf("Wrong handling of negative clients: %d", neg)
 	}
 
-	a, b, d, err = GenerateTestContext(suite, c, neg)
+	a, b, d, err = generateTestContext(suite, c, neg)
 	if a != nil || b != nil || d != nil || err == nil {
 		t.Errorf("Wrong handling of negative servers: %d", neg)
 	}

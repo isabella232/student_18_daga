@@ -92,7 +92,7 @@ func TestSchnorrVerify(t *testing.T) {
 func TestToBytes(t *testing.T) {
 	c := rand.Intn(10) + 1
 	s := rand.Intn(10) + 1
-	_, _, context, _ := GenerateTestContext(suite, c, s)
+	_, _, context, _ := generateTestContext(suite, c, s)
 	data, err := context.ToBytes()
 	if err != nil || data == nil || len(data) == 0 {
 		t.Error("Cannot convert valid context to bytes")

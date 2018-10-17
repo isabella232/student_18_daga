@@ -6,21 +6,43 @@ import (
 	"github.com/dedis/kyber"
 )
 
+// create a context with c clients, len(serverKeys) servers whose private keys are in serverKeys
+func GenerateContext(suite Suite, c int, serverKeys []kyber.Scalar) ([]Client, []Server, *AuthenticationContext, error) {
+	// TODO rename setup ?
+	return generateContext(suite, c, 0, serverKeys)
+}
+
 // creates a context to be used in the tests
-func GenerateTestContext(suite Suite, c, s int) ([]Client, []Server, *AuthenticationContext, error) {
+func generateTestContext(suite Suite, c, s int) ([]Client, []Server, *AuthenticationContext, error) {
+	return generateContext(suite, c, s, nil)
+}
+
+// TODO doc
+func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Client, []Server, *AuthenticationContext, error) {
 	if c <= 0 {
 		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", c) // ...
 	}
 
-	if s <= 0 {
-		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", s)
+	if s <= 0 && len(optServerKeys) == 0 {
+		return nil, nil, nil, fmt.Errorf("invalid number of servers: %d", s)
+	}
+
+	if s > 0 && len(optServerKeys) != 0 {
+		return nil, nil, nil, errors.New("invalid number of servers: cannot specify both s and optServerKeys")
 	}
 
 	//Generates s servers
-	serverKeys := make([]kyber.Point, 0, s)
-	servers := make([]Server, 0, s)
+	var serverKeys []kyber.Point
+	var servers []Server
+	if len(optServerKeys) != 0 {
+		s = len(optServerKeys)
+		serverKeys = make([]kyber.Point, 0, s)
+		servers = make([]Server, 0, s)
+	} else {
+		optServerKeys = make([]kyber.Scalar, s)
+	}
 	for i := 0; i < s; i++ {
-		new, _ := NewServer(suite, i, nil)
+		new, _ := NewServer(suite, i, optServerKeys[i])
 		serverKeys = append(serverKeys, new.PublicKey())
 		servers = append(servers, new)
 	}

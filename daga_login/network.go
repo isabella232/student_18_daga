@@ -1,14 +1,17 @@
-package daga
+package daga_login
 
 import (
 	"fmt"
 	"github.com/dedis/kyber"
+	"github.com/dedis/student_18_daga/sign/daga"
 )
 
 // ......
 
 //Provides functions to help with JSON marshal/unmarshal
 // TODO see if all these things are useful (aren't there builtins facilities in go/onet/cothority ?) and well written when building the protocols and services
+
+// QUESTION TODO IF still useful, see if I need to create wrapper structs to be able to add methods instead of defining functions (+ is this useful...bof)
 
 /*NetPoint provides a JSON compatible representation of a kyber.Point*/
 type NetPoint struct {
@@ -33,7 +36,7 @@ type NetContextEd25519 struct {
 	H []NetPoint
 }
 
-/*NetServerSignature provides a JSON compatible representation of the serverSignature struct*/
+/*NetServerSignature provides a JSON compatible representation of the ServerSignature struct*/
 type NetServerSignature struct {
 	Index int
 	Sig   []byte
@@ -45,7 +48,7 @@ type NetCommitment struct {
 	Sig    NetServerSignature
 }
 
-/*NetChallengeCheck provides a JSON compatible representation of the ChallengeCheck struct*/
+/*NetChallengeCheck provides a JSON compatible representation of the daga.ChallengeCheck struct*/
 type NetChallengeCheck struct {
 	Cs       NetScalar
 	Sigs     []NetServerSignature
@@ -53,7 +56,7 @@ type NetChallengeCheck struct {
 	Openings []NetScalar
 }
 
-/*NetChallenge provides a JSON compatible representation of the Challenge struct*/
+/*NetChallenge provides a JSON compatible representation of the daga.Challenge struct*/
 type NetChallenge struct {
 	Cs   NetScalar
 	Sigs []NetServerSignature
@@ -85,7 +88,7 @@ type NetServerProof struct {
 	R2 NetScalar
 }
 
-/*NetServerMessage provides a JSON compatible representation of the ServerMessage struct*/
+/*NetServerMessage provides a JSON compatible representation of the daga.ServerMessage struct*/
 type NetServerMessage struct {
 	Request NetClientMessage
 	Tags    []NetPoint
@@ -103,7 +106,7 @@ func NetEncodePoint(point kyber.Point) (*NetPoint, error) {
 	return &NetPoint{Value: value}, nil
 }
 
-func (netpoint *NetPoint) NetDecode(suite Suite) (kyber.Point, error) {
+func (netpoint *NetPoint) NetDecode(suite daga.Suite) (kyber.Point, error) {
 	point := suite.Point().Null()
 	err := point.UnmarshalBinary(netpoint.Value)
 	if err != nil {
@@ -122,7 +125,7 @@ func NetEncodeScalar(scalar kyber.Scalar) (*NetScalar, error) {
 	return &NetScalar{Value: value}, nil
 }
 
-func (netscalar *NetScalar) NetDecode(suite Suite) (kyber.Scalar, error) {
+func (netscalar *NetScalar) NetDecode(suite daga.Suite) (kyber.Scalar, error) {
 	scalar := suite.Scalar().Zero()
 	err := scalar.UnmarshalBinary(netscalar.Value)
 	if err != nil {
@@ -144,7 +147,7 @@ func NetEncodePoints(points []kyber.Point) ([]NetPoint, error) {
 	return netpoints, nil
 }
 
-func NetDecodePoints(suite Suite, netpoints []NetPoint) ([]kyber.Point, error) {
+func NetDecodePoints(suite daga.Suite, netpoints []NetPoint) ([]kyber.Point, error) {
 	var points []kyber.Point
 	if len(netpoints) == 0 {
 		return nil, fmt.Errorf("Empty array")
@@ -172,7 +175,7 @@ func NetEncodeScalars(scalars []kyber.Scalar) ([]NetScalar, error) {
 	return netscalars, nil
 }
 
-func NetDecodeScalars(suite Suite, netscalars []NetScalar) ([]kyber.Scalar, error) {
+func NetDecodeScalars(suite daga.Suite, netscalars []NetScalar) ([]kyber.Scalar, error) {
 	var scalars []kyber.Scalar
 	if len(netscalars) == 0 {
 		return nil, fmt.Errorf("Empty array")
@@ -206,7 +209,7 @@ func NetEncode(x, y []kyber.Point) (*NetMembers, error) {
 	return &netmembers, nil
 }
 
-func NetDecode(suite Suite, netmembers NetMembers) ([]kyber.Point, []kyber.Point, error) {
+func NetDecode(suite daga.Suite, netmembers NetMembers) ([]kyber.Point, []kyber.Point, error) {
 	X, err := NetDecodePoints(suite, netmembers.X)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Decode error in X\n%s", err)
@@ -220,7 +223,8 @@ func NetDecode(suite Suite, netmembers NetMembers) ([]kyber.Point, []kyber.Point
 	return X, Y, nil
 }
 
-func (context *AuthenticationContext) NetEncode() (*NetContextEd25519, error) {
+// QUESTION before doing anything useless ask all my marshalling questions to Linus
+func ContextNetEncode(context *daga.AuthenticationContext) (*NetContextEd25519, error) {
 	netcontext := NetContextEd25519{}
 
 	G, err := NetEncode(context.g.x, context.g.y)
@@ -244,8 +248,8 @@ func (context *AuthenticationContext) NetEncode() (*NetContextEd25519, error) {
 	return &netcontext, nil
 }
 
-func (netcontext *NetContextEd25519) NetDecode(suite Suite) (*AuthenticationContext, error) {
-	context := AuthenticationContext{}
+func (netcontext *NetContextEd25519) NetDecode(suite daga.Suite) (*daga.AuthenticationContext, error) {
+	context := daga.AuthenticationContext{}
 
 	X, Y, err := NetDecode(suite, netcontext.G)
 	if err != nil {
@@ -269,20 +273,20 @@ func (netcontext *NetContextEd25519) NetDecode(suite Suite) (*AuthenticationCont
 	return &context, nil
 }
 
-//netEncode for serverSignature copies the data into a NetServerSignature structure
+//netEncode for ServerSignature copies the data into a NetServerSignature structure
 //No error can be returned
-func (sig *serverSignature) netEncode() NetServerSignature {
+func ServerSignatureNetEncode(sig *daga.ServerSignature) NetServerSignature {
 	return NetServerSignature{Sig: sig.sig, Index: sig.index}
 }
 
-//netDecode for NetServerSignature copies the data into a serverSignature structure
+//netDecode for NetServerSignature copies the data into a ServerSignature structure
 //No error can be returned
-func (netsig *NetServerSignature) netDecode() serverSignature {
-	return serverSignature{sig: netsig.Sig, index: netsig.Index}
+func (netsig *NetServerSignature) netDecode() daga.ServerSignature {
+	return daga.ServerSignature{sig: netsig.Sig, index: netsig.Index}
 }
 
-func (com *Commitment) NetEncode() (*NetCommitment, error) {
-	netcom := NetCommitment{Sig: com.serverSignature.netEncode()}
+func CommitmentNetEncode(com *daga.Commitment) (*NetCommitment, error) {
+	netcom := NetCommitment{Sig: ServerSignatureNetEncode(&com.ServerSignature)}
 
 	commit, err := NetEncodePoint(com.commit)
 	if err != nil {
@@ -293,7 +297,7 @@ func (com *Commitment) NetEncode() (*NetCommitment, error) {
 	return &netcom, nil
 }
 
-func (netcom *NetCommitment) NetDecode(suite Suite) (*Commitment, error) {
+func (netcom *NetCommitment) NetDecode(suite daga.Suite) (*daga.Commitment, error) {
 
 	commit, err := netcom.Commit.NetDecode(suite)
 	if err != nil {
@@ -301,15 +305,15 @@ func (netcom *NetCommitment) NetDecode(suite Suite) (*Commitment, error) {
 	}
 	sig := netcom.Sig.netDecode()
 
-	com := Commitment{
+	com := daga.Commitment{
 		commit:commit,
-		serverSignature: sig,
+		ServerSignature: sig,
 	}
 
 	return &com, nil
 }
 
-func (chall *ChallengeCheck) NetEncode() (*NetChallengeCheck, error) {
+func ChallengeCheckNetEncode(chall *daga.ChallengeCheck) (*NetChallengeCheck, error) {
 	netchall := NetChallengeCheck{}
 
 	for _, sig := range chall.sigs {
@@ -317,7 +321,7 @@ func (chall *ChallengeCheck) NetEncode() (*NetChallengeCheck, error) {
 	}
 
 	for i, com := range chall.commits {
-		temp, err := com.NetEncode()
+		temp, err := CommitmentNetEncode(com)
 		if err != nil {
 			return nil, fmt.Errorf("Encode error for commit %d\n%s", i, err)
 		}
@@ -339,8 +343,8 @@ func (chall *ChallengeCheck) NetEncode() (*NetChallengeCheck, error) {
 	return &netchall, nil
 }
 
-func (netchall *NetChallengeCheck) NetDecode(suite Suite) (*ChallengeCheck, error) {
-	chall := ChallengeCheck{}
+func (netchall *NetChallengeCheck) NetDecode(suite daga.Suite) (*daga.ChallengeCheck, error) {
+	chall := daga.ChallengeCheck{}
 
 	for _, sig := range netchall.Sigs {
 		chall.sigs = append(chall.sigs, sig.netDecode())
@@ -369,10 +373,10 @@ func (netchall *NetChallengeCheck) NetDecode(suite Suite) (*ChallengeCheck, erro
 	return &chall, nil
 }
 
-func (c Challenge) NetEncode() (*NetChallenge, error) {
+func ChallengeNetEncode(c daga.Challenge) (*NetChallenge, error) {
 	netchall := NetChallenge{}
 	for _, sig := range c.sigs {
-		netchall.Sigs = append(netchall.Sigs, sig.netEncode())
+		netchall.Sigs = append(netchall.Sigs, ServerSignatureNetEncode(sig))
 	}
 
 	cs, err := NetEncodeScalar(c.cs)
@@ -384,8 +388,8 @@ func (c Challenge) NetEncode() (*NetChallenge, error) {
 	return &netchall, nil
 }
 
-func (netchall *NetChallenge) NetDecode(suite Suite) (*Challenge, error) {
-	chall := Challenge{}
+func (netchall *NetChallenge) NetDecode(suite daga.Suite) (*daga.Challenge, error) {
+	chall := daga.Challenge{}
 	for _, sig := range netchall.Sigs {
 		chall.sigs = append(chall.sigs, sig.netDecode())
 	}
@@ -399,7 +403,7 @@ func (netchall *NetChallenge) NetDecode(suite Suite) (*Challenge, error) {
 	return &chall, nil
 }
 
-func (proof *clientProof) NetEncode() (*NetClientProof, error) {
+func ClientProofNetEncode(proof *daga.ClientProof) (*NetClientProof, error) {
 	netproof := NetClientProof{}
 	cs, err := NetEncodeScalar(proof.cs)
 	if err != nil {
@@ -428,8 +432,8 @@ func (proof *clientProof) NetEncode() (*NetClientProof, error) {
 	return &netproof, nil
 }
 
-func (netproof *NetClientProof) NetDecode(suite Suite) (*clientProof, error) {
-	proof := clientProof{}
+func (netproof *NetClientProof) NetDecode(suite daga.Suite) (*daga.ClientProof, error) {
+	proof := daga.ClientProof{}
 	cs, err := netproof.Cs.NetDecode(suite)
 	if err != nil {
 		return nil, fmt.Errorf("Decode error for cs\n%s", err)
@@ -457,10 +461,10 @@ func (netproof *NetClientProof) NetDecode(suite Suite) (*clientProof, error) {
 	return &proof, nil
 }
 
-func (msg *AuthenticationMessage) NetEncode() (*NetClientMessage, error) {
+func AuthenticationMessageNetEncode(msg *daga.AuthenticationMessage) (*NetClientMessage, error) {
 	netmsg := NetClientMessage{}
 
-	context, err := msg.c.NetEncode()
+	context, err := ContextNetEncode(msg.c)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error for context\n%s", err)
 	}
@@ -478,7 +482,7 @@ func (msg *AuthenticationMessage) NetEncode() (*NetClientMessage, error) {
 	}
 	netmsg.T0 = *t0
 
-	proof, err := msg.p0.NetEncode()
+	proof, err := ClientProofNetEncode(msg.p0)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in proof\n%s", err)
 	}
@@ -487,8 +491,8 @@ func (msg *AuthenticationMessage) NetEncode() (*NetClientMessage, error) {
 	return &netmsg, nil
 }
 
-func (netmsg *NetClientMessage) NetDecode(suite Suite) (*AuthenticationMessage, error) {
-	msg := AuthenticationMessage{}
+func (netmsg *NetClientMessage) NetDecode(suite daga.Suite) (*daga.AuthenticationMessage, error) {
+	msg := daga.AuthenticationMessage{}
 
 	context, err := netmsg.Context.NetDecode(suite)
 	if err != nil {
@@ -517,7 +521,7 @@ func (netmsg *NetClientMessage) NetDecode(suite Suite) (*AuthenticationMessage, 
 	return &msg, nil
 }
 
-func (proof *serverProof) NetEncode(suite Suite) (*NetServerProof, error) {
+func ServerProofNetEncode(suite daga.Suite, proof *daga.ServerProof) (*NetServerProof, error) {
 	netproof := NetServerProof{}
 	t1, err := NetEncodePoint(proof.t1)
 	if err != nil {
@@ -558,8 +562,8 @@ func (proof *serverProof) NetEncode(suite Suite) (*NetServerProof, error) {
 	return &netproof, nil
 }
 
-func (netproof *NetServerProof) NetDecode(suite Suite) (*serverProof, error) {
-	proof := serverProof{}
+func (netproof *NetServerProof) NetDecode(suite daga.Suite) (*daga.ServerProof, error) {
+	proof := daga.ServerProof{}
 	t1, err := netproof.T1.NetDecode(suite)
 	if err != nil {
 		return nil, fmt.Errorf("Decode error in t1\n%s", err)
@@ -599,10 +603,10 @@ func (netproof *NetServerProof) NetDecode(suite Suite) (*serverProof, error) {
 	return &proof, nil
 }
 
-func (msg *ServerMessage) NetEncode(suite Suite) (*NetServerMessage, error) {
+func ServerMessageNetEncode(suite daga.Suite, msg *daga.ServerMessage)  (*NetServerMessage, error) {
 	netmsg := NetServerMessage{Indexes: msg.indexes}
 
-	request, err := msg.request.NetEncode()
+	request, err := AuthenticationMessageNetEncode(msg.request)
 	if err != nil {
 		return nil, fmt.Errorf("Encode error in request\n%s", err)
 	}
@@ -615,7 +619,7 @@ func (msg *ServerMessage) NetEncode(suite Suite) (*NetServerMessage, error) {
 	netmsg.Tags = tags
 
 	for i, p := range msg.proofs {
-		temp, err := p.NetEncode(suite)
+		temp, err := ServerProofNetEncode(suite, p)
 		if err != nil {
 			return nil, fmt.Errorf("Encode error in proof at index %d\n%s", i, err)
 		}
@@ -623,15 +627,15 @@ func (msg *ServerMessage) NetEncode(suite Suite) (*NetServerMessage, error) {
 	}
 
 	for _, s := range msg.sigs {
-		temp := s.netEncode()
+		temp := ServerSignatureNetEncode(s)
 		netmsg.Sigs = append(netmsg.Sigs, temp)
 	}
 
 	return &netmsg, nil
 }
 
-func (netmsg *NetServerMessage) NetDecode(suite Suite) (*ServerMessage, error) {
-	msg := ServerMessage{indexes: netmsg.Indexes}
+func (netmsg *NetServerMessage) NetDecode(suite daga.Suite) (*daga.ServerMessage, error) {
+	msg := daga.ServerMessage{indexes: netmsg.Indexes}
 
 	request, err := netmsg.Request.NetDecode(suite)
 	if err != nil {

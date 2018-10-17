@@ -28,7 +28,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestNewInitialTagAndCommitments(t *testing.T) {
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// normal execution
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
@@ -46,11 +46,11 @@ func TestNewInitialTagAndCommitments(t *testing.T) {
 // test helper that sign returns a Challenge by signing the cs using the keys of the servers
 func signDummyChallenge(cs kyber.Scalar, servers []Server) Challenge {
 	msg, _ := cs.MarshalBinary()
-	var sigs []serverSignature
+	var sigs []ServerSignature
 	//Make each test server sign the challenge
 	for _, server := range servers {
 		sig, _ := SchnorrSign(suite, server.PrivateKey(), msg)
-		sigs = append(sigs, serverSignature{index: server.Index(), sig: sig})
+		sigs = append(sigs, ServerSignature{index: server.Index(), sig: sig})
 	}
 	return Challenge{cs: cs, sigs: sigs}
 }
@@ -72,7 +72,7 @@ func newDummyServerChannels(challenge Challenge) (chan []kyber.Point, chan Chall
 
 func TestNewClientProof(t *testing.T) {
 	// setup, test context, clients, servers
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -102,12 +102,12 @@ func TestNewClientProof(t *testing.T) {
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	commits, responses, subChallenges = proof.t, proof.r, proof.c
 	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
-	assert.Equal(t, clientProof{}, proof, "proof not \"zero\" on error")
+	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 
 	//Signature modification
 	newsig := append(validChallenge.sigs[0].sig, []byte("A")...)
 	newsig = newsig[1:]
-	wrongSigs := make([]serverSignature, len(validChallenge.sigs))
+	wrongSigs := make([]ServerSignature, len(validChallenge.sigs))
 	copy(wrongSigs, validChallenge.sigs)
 	wrongSigs[0].sig = newsig
 	invalidChallenge = Challenge{cs: cs, sigs: wrongSigs}
@@ -116,13 +116,13 @@ func TestNewClientProof(t *testing.T) {
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
 	commits, responses, subChallenges = proof.t, proof.r, proof.c
 	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
-	assert.Equal(t, clientProof{}, proof, "proof not \"zero\" on error")
+	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 }
 
 func TestVerifyClientProof(t *testing.T) {
 	// TODO maybe assemble a message using previous student code and verify with current code (but that would amount to testing the proof package)
 	// setup, test context, clients, servers
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -169,7 +169,7 @@ func TestVerifyClientProof(t *testing.T) {
 
 func TestGetFinalLinkageTag(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -221,7 +221,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
-	clients, servers, context, _ = GenerateTestContext(suite, rand.Intn(10)+2, 1)
+	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, 1)
 	tagAndCommitments, s = newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
 	S := tagAndCommitments.sCommits
@@ -288,7 +288,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
-	clients, servers, context, _ = GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 	//Assemble the client message
 	tagAndCommitments, s = newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	S = tagAndCommitments.sCommits
@@ -328,7 +328,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 // or (but I won't lose more time on this) rewrite everything to follow best testing practises (more better named small tests for a start)
 func TestValidateClientMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -391,7 +391,7 @@ func TestValidateClientMessage(t *testing.T) {
 
 func TestToBytes_ClientMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -415,7 +415,7 @@ func TestToBytes_ClientMessage(t *testing.T) {
 
 func TestToBytes_ClientProof(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())

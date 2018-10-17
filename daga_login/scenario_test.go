@@ -1,9 +1,10 @@
-package daga_test
+package daga_login_test
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/dedis/kyber"
+	"github.com/dedis/student_18_daga/daga_login"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -20,7 +21,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 	go func() {
 		_, Y := context.Members()
 		t := <-pushCommitments
-		nett, err := daga.NetEncodePoints(t)
+		nett, err := daga_login.NetEncodePoints(t)
 		if err != nil {
 			fmt.Printf("Error when encoding the commitments t\n%s\n", err)
 			return
@@ -32,13 +33,13 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 		//Network transfer
 		//Decoding
-		var nettServer []daga.NetPoint
+		var nettServer []daga_login.NetPoint
 		err = json.Unmarshal(netdata, &nettServer)
 		if err != nil || &nettServer == nil {
 			fmt.Printf("Cannot json unmarshal the commitments t\n%s\n", err)
 			return
 		}
-		tserver, err := daga.NetDecodePoints(suite, nett)
+		tserver, err := daga_login.NetDecodePoints(suite, nett)
 		if err != nil || tserver == nil {
 			fmt.Printf("Error in t decoding\n%s\n", err)
 			return
@@ -69,7 +70,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		openings[j] = openlead
 
 		//Simulate transfer of comlead
-		sendCom, err := comlead.NetEncode()
+		sendCom, err := daga_login.CommitmentNetEncode(comlead)
 		if err != nil {
 			fmt.Printf("Error when encoding the commitment of the leader %d\n%s\n", j, err)
 			return
@@ -80,7 +81,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			return
 		}
 		//Network transfer
-		var rcvCom daga.NetCommitment
+		var rcvCom daga_login.NetCommitment
 		err = json.Unmarshal(netdata, &rcvCom)
 		if err != nil {
 			fmt.Printf("Error when json unmarshal the commitment of the leader %d\n%s\n", j, err)
@@ -107,7 +108,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			openings[num] = open
 
 			//Simulate the transfer of the commitment over the network
-			sendCom, e := com.NetEncode()
+			sendCom, e := daga_login.CommitmentNetEncode(com)
 			if e != nil {
 				fmt.Printf("Error when encoding the commitment at server %d\n%s\n", num, e)
 				return
@@ -118,7 +119,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 				return
 			}
 			//Network transfer
-			var rcvCom daga.NetCommitment
+			var rcvCom daga_login.NetCommitment
 			e = json.Unmarshal(netdata, &rcvCom)
 			if e != nil {
 				fmt.Printf("Error when json unmarshal the commitment of server %d\n%s\n", num, e)
@@ -141,7 +142,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 
 		//When the verification is done, the leader asks the servers to reveal their openings by sending its own opening
 		//Simulate the transfer of the leader's opening over the network
-		sendOpen, err := daga.NetEncodeScalar(openlead)
+		sendOpen, err := daga_login.NetEncodeScalar(openlead)
 		if err != nil {
 			fmt.Printf("Error when encoding the opening of the leader %d\n", j)
 			return
@@ -152,7 +153,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			return
 		}
 		//Network transfer
-		var rcvOpen daga.NetScalar
+		var rcvOpen daga_login.NetScalar
 		err = json.Unmarshal(netdata, &rcvOpen)
 		if err != nil {
 			fmt.Printf("Error when json unmarshal the opening of the leader %d\n", j)
@@ -171,7 +172,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			}
 
 			//Simulate the transfer of the opening over the network
-			sendOpen, e := daga.NetEncodeScalar(openings[num])
+			sendOpen, e := daga_login.NetEncodeScalar(openings[num])
 			if e != nil {
 				fmt.Printf("Error when encoding the opening at server %d\n%s\n", num, e)
 				return
@@ -182,7 +183,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 				return
 			}
 			//Network transfer
-			var rcvOpen daga.NetScalar
+			var rcvOpen daga_login.NetScalar
 			e = json.Unmarshal(netdata, &rcvOpen)
 			if e != nil {
 				fmt.Printf("Error when json unmarshal the opening of server %d\n%s\n", num, e)
@@ -207,7 +208,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		daga.CheckUpdateChallenge(suite, &context, challenge, servers[j])
 
 		//Next it sends this message to the next server
-		sendChall, err := challenge.NetEncode()
+		sendChall, err := daga_login.ChallengeCheckNetEncode(challenge)
 		if err != nil {
 			fmt.Printf("Error when encoding the challenge at the leader %d\n%s\n", j, err)
 			return
@@ -225,7 +226,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		for shift := 1; shift <= len(Y); shift++ {
 			index := (j + shift) % (len(Y))
 			//Receive the previous message
-			var rcvChall daga.NetChallengeCheck
+			var rcvChall daga_login.NetChallengeCheck
 			e := json.Unmarshal(netdata, &rcvChall)
 			if e != nil {
 				fmt.Printf("Error when json unmarshal the challenge at server %d\n%s\n", index, e)
@@ -241,7 +242,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			daga.CheckUpdateChallenge(suite, &context, serverChallenge, servers[index])
 
 			//Encode and transfer the challenge to the next server
-			sendservChall, e := serverChallenge.NetEncode()
+			sendservChall, e := daga_login.ChallengeCheckNetEncode(serverChallenge)
 			if e != nil {
 				fmt.Printf("Error when encoding the challenge at server %d\n%s\n", index, e)
 				return
@@ -255,7 +256,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 
 		//Finally the challenge is back at the leader
-		var rcvfinalChall daga.NetChallengeCheck
+		var rcvfinalChall daga_login.NetChallengeCheck
 		err = json.Unmarshal(netdata, &rcvfinalChall)
 		if err != nil {
 			fmt.Printf("Error when json unmarshal the challenge back at the leader %d\n%s\n", j, err)
@@ -277,7 +278,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 
 		//The challenge is then sent back to the client
-		sendclientChall, err := clientChallenge.NetEncode()
+		sendclientChall, err := daga_login.ChallengeNetEncode(clientChallenge)
 		if err != nil {
 			fmt.Printf("Error when encoding the client challenge at the leader %d\n%s\n", j, err)
 			return
@@ -288,7 +289,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			return
 		}
 		//Network transfer
-		var rcvclientChall daga.NetChallenge
+		var rcvclientChall daga_login.NetChallenge
 		err = json.Unmarshal(netdata, &rcvclientChall)
 		if err != nil {
 			fmt.Printf("Error when json unmarshal the challenge at client\n%s\n", err)
@@ -314,7 +315,8 @@ func TestScenario(t *testing.T) {
 	c := 20
 	//Number of servers
 	s := 10
-	clients, servers, serviceContext, err := daga.GenerateTestContext(suite, c, s)
+	serverKeys := make([]kyber.Scalar, s)  // all nil => keys will be drawn at random
+	clients, servers, serviceContext, err := daga.GenerateContext(suite, c, serverKeys)
 	if err != nil {
 		fmt.Printf("Error in while creating context\n%s\n", err)
 		return
@@ -322,7 +324,7 @@ func TestScenario(t *testing.T) {
 
 	//Simulate the transfer of the context from the service to the client
 	//Encoding
-	netServiceContext, err := serviceContext.NetEncode()
+	netServiceContext, err := daga_login.ContextNetEncode(serviceContext)
 	if err != nil {
 		fmt.Printf("Error in context encoding\n%s\n", err)
 		return
@@ -334,7 +336,7 @@ func TestScenario(t *testing.T) {
 	}
 	//Network transfer
 	//Decoding
-	var netContext daga.NetContextEd25519
+	var netContext daga_login.NetContextEd25519
 	err = json.Unmarshal(netdata, &netContext)
 	if err != nil || &netContext == nil {
 		fmt.Printf("Cannot json unmarshal the context\n%s\n", err)
@@ -358,7 +360,7 @@ func TestScenario(t *testing.T) {
 	j := rand.Intn(len(Y))
 
 	//Simulate the transfer of the client message to the server
-	sendclientMsg, err := msg.NetEncode()
+	sendclientMsg, err := daga_login.AuthenticationMessageNetEncode(msg)
 	if err != nil {
 		fmt.Printf("Error when encoding the client message\n%s\n", err)
 		return
@@ -369,7 +371,7 @@ func TestScenario(t *testing.T) {
 		return
 	}
 	//Network transfer
-	var rcvclientMsg daga.NetClientMessage
+	var rcvclientMsg daga_login.NetClientMessage
 	err = json.Unmarshal(netdata, &rcvclientMsg)
 	if err != nil {
 		fmt.Printf("Error when json unmarshal the client message\n%s\n", err)
@@ -397,7 +399,7 @@ func TestScenario(t *testing.T) {
 		}
 		//The server pass the massage to the next one
 		//If this is the last server, it broadcasts it to all the servers and the client
-		sendservMsg, e := msgServ.NetEncode(suite)
+		sendservMsg, e := daga_login.ServerMessageNetEncode(suite, msgServ)
 		if e != nil {
 			fmt.Printf("Error when encoding the server message at server %d\n%s\n", index, e)
 			return
@@ -408,7 +410,7 @@ func TestScenario(t *testing.T) {
 			return
 		}
 		//Network transfer
-		var rcvservMsg daga.NetServerMessage
+		var rcvservMsg daga_login.NetServerMessage
 		e = json.Unmarshal(netdata, &rcvservMsg)
 		if e != nil {
 			fmt.Printf("Error when json unmarshal the server message at server %d\n%s\n", index, e)

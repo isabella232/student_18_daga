@@ -1,6 +1,6 @@
 package daga
 
-// TODO maybe organize those in a "sub package" of daga "clientProof" and rename everything with better names
+// TODO maybe organize those in a "sub package" of daga "ClientProof" and rename everything with better names
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ import (
 // This is the structure sent to the client as part of client proof PKclient
 type Challenge struct {
 	cs   kyber.Scalar
-	sigs []serverSignature
+	sigs []ServerSignature
 }
 
 // verify all the signatures of the Challenge
@@ -291,7 +291,7 @@ func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
 	return errors.New("clientProverCtx.PriRand called with no arg, this is not expected")
 }
 
-// clientProof stores the client's proof P0 as of "Syta - Identity Management Through Privacy Preserving Aut 4.3.7"
+// ClientProof stores the client's proof P0 as of "Syta - Identity Management Through Privacy Preserving Aut 4.3.7"
 // and obtained after completion of the sigma-protocol with a server.
 //
 // cs the master challenge that was sent by the server and used to generate the sub-challenges and the responses
@@ -301,26 +301,26 @@ func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
 // c all the sub-challenges (one for each sub predicate of the PKclient OR-predicate)
 //
 // r the responses (final (prover) message of the sigma-protocol)
-type clientProof struct {
+type ClientProof struct {
 	cs kyber.Scalar
 	t  []kyber.Point
 	c  []kyber.Scalar
 	r  []kyber.Scalar
 }
 
-// builds a new clientProof (Step 4 of client's protocol) and returns it to caller
+// builds a new ClientProof (Step 4 of client's protocol) and returns it to caller
 func newClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
 	pushCommitments chan<- []kyber.Point,
-	pullChallenge <-chan Challenge) (clientProof, error) {
+	pullChallenge <-chan Challenge) (ClientProof, error) {
 	// TODO FIXME maybe, pack the 2 channels in a new Proxy type and add methods sendReceive etc NewTestProxy NewProxy etc..
 	// TODO or other things lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
 	// TODO see later while building the protocols and services
 
 	if len(context.g.x) <= 1 {
-		return clientProof{}, errors.New("newClientProof: there is only one client in the context, this means DAGA is pointless")
+		return ClientProof{}, errors.New("newClientProof: there is only one client in the context, this means DAGA is pointless")
 		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
 		// in the context/OR-predicate, if this condition is not met there won't be an "subChallenges" to generate by the
 		// prover => he won't send them by calling Put, but we wait for them !!
@@ -333,7 +333,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 
 	//3-move interaction with server
 	//	start the proof.Prover and proof machinery in new goroutine  // TODO maybe create a function
-	var P clientProof
+	var P ClientProof
 	var proverErr error
 	go func() {
 		defer close(proverCtx.responsesChan)
@@ -342,7 +342,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 
 	//	get initial commitments from running Prover
 	if commits, err := proverCtx.commitments(); err != nil {
-		return clientProof{}, errors.New("newClientProof:" + err.Error())
+		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
 		P.t = commits
 	}
@@ -355,7 +355,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	challenge := <-pullChallenge
 	if err := challenge.verifySignatures(suite, context.g.y); err != nil {
 		// TODO log
-		return clientProof{}, errors.New("newClientProof:" + err.Error())
+		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	}
 	P.cs = challenge.cs
 
@@ -365,7 +365,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	//	get final responses from Prover
 	if responses, err := proverCtx.responses(); err != nil {
 		// TODO onet.log something
-		return clientProof{}, errors.New("newClientProof:" + err.Error())
+		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
 		P.r = responses
 	}
@@ -373,14 +373,14 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	//check return value of the now done proof.Prover
 	if proverErr != nil { // here no race, we are sure that Prover is done since responses() returns only after response chan is closed
 		// TODO onet.log something
-		return clientProof{}, errors.New("newClientProof:" + proverErr.Error())
+		return ClientProof{}, errors.New("newClientProof:" + proverErr.Error())
 	}
 	return P, nil
 }
 
-// verifyClientProof checks the validity of a client's clientProof
+// verifyClientProof checks the validity of a client's ClientProof
 func verifyClientProof(suite Suite, context AuthenticationContext,
-	proof clientProof,
+	proof ClientProof,
 	tagAndCommitments initialTagAndCommitments) error {
 
 	if len(context.g.x) <= 1 {
@@ -512,7 +512,7 @@ func newClientProver(suite Suite, context AuthenticationContext, tagAndCommitmen
 }
 
 //ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures
-func (proof clientProof) ToBytes() (data []byte, err error) {
+func (proof ClientProof) ToBytes() (data []byte, err error) {
 	// TODO WTF no other way ? + rename marshalbinary for consistency
 	data, e := proof.cs.MarshalBinary()
 	if e != nil {
