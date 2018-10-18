@@ -12,7 +12,7 @@ import (
 	"strconv"
 )
 
-// TODO doc
+// TODO doc + we love P2P right ? seems that a server is a client too why not embed client interface and share code with client
 type Server interface {
 	Index() int
 	RoundSecret() kyber.Scalar //Per round secret
@@ -21,6 +21,7 @@ type Server interface {
 	PrivateKey()  kyber.Scalar
 }
 
+// TODO same as above, only struct. dif between client and server is the per round secret
 type server struct {
 	key   key.Pair
 	index int
@@ -250,7 +251,7 @@ func FinalizeChallenge(context *AuthenticationContext, challenge *ChallengeCheck
 		return Challenge{}, fmt.Errorf("signature count does not match: got %d expected %d", len(challenge.sigs), len(context.g.y))
 	}
 
-	return Challenge{cs: challenge.cs, sigs: challenge.sigs}, nil
+	return Challenge{Cs: challenge.cs, Sigs: challenge.sigs}, nil
 }
 
 //InitializeServerMessage creates a ServerMessage from a ClientMessage to ease further processing

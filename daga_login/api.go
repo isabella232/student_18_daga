@@ -44,35 +44,68 @@ func NewClient(i int, s kyber.Scalar) (*Client, error) {
 	}
 }
 
-// performs the client protocol and proof of knowledge, to generate a new authentication message
-func (c Client) NewAuthenticationMessage(context daga.AuthenticationContext, r *onet.Roster) (daga.AuthenticationMessage, error) {
-	// TODO rename
+type PKclientVerifier func([]kyber.Point)daga.Challenge
+
+func (c Client) newPKclientVerifier(dst *network.ServerIdentity) PKclientVerifier {
+	// poor man's curry
+	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point)daga.Challenge {
+		return c.pKClient(dst, proverCommitments)
+	}
+	return sendCommitsReceiveChallenge
+}
+
+// performs the client protocol and proof of knowledge, to generate a new authentication message, send it and extract final linkage tag after completion of the auth. process
+// FIXME add a linkageTag type in kyber.daga
+// TODO mybe make the authcontext an interface + type like client and then here create a Context that embed roster + daga.context (mhh bad idea I would say)
+func (c Client) Login(context daga.AuthenticationContext, r *onet.Roster) (kyber.Point, error) {
 	// TODO see if context big enough to justify transforming the parameter into *authenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
-	// TODO server selection (at random) and circuit establishment "channel" from/to server (use roster infos etc..)
+	// abstraction of remote server for PKclient, sendCommitsReceiveChallenge
+	// FIXME draw daga server at random from context ! not from all conodes in roster => need helpers and mapping
+	PKclientVerifier := c.newPKclientVerifier(r.RandomServerIdentity())
 
-
-	// TODO  => using onet/cothority facilities
-	// TODO net encode/decode data (if needed/not provided by onet/cothority)
-	// TODO see cothority template, on reception of a challenge message (to define) from the network pipe it into the pullChallenge chan => register an handler that do that
-	// TODO  ''  , on reception of the commitments from the pushCommitments channel pipe them to the remote server over the network
-	// TODO see relevant comments in newClientProof
-
-	var pushCommitments chan []kyber.Point
-	var pullChallenge chan daga.Challenge
-
-	// TODO why
-
-	if M0, err := daga.NewAuthenticationMessage(suite, context, c, pushCommitments, pullChallenge); err != nil {
-		return daga.AuthenticationMessage{}, errors.New("failed to build new authentication message: " + err.Error())
+	if M0, err := daga.NewAuthenticationMessage(suite, context, c, PKclientVerifier); err != nil {
+		return nil, errors.New("failed to build new authentication message: " + err.Error())
 	} else {
-		return *M0, nil
+		log.Panic("c.Login: remaining parts not implemented")
+		reply := &daga.ServerMessage{}
+		err := c.onet.SendProtobuf(r.RandomServerIdentity(), M0, reply) // god I miss WCF.NET...
+		if err != nil {
+			return nil, err
+		}
+		// TODO wait for serverprotocol to complete
+		if Tf, err := daga.GetFinalLinkageTag(suite, &context, *reply); err != nil {
+			return nil, errors.New("failed to extract final linkage tag from server reply: " + err.Error())
+		} else {
+			return Tf, nil
+		}
 	}
 }
 
-
-
+// send PKclient commitments and receive master challenge
+func (c Client) pKClient(dst *network.ServerIdentity, proverCommitments []kyber.Point) daga.Challenge {
+	commitments, err := NetEncodePoints(proverCommitments)
+	if err != nil {
+		log.Panic("error encoding commitments:", err)
+		return daga.Challenge{}
+	}
+	log.Lvl4("Sending PKclient commitments to", dst)
+	reply := NetChallenge{}
+	// QUESTION see if I need to "cast" them to the type alias registered in struct
+	request := &PKclientCommitments{Data:commitments}
+	err = c.onet.SendProtobuf(dst, request, &reply)
+	if err != nil {
+		log.Panic("error sending commitments to", dst, ":", err)
+		return daga.Challenge{}
+	}
+	challenge, err := reply.NetDecode(suite)
+	if err != nil {
+		log.Panic("error decoding Challenge from", dst, ":", err)
+		return daga.Challenge{}
+	}
+	return *challenge
+}
 
 // Clock chooses one server from the Roster at random. It
 // sends a Clock to it, which is then processed on the server side

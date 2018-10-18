@@ -274,10 +274,10 @@ func TestFinalizeChallenge(t *testing.T) {
 	assert.NoError(t, err, "Error during finalization of the challenge")
 
 	//Check cs value
-	assert.True(t, clientChallenge.cs.Equal(challenge.cs), "cs values does not match")
+	assert.True(t, clientChallenge.Cs.Equal(challenge.cs), "cs values does not match")
 
 	//Check number of signatures
-	assert.Equal(t, len(clientChallenge.sigs), len(challenge.sigs), "Signature count does not match: got %d expected %d", len(clientChallenge.sigs), len(challenge.sigs))
+	assert.Equal(t, len(clientChallenge.Sigs), len(challenge.sigs), "Signature count does not match: got %d expected %d", len(clientChallenge.Sigs), len(challenge.sigs))
 
 	//Empty inputs
 	clientChallenge, err = FinalizeChallenge(nil, challenge)
@@ -327,10 +327,10 @@ func TestInitializeServerMessage(t *testing.T) {
 	}
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
@@ -373,10 +373,10 @@ func TestServerProtocol(t *testing.T) {
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
@@ -481,10 +481,10 @@ func TestGenerateServerProof(t *testing.T) {
 	}
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
@@ -560,10 +560,10 @@ func TestVerifyServerProof(t *testing.T) {
 	}
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
@@ -695,10 +695,10 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
@@ -752,10 +752,10 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
@@ -862,10 +862,10 @@ func TestToBytes_ServerProof(t *testing.T) {
 	clientChallenge, _ := FinalizeChallenge(context, challenge)
 
 	// setup test server "channels"
-	pushCommitments, pullChallenge := newDummyServerChannels(clientChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		c:                        *context,

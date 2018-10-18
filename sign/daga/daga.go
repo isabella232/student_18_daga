@@ -105,6 +105,10 @@ func (ac AuthenticationContext) ClientsGenerators() []kyber.Point {
 	return ac.h
 }
 
+func (ac AuthenticationContext) ServersSecretsCommitments() []kyber.Point {
+	return ac.r
+}
+
 // Signs using schnorr signature scheme over the group of the Suite
 // QUESTION to me this is a bad idea ?! better to have Sign be a required function listed in the Suite,
 // QUESTION where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..

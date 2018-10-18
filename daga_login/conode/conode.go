@@ -1,6 +1,6 @@
 // Conode is the main binary for running a Cothority server.
 // A conode can participate in various distributed protocols using the
-// *onet* library as a network and overlay library and the *dedis/crypto*
+// *onet* library as a network and overlay library and the *dedis/kyber*
 // library for all cryptographic primitives.
 // Basically, you first need to setup a config file for the server by using:
 //
@@ -13,18 +13,17 @@
 package main
 
 import (
+	"github.com/dedis/student_18_daga/sign/daga"
 	"os"
 	"path"
 
-	"github.com/dedis/cothority"
 	"github.com/dedis/onet/app"
 	"github.com/dedis/onet/cfgpath"
 	"github.com/dedis/onet/log"
-	cli "gopkg.in/urfave/cli.v1"
-
+	"gopkg.in/urfave/cli.v1"
 	// Import your service:
-	_ "github.com/dedis/cothority_template/byzcoin"
-	_ "github.com/dedis/cothority_template/service"
+	_ "github.com/dedis/cothority/status/service"
+	_ "github.com/dedis/student_18_daga/daga_login/service"
 	// Here you can import any other needed service for your conode.
 	// For example, if your service needs cosi available in the server
 	// as well, uncomment this:
@@ -33,8 +32,7 @@ import (
 
 func main() {
 	cliApp := cli.NewApp()
-	cliApp.Name = "cothority_template"
-	cliApp.Usage = "basic file for an app"
+	cliApp.Usage = "basic file for an app TODO"
 	cliApp.Version = "0.1"
 
 	cliApp.Commands = []cli.Command{
@@ -49,7 +47,7 @@ func main() {
 				if c.String("debug") != "" {
 					log.Fatal("[-] Debug option cannot be used for the 'setup' command")
 				}
-				app.InteractiveConfig(cothority.Suite, "cothority_template")
+				app.InteractiveConfig(daga.NewSuiteEC(), cliApp.Name)
 				return nil
 			},
 		},
@@ -69,7 +67,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "config, c",
-			Value: path.Join(cfgpath.GetConfigPath("cothority_template"), app.DefaultServerConfig),
+			Value: path.Join(cfgpath.GetConfigPath(cliApp.Name), app.DefaultServerConfig),  // TODO verify that it is still working (replaced a "magic app name" with what I think is populated by default app name)
 			Usage: "Configuration file of the server",
 		},
 	}

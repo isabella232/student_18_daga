@@ -13,15 +13,15 @@ import (
 // Challenge stores the collectively generated challenge and the signatures of the servers
 // This is the structure sent to the client as part of client proof PKclient
 type Challenge struct {
-	cs   kyber.Scalar
-	sigs []ServerSignature
+	Cs   kyber.Scalar
+	Sigs []ServerSignature
 }
 
 // verify all the signatures of the Challenge
 func (c Challenge) verifySignatures(suite Suite, serverKeys []kyber.Point) error {
 	//	verify challenge signatures
-	if msg, e := c.cs.MarshalBinary(); e == nil {
-		for _, sig := range c.sigs {
+	if msg, e := c.Cs.MarshalBinary(); e == nil {
+		for _, sig := range c.Sigs {
 			if e = SchnorrVerify(suite, serverKeys[sig.index], msg, sig.sig); e != nil {
 				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.index) + ": " + e.Error())
 			}
@@ -313,8 +313,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
-	pushCommitments chan<- []kyber.Point,
-	pullChallenge <-chan Challenge) (ClientProof, error) {
+	sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (ClientProof, error) {
 	// TODO FIXME maybe, pack the 2 channels in a new Proxy type and add methods sendReceive etc NewTestProxy NewProxy etc..
 	// TODO or other things lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
 	// TODO see later while building the protocols and services
@@ -350,14 +349,14 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	// TODO pack those in a single step and maybe remove these channels and instead call userprovided function "sendCommitsReceiveChallenge"
 	// TODO but keep in mind that cannot accept challenge as parameter if asked by someone.. first the commitments should be sent to the servers
 	//	forward them to random remote server/verifier (over *anon.* circuit etc.. concern of the caller code / client setup!!)
-	pushCommitments <- P.t
-	//	receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code / client setup!!)
-	challenge := <-pullChallenge
+	//	and receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code / client setup!!)
+	challenge := sendCommitsReceiveChallenge(P.t)
+
 	if err := challenge.verifySignatures(suite, context.g.y); err != nil {
 		// TODO log
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	}
-	P.cs = challenge.cs
+	P.cs = challenge.Cs
 
 	//	forward master challenge to running Prover in order to continue the proof process, and receive the sub-challenges from Prover
 	P.c = proverCtx.receiveChallenges(P.cs)

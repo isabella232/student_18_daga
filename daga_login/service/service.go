@@ -7,11 +7,13 @@ runs on the node.
 
 import (
 	"errors"
+	"fmt"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/daga_login"
 	"github.com/dedis/student_18_daga/daga_login/protocol"
+	"github.com/dedis/student_18_daga/sign/daga"
 	"sync"
 	"time"
 )
@@ -26,7 +28,7 @@ func init() {
 	network.RegisterMessage(&storage{})
 }
 
-// Service is our template-service
+// Service is our template-service // TODO
 type Service struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
@@ -35,12 +37,15 @@ type Service struct {
 	storage *storage
 }
 
+// TODO load auth context from well defined place!
+
 // storageID reflects the data we're storing - we could store more
 // than one structure.
 var storageID = []byte("main")
 
 // storage is used to save our data.
 type storage struct {
+	Context daga_login.NetContextEd25519
 	Count int
 	sync.Mutex
 }
@@ -61,7 +66,7 @@ func (s *Service) Clock(req *daga_login.Clock) (*daga_login.ClockReply, error) {
 	}
 	start := time.Now()
 	pi.Start()
-	resp := &daga_login.ClockReply{
+	resp := &daga_login.ClockReply{  // FIXME not called when #nodes = 1 ..(why ?)
 		Children: <-pi.(*protocol.TemplateProtocol).ChildCount,
 	}
 	resp.Time = time.Now().Sub(start).Seconds()
@@ -75,6 +80,25 @@ func (s *Service) Count(req *daga_login.Count) (*daga_login.CountReply, error) {
 	return &daga_login.CountReply{Count: s.storage.Count}, nil
 }
 
+// Login starts the server's protocol (daga 4.3.6)
+func (s *Service) Login(req *daga.AuthenticationMessage) (*daga.ServerMessage, error) {
+	context, err := s.storage.Context.NetDecode(daga.NewSuiteEC())
+	if err != nil {
+		return nil, err
+	}
+	// TODO ring "overlay"... or don't use protocols or see if enough info for each server to determine its position in ring or etc..
+	// TODO will need a mapping from public keys to serveridentity/address
+	return nil, fmt.Errorf("unimplemented, %v", context)
+}
+
+// PKClient starts the challenge generation protocol
+func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKclientChallenge, error) {
+	// YEAH YEAH finally I arrive here !
+	return nil, fmt.Errorf("not implemented, but here is what I received: %v", *req)
+}
+
+
+// QUESTION: don't understand
 // NewProtocol is called on all nodes of a Tree (except the root, since it is
 // the one starting the protocol) so it's the Service that will be called to
 // generate the PI on all others node.
@@ -98,7 +122,7 @@ func (s *Service) save() {
 }
 
 // Tries to load the configuration and updates the data in the service
-// if it finds a valid config-file.
+// if it finds a valid config-file
 func (s *Service) tryLoad() error {
 	s.storage = &storage{}
 	msg, err := s.Load(storageID)
@@ -106,14 +130,25 @@ func (s *Service) tryLoad() error {
 		return err
 	}
 	if msg == nil {
+		// first time or nothing, load from setup files FIXME temp hack
+		context, err := daga_login.ReadContext("./context.bin")
+		if err != nil {
+			return err
+		}
+		netContext, err := daga_login.NetEncodeContext(context)
+		if err != nil {
+			return err
+		}
+		s.storage.Context = *netContext
+		return nil
+	} else {
+		var ok bool
+		s.storage, ok = msg.(*storage)
+		if !ok {
+			return errors.New("Data of wrong type")
+		}
 		return nil
 	}
-	var ok bool
-	s.storage, ok = msg.(*storage)
-	if !ok {
-		return errors.New("Data of wrong type")
-	}
-	return nil
 }
 
 // newService receives the context that holds information about the node it's
@@ -123,8 +158,8 @@ func newService(c *onet.Context) (onet.Service, error) {
 	s := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
 	}
-	if err := s.RegisterHandlers(s.Clock, s.Count); err != nil {
-		return nil, errors.New("Couldn't register messages")
+	if err := s.RegisterHandlers(s.Clock, s.Count, /*s.Login,*/ s.PKClient); err != nil {
+		return nil, errors.New("Couldn't register messages: " + err.Error())
 	}
 	if err := s.tryLoad(); err != nil {
 		log.Error(err)

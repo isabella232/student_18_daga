@@ -52,22 +52,16 @@ func signDummyChallenge(cs kyber.Scalar, servers []Server) Challenge {
 		sig, _ := SchnorrSign(suite, server.PrivateKey(), msg)
 		sigs = append(sigs, ServerSignature{index: server.Index(), sig: sig})
 	}
-	return Challenge{cs: cs, sigs: sigs}
+	return Challenge{Cs: cs, Sigs: sigs}
 }
 
-// test helper that returns dummy channels to act as a dummy server/verifier
-// that send challenge on pullChallenge channel upon reception of the prover's commitments on pullChallenge channel
-func newDummyServerChannels(challenge Challenge) (chan []kyber.Point, chan Challenge) {
-	// dummy channel to receive the commitments (they will be part of the returned proof)
-	// and dummy channel to send a dummy challenge as we are only interested in the commitments
-	// "push"/"pull" from the perspective of newClientProof()
-	pushCommitments := make(chan []kyber.Point)
-	pullChallenge := make(chan Challenge)
-	go func() {
-		<-pushCommitments
-		pullChallenge <- challenge
-	}()
-	return pushCommitments, pullChallenge
+// test helper that returns dummy "channel" to act as a dummy server/verifier
+// that return challenge upon reception of the prover's commitments
+func newDummyServerChannels(challenge Challenge) func([]kyber.Point)Challenge {
+	sendCommitsReceiveChallenge := func([]kyber.Point)Challenge {
+		return challenge
+	}
+	return sendCommitsReceiveChallenge
 }
 
 func TestNewClientProof(t *testing.T) {
@@ -77,11 +71,11 @@ func TestNewClientProof(t *testing.T) {
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	validChallenge := signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(validChallenge)
 
 	// normal execution, create client proof
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "newClientProof returned an error on valid inputs")
 	commits, responses, subChallenges := proof.t, proof.r, proof.c
 	// FIXME not sure whether these tests are pertinent or well written... they are testing the proof framework...not my code
@@ -97,23 +91,23 @@ func TestNewClientProof(t *testing.T) {
 			break
 		}
 	}
-	invalidChallenge := Challenge{cs: fake, sigs: validChallenge.sigs}
-	pushCommitments, pullChallenge = newDummyServerChannels(invalidChallenge)
-	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	invalidChallenge := Challenge{Cs: fake, Sigs: validChallenge.Sigs}
+	sendCommitsReceiveChallenge = newDummyServerChannels(invalidChallenge)
+	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	commits, responses, subChallenges = proof.t, proof.r, proof.c
 	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
 	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 
 	//Signature modification
-	newsig := append(validChallenge.sigs[0].sig, []byte("A")...)
+	newsig := append(validChallenge.Sigs[0].sig, []byte("A")...)
 	newsig = newsig[1:]
-	wrongSigs := make([]ServerSignature, len(validChallenge.sigs))
-	copy(wrongSigs, validChallenge.sigs)
+	wrongSigs := make([]ServerSignature, len(validChallenge.Sigs))
+	copy(wrongSigs, validChallenge.Sigs)
 	wrongSigs[0].sig = newsig
-	invalidChallenge = Challenge{cs: cs, sigs: wrongSigs}
-	pushCommitments, pullChallenge = newDummyServerChannels(invalidChallenge)
+	invalidChallenge = Challenge{Cs: cs, Sigs: wrongSigs}
+	sendCommitsReceiveChallenge = newDummyServerChannels(invalidChallenge)
 
-	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	commits, responses, subChallenges = proof.t, proof.r, proof.c
 	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
 	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
@@ -127,11 +121,11 @@ func TestVerifyClientProof(t *testing.T) {
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	validChallenge := signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(validChallenge)
 
 	// create valid proof and auth. message
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 
 	clientMsg := AuthenticationMessage{
 		c:                        *context,
@@ -174,11 +168,11 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	validChallenge := signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test authMsg M0 // TODO instead of these (above and below tests too) use NewAuthMessage (=> make new Auth message easily testable by adding server channels parameters)
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -228,8 +222,8 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	S[2] = suite.Point().Null()
 	validChallenge = signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
-	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	sendCommitsReceiveChallenge = newDummyServerChannels(validChallenge)
+	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage = AuthenticationMessage{
 		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -260,8 +254,8 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	S[2] = suite.Point().Null()
 	tagAndCommitments.t0.Set(suite.Point().Null())
 	validChallenge = signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
-	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, suite.Scalar().Zero(), pushCommitments, pullChallenge)
+	sendCommitsReceiveChallenge = newDummyServerChannels(validChallenge)
+	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, suite.Scalar().Zero(), sendCommitsReceiveChallenge)
 	clientMessage = AuthenticationMessage{
 		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -294,8 +288,8 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	S = tagAndCommitments.sCommits
 	S[2] = suite.Point().Null()
 	validChallenge = signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge = newDummyServerChannels(validChallenge)
-	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	sendCommitsReceiveChallenge = newDummyServerChannels(validChallenge)
+	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage = AuthenticationMessage{
 		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -333,11 +327,11 @@ func TestValidateClientMessage(t *testing.T) {
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	validChallenge := signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test authMsg M0
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -396,11 +390,11 @@ func TestToBytes_ClientMessage(t *testing.T) {
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	validChallenge := signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test authMsg M0  // TODO instead of these (above and below tests too) use NewAuthMessage (=> make new Auth message easily testable by adding server channels parameters)
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage := AuthenticationMessage{
 		c:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -420,11 +414,11 @@ func TestToBytes_ClientProof(t *testing.T) {
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	validChallenge := signDummyChallenge(cs, servers)
-	pushCommitments, pullChallenge := newDummyServerChannels(validChallenge)
+	sendCommitsReceiveChallenge := newDummyServerChannels(validChallenge)
 
 	//Create test client proof
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, pushCommitments, pullChallenge)
+	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 
 	//Normal execution
 	data, err := proof.ToBytes()

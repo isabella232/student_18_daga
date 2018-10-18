@@ -31,6 +31,24 @@ func (c client) Index() int {
 	return c.index
 }
 
+//func ClientToBytes(c Client) (data []byte, err error) {
+//	b, err := c.PublicKey().MarshalBinary()
+//	if err != nil {
+//		return nil, err
+//	}
+//	data = append(data, b...)
+//	b, err = c.PrivateKey().MarshalBinary()
+//	if err != nil {
+//		return nil, err
+//	}
+//	data = append(data, b...)
+//	b, err = c.Index().
+//	if err != nil {
+//		return nil, err
+//	}
+//	data = append(data, b...)
+//}
+
 func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 	if i < 0 {
 		return nil, errors.New("invalid parameters, negative index")
@@ -74,9 +92,9 @@ type AuthenticationMessage struct {
 	p0 ClientProof
 }
 
-func NewAuthenticationMessage(suite Suite, context AuthenticationContext, client Client,
-	pushCommitments chan<- []kyber.Point,
-	pullChallenge <-chan Challenge) (*AuthenticationMessage, error) {
+func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
+							  client Client,
+	                          sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (*AuthenticationMessage, error) {
 	// TODO see if context big enough to justify transforming the parameter into *authenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
@@ -89,7 +107,7 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext, client
 	TAndS, s := newInitialTagAndCommitments(suite, context.g.y, context.h[client.Index()])
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
-	if P, err := newClientProof(suite, context, client, *TAndS, s, pushCommitments, pullChallenge); err != nil {
+	if P, err := newClientProof(suite, context, client, *TAndS, s, sendCommitsReceiveChallenge); err != nil {
 		// TODO log QUESTION intro on the logging practises/conventions at DEDIS
 		return nil, err
 	} else {
@@ -136,7 +154,7 @@ func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())
 	}
 	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
-	// FIXME here challenge ~~should~~ MUST be picked from server state IMO but QUESTION ask Ewa Syta !
+	// FIXME here challenge ~~should~~ MUST be picked from server state IMO but QUESTION ask Ewa Syta
 	// TODO resolve all these when building the actual service
 	if err := verifyClientProof(suite, msg.c, msg.p0, msg.initialTagAndCommitments); err != nil {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())

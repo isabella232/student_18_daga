@@ -5,7 +5,7 @@ set -e
 # run_conode.sh public # Launch a public conode - supposes it's already configured
 # run_conode.sh local 3 # Launches 3 conodes locally.
 
-MAILADDR=linus.gasser@epfl.ch
+MAILADDR=lucas.pires@epfl.ch
 MAILCMD=/usr/bin/mail
 
 # Find out which package this copy of run_conode.sh is checked into.

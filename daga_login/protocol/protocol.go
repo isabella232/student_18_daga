@@ -86,6 +86,6 @@ func (p *TemplateProtocol) HandleReply(reply []StructReply) error {
 		return p.SendTo(p.Parent(), &Reply{children})
 	}
 	log.Lvl3("Root-node is done - nbr of children found:", children)
-	p.ChildCount <- children
+	p.ChildCount <- children  // FIXME blocks when #nodes = 1 (why ?)
 	return nil
 }

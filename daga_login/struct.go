@@ -14,6 +14,8 @@ func init() {
 	network.RegisterMessages(
 		Count{}, CountReply{},
 		Clock{}, ClockReply{},
+		PKclientCommitments{}, PKclientChallenge{},
+		//daga.AuthenticationMessage{}, daga.ServerMessage{},  // FIXME instead Net*
 	)
 }
 
@@ -42,3 +44,12 @@ type Count struct {
 type CountReply struct {
 	Count int
 }
+
+// PKclientCommitments will initiate the challenge generation protocol that will result in a PKclientChallenge
+type PKclientCommitments struct {
+	Data []NetPoint
+}
+
+type PKclientChallenge NetChallenge
+
+//type AuthenticationMessage NetA
