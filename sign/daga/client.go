@@ -87,9 +87,9 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 // p0 is the client's proof that he correctly followed the protocol and
 // that he belongs to the authorized clients in the context. (see ClientProof).
 type AuthenticationMessage struct {
-	c AuthenticationContext
+	C AuthenticationContext
 	initialTagAndCommitments
-	p0 ClientProof
+	P0 ClientProof
 }
 
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
@@ -113,9 +113,9 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	} else {
 		// DAGA client Step 5
 		M0 := AuthenticationMessage{
-			c:                        context,
+			C:                        context,
 			initialTagAndCommitments: *TAndS,
-			p0:                       P,
+			P0:                       P,
 		}
 		return &M0, nil
 	}
@@ -125,23 +125,23 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 func validateClientMessage(suite Suite, msg AuthenticationMessage) error {
 	// TODO rename validateAuthenticationMessage
 	//Number of clients
-	i := len(msg.c.g.x)
+	i := len(msg.C.g.x)
 	//Number of servers
-	j := len(msg.c.g.y)
+	j := len(msg.C.g.y)
 	//A commitment for each server exists and the second element is the generator S=(Z,g,S1,..,Sj)
-	if len(msg.sCommits) != j+2 {
-		return fmt.Errorf("validateClientMessage: wrong number of commitments in sCommits (%d), expected: %d", len(msg.sCommits), j+2)
+	if len(msg.SCommits) != j+2 {
+		return fmt.Errorf("validateClientMessage: wrong number of commitments in sCommits (%d), expected: %d", len(msg.SCommits), j+2)
 	}
-	if !msg.sCommits[1].Equal(suite.Point().Base()) {
+	if !msg.SCommits[1].Equal(suite.Point().Base()) {
 		return errors.New("validateClientMessage: second group element in sCommits is not the group generator")
 	}
 	//T0 not empty
-	if msg.t0 == nil {
+	if msg.T0 == nil {
 		return errors.New("validateClientMessage: initial tag T0 is nil")
 	}
 	//Proof fields have the correct size
-	if len(msg.p0.c) != i || len(msg.p0.r) != 2*i || len(msg.p0.t) != 3*i || msg.p0.cs == nil {
-		return fmt.Errorf("validateClientMessage: malformed ClientProof, %v", msg.p0)
+	if len(msg.P0.C) != i || len(msg.P0.R) != 2*i || len(msg.P0.T) != 3*i || msg.P0.Cs == nil {
+		return fmt.Errorf("validateClientMessage: malformed ClientProof, %v", msg.P0)
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
 	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
 	// FIXME here challenge ~~should~~ MUST be picked from server state IMO but QUESTION ask Ewa Syta
 	// TODO resolve all these when building the actual service
-	if err := verifyClientProof(suite, msg.c, msg.p0, msg.initialTagAndCommitments); err != nil {
+	if err := verifyClientProof(suite, msg.C, msg.P0, msg.initialTagAndCommitments); err != nil {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())
 	}
 	return nil
@@ -173,8 +173,8 @@ func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
 // here above, (Z,z) is the client's ephemeral DH key pair, (see 4.3.5 client's protocol step 1)
 // and sk=Hash1(Yk^z)
 type initialTagAndCommitments struct {
-	sCommits []kyber.Point
-	t0       kyber.Point
+	SCommits []kyber.Point
+	T0       kyber.Point
 }
 
 // TODO later add logging where needed/desired
@@ -235,8 +235,8 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 	s := exp
 
 	return &initialTagAndCommitments{
-		t0:       T0,
-		sCommits: S,
+		T0:       T0,
+		SCommits: S,
 	}, s
 }
 
@@ -248,17 +248,17 @@ func GetFinalLinkageTag(suite Suite, context *AuthenticationContext, msg ServerM
 	// TODO but guess this won't do any harm, will need to decide when building the service
 
 	//Input checks
-	if context == nil || len(msg.tags) == 0 || len(msg.tags) != len(msg.proofs) || len(msg.proofs) != len(msg.sigs) || len(msg.sigs) != len(msg.indexes) {
+	if context == nil || len(msg.Tags) == 0 || len(msg.Tags) != len(msg.Proofs) || len(msg.Proofs) != len(msg.Sigs) || len(msg.Sigs) != len(msg.Indexes) {
 		return nil, errors.New("invalid inputs")
 	}
 
-	data, e := msg.request.ToBytes()
+	data, e := msg.Request.ToBytes()
 	if e != nil {
 		return nil, fmt.Errorf("error in request: %s", e)
 	}
-	for i, p := range msg.proofs {
+	for i, p := range msg.Proofs {
 		//verify signatures
-		temp, err := msg.tags[i].MarshalBinary()
+		temp, err := msg.Tags[i].MarshalBinary()
 		if err != nil {
 			return nil, fmt.Errorf("error in tags: %s", err)
 		}
@@ -268,15 +268,15 @@ func GetFinalLinkageTag(suite Suite, context *AuthenticationContext, msg ServerM
 			return nil, fmt.Errorf("error in proofs: %s", err)
 		}
 		data = append(data, temp...)
-		data = append(data, []byte(strconv.Itoa(msg.indexes[i]))...)
-		err = SchnorrVerify(suite, context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
+		data = append(data, []byte(strconv.Itoa(msg.Indexes[i]))...)
+		err = SchnorrVerify(suite, context.g.y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
 		if err != nil {
 			return nil, fmt.Errorf("error in signature: %d\n%s", i, err)
 		}
 		//verify proofs
 		var valid bool
-		if p.r2 == nil {
-			valid = verifyMisbehavingProof(suite, context, i, &p, msg.request.sCommits[0])
+		if p.R2 == nil {
+			valid = verifyMisbehavingProof(suite, context, i, &p, msg.Request.SCommits[0])
 		} else {
 			valid = verifyServerProof(suite, context, i, &msg)
 		}
@@ -284,5 +284,5 @@ func GetFinalLinkageTag(suite Suite, context *AuthenticationContext, msg ServerM
 			return nil, errors.New("invalid server proof")
 		}
 	}
-	return msg.tags[len(msg.tags)-1], nil
+	return msg.Tags[len(msg.Tags)-1], nil
 }

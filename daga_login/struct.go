@@ -15,7 +15,7 @@ func init() {
 		Count{}, CountReply{},
 		Clock{}, ClockReply{},
 		PKclientCommitments{}, PKclientChallenge{},
-		//daga.AuthenticationMessage{}, daga.ServerMessage{},  // FIXME instead Net*
+		Auth{}, AuthReply{},
 	)
 }
 
@@ -52,4 +52,6 @@ type PKclientCommitments struct {
 
 type PKclientChallenge NetChallenge
 
-//type AuthenticationMessage NetA
+type Auth NetAuthenticationMessage
+
+type AuthReply NetServerMessage

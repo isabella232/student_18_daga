@@ -78,41 +78,41 @@ func (s *server) SetRoundSecret(secret kyber.Scalar) {
 
 /*ServerMessage stores the message sent by a server to one or many others*/
 type ServerMessage struct {
-	request AuthenticationMessage
-	tags    []kyber.Point
-	proofs  []ServerProof
-	indexes []int
-	sigs    []ServerSignature
+	Request AuthenticationMessage
+	Tags    []kyber.Point
+	Proofs  []ServerProof
+	Indexes []int
+	Sigs    []ServerSignature
 }
 
 /*Commitment stores the index of the server, the commitment value and the signature for the commitment*/
 type Commitment struct {
-	commit kyber.Point
+	Commit kyber.Point
 	ServerSignature
 }
 
 /*ServerSignature stores a signature created by a server and the server's index*/
 type ServerSignature struct {
-	index int
-	sig   []byte
+	Index int
+	Sig   []byte
 }
 
 /*ChallengeCheck stores all the information passed along the servers to check and sign the challenge*/
 type ChallengeCheck struct {
-	cs       kyber.Scalar
-	sigs     []ServerSignature //Signatures for cs only
-	commits  []Commitment
-	openings []kyber.Scalar
+	Cs       kyber.Scalar
+	Sigs     []ServerSignature //Signatures for cs only
+	Commits  []Commitment
+	Openings []kyber.Scalar
 }
 
 /*ServerProof stores a server proof of his computations*/
 type ServerProof struct {
-	t1 kyber.Point
-	t2 kyber.Point
-	t3 kyber.Point
-	c  kyber.Scalar
-	r1 kyber.Scalar
-	r2 kyber.Scalar
+	T1 kyber.Point
+	T2 kyber.Point
+	T3 kyber.Point
+	C  kyber.Scalar
+	R1 kyber.Scalar
+	R2 kyber.Scalar
 }
 
 /*GenerateCommitment creates the server's commitment and its opening for the distributed challenge generation*/
@@ -128,24 +128,24 @@ func GenerateCommitment(suite Suite, context *AuthenticationContext, server Serv
 	if err != nil {
 		return nil, nil, fmt.Errorf("error in commit signature generation: %s", err)
 	}
-	return &Commitment{ServerSignature: ServerSignature{index: server.Index(), sig: sig}, commit: com}, opening, nil
+	return &Commitment{ServerSignature: ServerSignature{Index: server.Index(), Sig: sig}, Commit: com}, opening, nil
 }
 
 /*VerifyCommitmentSignature verifies that all the commitments are valid and correctly signed*/
 func VerifyCommitmentSignature(suite Suite, context *AuthenticationContext, commits []Commitment) (err error) {
 	for i, com := range commits {
-		if i != com.index {
-			return fmt.Errorf("wrong index: got %d expected %d", com.index, i)
+		if i != com.Index {
+			return fmt.Errorf("wrong index: got %d expected %d", com.Index, i)
 		}
 		// QUESTION FIXME: How to check that a point is on the curve? (don't remember why but the answer is you don't need if you use edwards curve25519)
 		// FIXME but still this is a valid concern since if we change the curve/suite_implementation we would like the code to remain correct or ?
 
 		//Convert the commitment and verify the signature
-		msg, e := com.commit.MarshalBinary()
+		msg, e := com.Commit.MarshalBinary()
 		if e != nil {
 			return fmt.Errorf("error in conversion of commit for verification: %s", err)
 		}
-		err = SchnorrVerify(suite, context.g.y[i], msg, com.sig)
+		err = SchnorrVerify(suite, context.g.y[i], msg, com.Sig)
 		if err != nil {
 			return err
 		}
@@ -169,7 +169,7 @@ func checkOpenings(suite Suite, context *AuthenticationContext, commits []Commit
 	cs = suite.Scalar().Zero()
 	for i := 0; i < len(commits); i++ {
 		c := suite.Point().Mul(openings[i], nil)
-		if !commits[i].commit.Equal(c) {
+		if !commits[i].Commit.Equal(c) {
 			return nil, fmt.Errorf("mismatch opening for server %d", i)
 		}
 		cs = suite.Scalar().Add(cs, openings[i])
@@ -188,7 +188,7 @@ func InitializeChallenge(suite Suite, context *AuthenticationContext, commits []
 		return nil, err
 	}
 
-	return &ChallengeCheck{cs: cs, commits: commits, openings: openings, sigs: nil}, nil
+	return &ChallengeCheck{Cs: cs, Commits: commits, Openings: openings, Sigs: nil}, nil
 }
 
 /*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
@@ -196,47 +196,47 @@ It also adds the server's signature to the list if the round-robin is not comple
 It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
 func CheckUpdateChallenge(suite Suite, context *AuthenticationContext, challenge *ChallengeCheck, server Server) error {
 	//Check the signatures and check for duplicates
-	msg, e := challenge.cs.MarshalBinary()
+	msg, e := challenge.Cs.MarshalBinary()
 	if e != nil {
 		return fmt.Errorf("error in challenge conversion: %s", e)
 	}
 	encountered := map[int]bool{}
-	for _, sig := range challenge.sigs {
-		if encountered[sig.index] == true {
+	for _, sig := range challenge.Sigs {
+		if encountered[sig.Index] == true {
 			return fmt.Errorf("duplicate signature")
 		}
-		encountered[sig.index] = true
+		encountered[sig.Index] = true
 
-		e = SchnorrVerify(suite, context.g.y[sig.index], msg, sig.sig)
+		e = SchnorrVerify(suite, context.g.y[sig.Index], msg, sig.Sig)
 		if e != nil {
 			return fmt.Errorf("%s", e)
 		}
 	}
 
 	//Checks the signatures of the commitments
-	err := VerifyCommitmentSignature(suite, context, challenge.commits)
+	err := VerifyCommitmentSignature(suite, context, challenge.Commits)
 	if err != nil {
 		return err
 	}
 	//Checks the openings
-	cs, err := checkOpenings(suite, context, challenge.commits, challenge.openings)
+	cs, err := checkOpenings(suite, context, challenge.Commits, challenge.Openings)
 	if err != nil {
 		return err
 	}
 	//Checks that the challenge values match
-	if !cs.Equal(challenge.cs) {
+	if !cs.Equal(challenge.Cs) {
 		return fmt.Errorf("challenge values does not match")
 	}
 
 	//Add the server's signature to the list if it is not the last one
-	if len(challenge.sigs) == len(context.g.y) {
+	if len(challenge.Sigs) == len(context.g.y) {
 		return nil
 	}
 	sig, e := SchnorrSign(suite, server.PrivateKey(), msg)
 	if e != nil {
 		return e
 	}
-	challenge.sigs = append(challenge.sigs, ServerSignature{index: server.Index(), sig: sig})
+	challenge.Sigs = append(challenge.Sigs, ServerSignature{Index: server.Index(), Sig: sig})
 
 	return nil
 }
@@ -247,11 +247,11 @@ func FinalizeChallenge(context *AuthenticationContext, challenge *ChallengeCheck
 	if context == nil || challenge == nil {
 		return Challenge{}, fmt.Errorf("invalid inputs")
 	}
-	if len(challenge.sigs) != len(context.g.y) {
-		return Challenge{}, fmt.Errorf("signature count does not match: got %d expected %d", len(challenge.sigs), len(context.g.y))
+	if len(challenge.Sigs) != len(context.g.y) {
+		return Challenge{}, fmt.Errorf("signature count does not match: got %d expected %d", len(challenge.Sigs), len(context.g.y))
 	}
 
-	return Challenge{Cs: challenge.cs, Sigs: challenge.sigs}, nil
+	return Challenge{Cs: challenge.Cs, Sigs: challenge.Sigs}, nil
 }
 
 //InitializeServerMessage creates a ServerMessage from a ClientMessage to ease further processing
@@ -261,11 +261,11 @@ func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage
 		return nil, errors.New("InitializeServerMessage: request is nil")
 	}
 	return &ServerMessage{
-		request: *request,
-		tags: nil,
-		indexes: nil,
-		proofs: nil,
-		sigs: nil,
+		Request: *request,
+		Tags:    nil,
+		Indexes: nil,
+		Proofs:  nil,
+		Sigs:    nil,
 	}, nil
 }
 
@@ -273,43 +273,43 @@ func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage
 // TODO DRY see what can be shared with GetFinalLinkageTag ...
 func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMessage, server Server) error {
 	// input checks
-	if context == nil || msg == nil || len(msg.indexes) != len(msg.proofs) || len(msg.proofs) != len(msg.tags) || len(msg.tags) != len(msg.sigs) {
+	if context == nil || msg == nil || len(msg.Indexes) != len(msg.Proofs) || len(msg.Proofs) != len(msg.Tags) || len(msg.Tags) != len(msg.Sigs) {
 		return fmt.Errorf("invalid message")
 	}
 
 	//Step 1
 	//Verify that the client's message is correctly formed and its proof correct
-	if err := verifyAuthenticationMessage(suite, msg.request); err != nil {
+	if err := verifyAuthenticationMessage(suite, msg.Request); err != nil {
 		return errors.New("ServerProtocol: malformed client message or wrong proof")
 	}
 
 	//Checks that not all servers already did the protocol
-	if len(msg.indexes) >= len(context.g.y) {
+	if len(msg.Indexes) >= len(context.g.y) {
 		return fmt.Errorf("ServerProtocol: too many calls of the protocol") //... ok... smells like fish..
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
-	data, e := msg.request.ToBytes()
+	data, e := msg.Request.ToBytes()
 	if e != nil {
 		return errors.New("ServerProtocol: failed to marshall client's msg, " + e.Error())
 	}
-	if len(msg.indexes) != 0 {
-		for i := 0; i < len(msg.indexes); i++ {
-			temp, err := msg.tags[i].MarshalBinary()
+	if len(msg.Indexes) != 0 {
+		for i := 0; i < len(msg.Indexes); i++ {
+			temp, err := msg.Tags[i].MarshalBinary()
 			if err != nil {
 				return errors.New("ServerProtocol: failed to marshall tags, " + err.Error())
 			}
 			data = append(data, temp...)
 
-			temp, err = msg.proofs[i].ToBytes()
+			temp, err = msg.Proofs[i].ToBytes()
 			if err != nil {
 				return fmt.Errorf("error in proofs: %s", err)
 			}
 			data = append(data, temp...)
 
-			data = append(data, []byte(strconv.Itoa(msg.indexes[i]))...)
+			data = append(data, []byte(strconv.Itoa(msg.Indexes[i]))...)
 
-			err = SchnorrVerify(suite, context.g.y[msg.sigs[i].index], data, msg.sigs[i].sig)
+			err = SchnorrVerify(suite, context.g.y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
 			if err != nil {
 				return fmt.Errorf("error in signature: "+strconv.Itoa(i)+"\n%s", err)
 			}
@@ -317,11 +317,11 @@ func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMess
 	}
 
 	//Check all the proofs
-	if len(msg.proofs) != 0 {
-		for i, p := range msg.proofs {
+	if len(msg.Proofs) != 0 {
+		for i, p := range msg.Proofs {
 			var valid bool
-			if p.r2 == nil {
-				valid = verifyMisbehavingProof(suite, context, i, &p, msg.request.sCommits[0])
+			if p.R2 == nil {
+				valid = verifyMisbehavingProof(suite, context, i, &p, msg.Request.SCommits[0])
 			} else {
 				valid = verifyServerProof(suite, context, i, msg)
 			}
@@ -333,21 +333,21 @@ func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMess
 
 	//Step 2: Verify the correct behaviour of the client
 	hasher := suite.Hash()
-	suite.Point().Mul(server.PrivateKey(), msg.request.sCommits[0]).MarshalTo(hasher)
+	suite.Point().Mul(server.PrivateKey(), msg.Request.SCommits[0]).MarshalTo(hasher)
 	s := suite.Scalar().SetBytes(hasher.Sum(nil))
 	var T kyber.Point
 	var proof *ServerProof
 	//Detect a misbehaving client and generate the elements of the server's message accordingly
-	if !msg.request.sCommits[server.Index()+2].Equal(suite.Point().Mul(s, msg.request.sCommits[server.Index()+1])) {
+	if !msg.Request.SCommits[server.Index()+2].Equal(suite.Point().Mul(s, msg.Request.SCommits[server.Index()+1])) {
 		T = suite.Point().Null()
-		proof, e = generateMisbehavingProof(suite, context, msg.request.sCommits[0], server)
+		proof, e = generateMisbehavingProof(suite, context, msg.Request.SCommits[0], server)
 	} else {
 		inv := suite.Scalar().Inv(s)
 		exp := suite.Scalar().Mul(server.RoundSecret(), inv)
-		if len(msg.tags) == 0 {
-			T = suite.Point().Mul(exp, msg.request.t0)
+		if len(msg.Tags) == 0 {
+			T = suite.Point().Mul(exp, msg.Request.T0)
 		} else {
-			T = suite.Point().Mul(exp, msg.tags[len(msg.tags)-1])
+			T = suite.Point().Mul(exp, msg.Tags[len(msg.Tags)-1])
 		}
 		proof, e = generateServerProof(suite, context, s, T, msg, server)
 	}
@@ -375,13 +375,13 @@ func ServerProtocol(suite Suite, context *AuthenticationContext, msg *ServerMess
 		return fmt.Errorf("error in own signature: %s", e)
 	}
 
-	signature := ServerSignature{sig: sign, index: server.Index()}
+	signature := ServerSignature{Sig: sign, Index: server.Index()}
 
 	//Step 4: Form the new message
-	msg.tags = append(msg.tags, T)
-	msg.proofs = append(msg.proofs, *proof)
-	msg.indexes = append(msg.indexes, server.Index())
-	msg.sigs = append(msg.sigs, signature)
+	msg.Tags = append(msg.Tags, T)
+	msg.Proofs = append(msg.Proofs, *proof)
+	msg.Indexes = append(msg.Indexes, server.Index())
+	msg.Sigs = append(msg.Sigs, signature)
 
 	return nil
 }
@@ -407,10 +407,10 @@ func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Sc
 	v2 := suite.Scalar().Pick(suite.RandomStream())
 
 	var a kyber.Point
-	if len(msg.tags) == 0 {
-		a = suite.Point().Mul(v1, msg.request.t0)
+	if len(msg.Tags) == 0 {
+		a = suite.Point().Mul(v1, msg.Request.T0)
 	} else {
-		a = suite.Point().Mul(v1, msg.tags[len(msg.tags)-1])
+		a = suite.Point().Mul(v1, msg.Tags[len(msg.Tags)-1])
 	}
 
 	//exp := suite.Scalar().Neg(v2)
@@ -419,14 +419,14 @@ func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Sc
 
 	t2 := suite.Point().Mul(v1, nil)
 
-	t3 := suite.Point().Mul(v2, msg.request.sCommits[server.Index()+1]) //Accesses S[j-1]
+	t3 := suite.Point().Mul(v2, msg.Request.SCommits[server.Index()+1]) //Accesses S[j-1]
 
 	//Step 2
 	var Tprevious kyber.Point
-	if len(msg.tags) == 0 {
-		Tprevious = msg.request.t0
+	if len(msg.Tags) == 0 {
+		Tprevious = msg.Request.T0
 	} else {
-		Tprevious = msg.tags[len(msg.tags)-1]
+		Tprevious = msg.Tags[len(msg.Tags)-1]
 	}
 	//Generating the hash
 	hasher := suite.Hash()
@@ -434,8 +434,8 @@ func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Sc
 	T.MarshalTo(hasher)
 	context.r[server.Index()].MarshalTo(hasher)
 	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(hasher)
-	msg.request.sCommits[server.Index()+2].MarshalTo(hasher)
-	msg.request.sCommits[server.Index()+1].MarshalTo(hasher)
+	msg.Request.SCommits[server.Index()+2].MarshalTo(hasher)
+	msg.Request.SCommits[server.Index()+1].MarshalTo(hasher)
 	t1.MarshalTo(hasher)
 	t2.MarshalTo(hasher)
 	t3.MarshalTo(hasher)
@@ -452,12 +452,12 @@ func generateServerProof(suite Suite, context *AuthenticationContext, s kyber.Sc
 
 	//Step 4
 	return &ServerProof{
-		t1: t1,
-		t2: t2,
-		t3: t3,
-		c:  c,
-		r1: r1,
-		r2: r2,
+		T1: t1,
+		T2: t2,
+		T3: t3,
+		C:  c,
+		R1: r1,
+		R2: r2,
 	}, nil
 }
 
@@ -468,51 +468,51 @@ func verifyServerProof(suite Suite, context *AuthenticationContext, i int, msg *
 		return false
 	}
 
-	if i >= len(msg.proofs) || i < 0 {
+	if i >= len(msg.Proofs) || i < 0 {
 		return false
 	}
 
 	//Verify format of the proof
-	if msg.proofs[i].c == nil || msg.proofs[i].t1 == nil || msg.proofs[i].t2 == nil || msg.proofs[i].t3 == nil || msg.proofs[i].r1 == nil || msg.proofs[i].r2 == nil {
+	if msg.Proofs[i].C == nil || msg.Proofs[i].T1 == nil || msg.Proofs[i].T2 == nil || msg.Proofs[i].T3 == nil || msg.Proofs[i].R1 == nil || msg.Proofs[i].R2 == nil {
 		return false
 	}
 
-	index := msg.indexes[i]
+	index := msg.Indexes[i]
 
 	//Step 1
 	var a kyber.Point
 	if i == 0 {
-		a = suite.Point().Mul(msg.proofs[i].r1, msg.request.t0)
+		a = suite.Point().Mul(msg.Proofs[i].R1, msg.Request.T0)
 	} else {
-		a = suite.Point().Mul(msg.proofs[i].r1, msg.tags[i-1])
+		a = suite.Point().Mul(msg.Proofs[i].R1, msg.Tags[i-1])
 	}
 	//exp := suite.Scalar().Neg(msg.proofs[i].r2)
-	b := suite.Point().Mul(msg.proofs[i].r2, msg.tags[i])
+	b := suite.Point().Mul(msg.Proofs[i].R2, msg.Tags[i])
 	t1 := suite.Point().Sub(a, b)
 
-	d := suite.Point().Mul(msg.proofs[i].r1, nil)
-	e := suite.Point().Mul(msg.proofs[i].c, context.r[index])
+	d := suite.Point().Mul(msg.Proofs[i].R1, nil)
+	e := suite.Point().Mul(msg.Proofs[i].C, context.r[index])
 	t2 := suite.Point().Add(d, e)
 
-	f := suite.Point().Mul(msg.proofs[i].r2, msg.request.sCommits[index+1])
-	g := suite.Point().Mul(msg.proofs[i].c, msg.request.sCommits[index+2])
+	f := suite.Point().Mul(msg.Proofs[i].R2, msg.Request.SCommits[index+1])
+	g := suite.Point().Mul(msg.Proofs[i].C, msg.Request.SCommits[index+2])
 	t3 := suite.Point().Add(f, g)
 
 	//Step 2
 	var Tprevious kyber.Point
 	if i == 0 {
-		Tprevious = msg.request.t0
+		Tprevious = msg.Request.T0
 	} else {
-		Tprevious = msg.tags[i-1]
+		Tprevious = msg.Tags[i-1]
 	}
 	// FIXME remember to use hashtwo when/where needed to keep things compatible with other implementations
 	hasher := suite.Hash()
 	Tprevious.MarshalTo(hasher)
-	msg.tags[i].MarshalTo(hasher)
+	msg.Tags[i].MarshalTo(hasher)
 	context.r[index].MarshalTo(hasher)
 	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(hasher)
-	msg.request.sCommits[index+2].MarshalTo(hasher)
-	msg.request.sCommits[index+1].MarshalTo(hasher)
+	msg.Request.SCommits[index+2].MarshalTo(hasher)
+	msg.Request.SCommits[index+1].MarshalTo(hasher)
 	t1.MarshalTo(hasher)
 	t2.MarshalTo(hasher)
 	t3.MarshalTo(hasher)
@@ -520,7 +520,7 @@ func verifyServerProof(suite Suite, context *AuthenticationContext, i int, msg *
 
 	c := suite.Scalar().SetBytes(challenge)
 
-	if !c.Equal(msg.proofs[i].c) {
+	if !c.Equal(msg.Proofs[i].C) {
 		return false
 	}
 
@@ -566,12 +566,12 @@ func generateMisbehavingProof(suite Suite, context *AuthenticationContext, Z kyb
 
 	//Step 4
 	return &ServerProof{
-		t1: t1,
-		t2: t2,
-		t3: Zs,
-		c:  c,
-		r1: r,
-		r2: nil,
+		T1: t1,
+		T2: t2,
+		T3: Zs,
+		C:  c,
+		R1: r,
+		R2: nil,
 	}, nil
 }
 
@@ -587,28 +587,28 @@ func verifyMisbehavingProof(suite Suite, context *AuthenticationContext, i int, 
 	}
 
 	//Check that this is a misbehaving proof
-	if proof.r2 != nil {
+	if proof.R2 != nil {
 		return false
 	}
 
 	//Verify format of the proof
-	if proof.t1 == nil || proof.t2 == nil || proof.t3 == nil || proof.c == nil || proof.r1 == nil {
+	if proof.T1 == nil || proof.T2 == nil || proof.T3 == nil || proof.C == nil || proof.R1 == nil {
 		return false
 	}
 
 	//Step 1
-	a := suite.Point().Mul(proof.r1, Z)       //r1 = r
-	b := suite.Point().Mul(proof.c, proof.t3) //t3 = Zs
+	a := suite.Point().Mul(proof.R1, Z)       //r1 = r
+	b := suite.Point().Mul(proof.C, proof.T3) //t3 = Zs
 	t1 := suite.Point().Add(a, b)
 
-	d := suite.Point().Mul(proof.r1, nil) //r1 = r
-	e := suite.Point().Mul(proof.c, context.g.y[i])
+	d := suite.Point().Mul(proof.R1, nil) //r1 = r
+	e := suite.Point().Mul(proof.C, context.g.y[i])
 	t2 := suite.Point().Add(d, e)
 
 	//Step 2
 	hasher := sha512.New()
 	var writer io.Writer = hasher
-	proof.t3.MarshalTo(writer)
+	proof.T3.MarshalTo(writer)
 	Z.MarshalTo(writer)
 	context.g.y[i].MarshalTo(writer)
 	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
@@ -622,7 +622,7 @@ func verifyMisbehavingProof(suite Suite, context *AuthenticationContext, i int, 
 	//rand := suite.Cipher(challhasenge)
 	c := suite.Scalar().SetBytes(hasher.Sum(nil))
 
-	if !c.Equal(proof.c) {
+	if !c.Equal(proof.C) {
 		return false
 	}
 	return true
@@ -631,39 +631,39 @@ func verifyMisbehavingProof(suite Suite, context *AuthenticationContext, i int, 
 /*ToBytes is a helper function used to convert a ServerProof into []byte to be used in signatures*/
 // QUESTION WTF ? + DRY there should be another way or no ?
 func (proof ServerProof) ToBytes() (data []byte, err error) {
-	temp, e := proof.t1.MarshalBinary()
+	temp, e := proof.T1.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in t1: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = proof.t2.MarshalBinary()
+	temp, e = proof.T2.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in t2: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = proof.t3.MarshalBinary()
+	temp, e = proof.T3.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in t3: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = proof.c.MarshalBinary()
+	temp, e = proof.C.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in c: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = proof.r1.MarshalBinary()
+	temp, e = proof.R1.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in r1: %s", e)
 	}
 	data = append(data, temp...)
 
 	//Need to test if r2 == nil (Misbehaving)
-	if proof.r2 != nil {
-		temp, e = proof.r2.MarshalBinary()
+	if proof.R2 != nil {
+		temp, e = proof.R2.MarshalBinary()
 		if e != nil {
 			return nil, fmt.Errorf("error in r2: %s", e)
 		}

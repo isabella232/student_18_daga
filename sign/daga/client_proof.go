@@ -22,8 +22,8 @@ func (c Challenge) verifySignatures(suite Suite, serverKeys []kyber.Point) error
 	//	verify challenge signatures
 	if msg, e := c.Cs.MarshalBinary(); e == nil {
 		for _, sig := range c.Sigs {
-			if e = SchnorrVerify(suite, serverKeys[sig.index], msg, sig.sig); e != nil {
-				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.index) + ": " + e.Error())
+			if e = SchnorrVerify(suite, serverKeys[sig.Index], msg, sig.Sig); e != nil {
+				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.Index) + ": " + e.Error())
 			}
 		}
 		return nil
@@ -294,18 +294,18 @@ func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
 // ClientProof stores the client's proof P0 as of "Syta - Identity Management Through Privacy Preserving Aut 4.3.7"
 // and obtained after completion of the sigma-protocol with a server.
 //
-// cs the master challenge that was sent by the server and used to generate the sub-challenges and the responses
+// Cs the master challenge that was sent by the server and used to generate the sub-challenges and the responses
 //
-// t the commitments (first (prover) message of the sigma-protocol)
+// T the commitments (first (prover) message of the sigma-protocol)
 //
-// c all the sub-challenges (one for each sub predicate of the PKclient OR-predicate)
+// C all the sub-challenges (one for each sub predicate of the PKclient OR-predicate)
 //
-// r the responses (final (prover) message of the sigma-protocol)
+// R the responses (final (prover) message of the sigma-protocol)
 type ClientProof struct {
-	cs kyber.Scalar
-	t  []kyber.Point
-	c  []kyber.Scalar
-	r  []kyber.Scalar
+	Cs kyber.Scalar
+	T  []kyber.Point
+	C  []kyber.Scalar
+	R  []kyber.Scalar
 }
 
 // builds a new ClientProof (Step 4 of client's protocol) and returns it to caller
@@ -343,30 +343,30 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	if commits, err := proverCtx.commitments(); err != nil {
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
-		P.t = commits
+		P.T = commits
 	}
 
 	// TODO pack those in a single step and maybe remove these channels and instead call userprovided function "sendCommitsReceiveChallenge"
 	// TODO but keep in mind that cannot accept challenge as parameter if asked by someone.. first the commitments should be sent to the servers
 	//	forward them to random remote server/verifier (over *anon.* circuit etc.. concern of the caller code / client setup!!)
 	//	and receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code / client setup!!)
-	challenge := sendCommitsReceiveChallenge(P.t)
+	challenge := sendCommitsReceiveChallenge(P.T)
 
 	if err := challenge.verifySignatures(suite, context.g.y); err != nil {
 		// TODO log
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	}
-	P.cs = challenge.Cs
+	P.Cs = challenge.Cs
 
 	//	forward master challenge to running Prover in order to continue the proof process, and receive the sub-challenges from Prover
-	P.c = proverCtx.receiveChallenges(P.cs)
+	P.C = proverCtx.receiveChallenges(P.Cs)
 
 	//	get final responses from Prover
 	if responses, err := proverCtx.responses(); err != nil {
 		// TODO onet.log something
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
-		P.r = responses
+		P.R = responses
 	}
 
 	//check return value of the now done proof.Prover
@@ -403,19 +403,19 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 	}()
 
 	//	forward commitments to running Verifier
-	commitments := proof.t
+	commitments := proof.T
 	if err := verifierCtx.receiveCommitments(commitments); err != nil {
 		// TODO log
 		return errors.New("verifyClientProof:" + err.Error())
 	}
 
 	//	forward challenges to running Verifier
-	challenge := proof.cs
-	subChallenges := proof.c
+	challenge := proof.Cs
+	subChallenges := proof.C
 	verifierCtx.receiveChallenges(challenge, subChallenges)
 
 	//	forward responses to running Verifier
-	responses := proof.r
+	responses := proof.R
 	if err := verifierCtx.receiveResponses(responses); err != nil {
 		// TODO log
 		return errors.New("verifyClientProof:" + err.Error())
@@ -444,8 +444,8 @@ func newClientProofPred(suite Suite, context AuthenticationContext, tagAndCommit
 	// map for public values needed to construct the Prover and Verifier from the predicate
 	pval := make(map[string]kyber.Point, 3+2*len(context.g.x))
 	pval["G"] = suite.Point().Base()
-	pval["T0"] = tagAndCommitments.t0
-	pval["Sm"] = tagAndCommitments.sCommits[len(tagAndCommitments.sCommits)-1]
+	pval["T0"] = tagAndCommitments.T0
+	pval["Sm"] = tagAndCommitments.SCommits[len(tagAndCommitments.SCommits)-1]
 
 	//	build all the internal And predicates (one for each client in current auth. group)
 	for k, pubKey := range context.g.x {
@@ -513,24 +513,24 @@ func newClientProver(suite Suite, context AuthenticationContext, tagAndCommitmen
 //ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures
 func (proof ClientProof) ToBytes() (data []byte, err error) {
 	// TODO WTF no other way ? + rename marshalbinary for consistency
-	data, e := proof.cs.MarshalBinary()
+	data, e := proof.Cs.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in cs: %s", e)
 	}
 
-	temp, e := PointArrayToBytes(proof.t)
+	temp, e := PointArrayToBytes(proof.T)
 	if e != nil {
 		return nil, fmt.Errorf("error in t: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = ScalarArrayToBytes(proof.c)
+	temp, e = ScalarArrayToBytes(proof.C)
 	if e != nil {
 		return nil, fmt.Errorf("error in c: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = ScalarArrayToBytes(proof.r)
+	temp, e = ScalarArrayToBytes(proof.R)
 	if e != nil {
 		return nil, fmt.Errorf("error in r: %s", e)
 	}

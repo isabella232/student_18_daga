@@ -205,24 +205,24 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 // TODO WTF, no other way ? + rename marshalbinary for consistency
 /*ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures*/
 func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
-	data, e := msg.c.ToBytes()
+	data, e := msg.C.ToBytes()
 	if e != nil {
 		return nil, fmt.Errorf("error in context: %s", e)
 	}
 
-	temp, e := PointArrayToBytes(msg.sCommits)
+	temp, e := PointArrayToBytes(msg.SCommits)
 	if e != nil {
 		return nil, fmt.Errorf("error in S: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = msg.t0.MarshalBinary()
+	temp, e = msg.T0.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in T0: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = msg.p0.ToBytes()
+	temp, e = msg.P0.ToBytes()
 	if e != nil {
 		return nil, fmt.Errorf("error in proof: %s", e)
 	}

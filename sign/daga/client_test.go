@@ -32,7 +32,7 @@ func TestNewInitialTagAndCommitments(t *testing.T) {
 
 	// normal execution
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	T0, S := tagAndCommitments.t0, tagAndCommitments.sCommits
+	T0, S := tagAndCommitments.T0, tagAndCommitments.SCommits
 	assert.NotNil(t, T0, "T0 nil")
 	assert.NotNil(t, S, "sCommits nil")
 	assert.NotNil(t, s, "s nil")
@@ -50,7 +50,7 @@ func signDummyChallenge(cs kyber.Scalar, servers []Server) Challenge {
 	//Make each test server sign the challenge
 	for _, server := range servers {
 		sig, _ := SchnorrSign(suite, server.PrivateKey(), msg)
-		sigs = append(sigs, ServerSignature{index: server.Index(), sig: sig})
+		sigs = append(sigs, ServerSignature{Index: server.Index(), Sig: sig})
 	}
 	return Challenge{Cs: cs, Sigs: sigs}
 }
@@ -77,7 +77,7 @@ func TestNewClientProof(t *testing.T) {
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	assert.NoError(t, err, "newClientProof returned an error on valid inputs")
-	commits, responses, subChallenges := proof.t, proof.r, proof.c
+	commits, responses, subChallenges := proof.T, proof.R, proof.C
 	// FIXME not sure whether these tests are pertinent or well written... they are testing the proof framework...not my code
 	assert.Equal(t, len(commits), 3*len(clients))
 	assert.Equal(t, len(subChallenges), len(clients))
@@ -94,21 +94,21 @@ func TestNewClientProof(t *testing.T) {
 	invalidChallenge := Challenge{Cs: fake, Sigs: validChallenge.Sigs}
 	sendCommitsReceiveChallenge = newDummyServerChannels(invalidChallenge)
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	commits, responses, subChallenges = proof.t, proof.r, proof.c
+	commits, responses, subChallenges = proof.T, proof.R, proof.C
 	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
 	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 
 	//Signature modification
-	newsig := append(validChallenge.Sigs[0].sig, []byte("A")...)
+	newsig := append(validChallenge.Sigs[0].Sig, []byte("A")...)
 	newsig = newsig[1:]
 	wrongSigs := make([]ServerSignature, len(validChallenge.Sigs))
 	copy(wrongSigs, validChallenge.Sigs)
-	wrongSigs[0].sig = newsig
+	wrongSigs[0].Sig = newsig
 	invalidChallenge = Challenge{Cs: cs, Sigs: wrongSigs}
 	sendCommitsReceiveChallenge = newDummyServerChannels(invalidChallenge)
 
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	commits, responses, subChallenges = proof.t, proof.r, proof.c
+	commits, responses, subChallenges = proof.T, proof.R, proof.C
 	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
 	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 }
@@ -128,9 +128,9 @@ func TestVerifyClientProof(t *testing.T) {
 	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 
 	clientMsg := AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Normal execution
@@ -140,24 +140,24 @@ func TestVerifyClientProof(t *testing.T) {
 	//Modify the value of some commitments
 	scratchMsg := clientMsg
 	i := rand.Intn(len(clients))
-	ttemp := scratchMsg.p0.t[3*i].Clone()
-	scratchMsg.p0.t[3*i] = suite.Point().Null()
+	ttemp := scratchMsg.P0.T[3*i].Clone()
+	scratchMsg.P0.T[3*i] = suite.Point().Null()
 	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i)
 
-	scratchMsg.p0.t[3*i] = ttemp.Clone()
-	ttemp = scratchMsg.p0.t[3*i+1].Clone()
-	scratchMsg.p0.t[3*i+1] = suite.Point().Null()
+	scratchMsg.P0.T[3*i] = ttemp.Clone()
+	ttemp = scratchMsg.P0.T[3*i+1].Clone()
+	scratchMsg.P0.T[3*i+1] = suite.Point().Null()
 	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i+1)
 
-	scratchMsg.p0.t[3*i+1] = ttemp.Clone()
-	ttemp = scratchMsg.p0.t[3*i+2].Clone()
-	scratchMsg.p0.t[3*i+2] = suite.Point().Null()
+	scratchMsg.P0.T[3*i+1] = ttemp.Clone()
+	ttemp = scratchMsg.P0.T[3*i+2].Clone()
+	scratchMsg.P0.T[3*i+2] = suite.Point().Null()
 	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i+2)
 
-	scratchMsg.p0.t[3*i+2] = ttemp.Clone()
+	scratchMsg.P0.T[3*i+2] = ttemp.Clone()
 
 	//tamper the challenge
-	scratchMsg.p0.cs = suite.Scalar().Zero()
+	scratchMsg.P0.Cs = suite.Scalar().Zero()
 	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of the challenge")
 }
 
@@ -174,13 +174,13 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage := AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Create the initial server message
-	servMsg := ServerMessage{request: clientMessage, proofs: nil, tags: nil, sigs: nil, indexes: nil}
+	servMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 
 	//Run ServerProtocol on each server
 	for i := range servers {
@@ -203,40 +203,40 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	assert.Nil(t, Tf, "wrong check: Empty context")
 
 	//Change a signature
-	servMsg.sigs[0].sig = append(servMsg.sigs[0].sig[1:], servMsg.sigs[0].sig[0])
+	servMsg.Sigs[0].Sig = append(servMsg.Sigs[0].Sig[1:], servMsg.Sigs[0].Sig[0])
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
 	assert.Error(t, err, "Invalid signature accepted")
 	assert.Nil(t, Tf, "Invalid signature accepted")
 
 	//Revert the change
-	servMsg.sigs[0].sig = append([]byte{0x0}, servMsg.sigs[0].sig...)
-	servMsg.sigs[0].sig[0] = servMsg.sigs[0].sig[len(servMsg.sigs[0].sig)-1]
-	servMsg.sigs[0].sig = servMsg.sigs[0].sig[:len(servMsg.sigs[0].sig)-2]
+	servMsg.Sigs[0].Sig = append([]byte{0x0}, servMsg.Sigs[0].Sig...)
+	servMsg.Sigs[0].Sig[0] = servMsg.Sigs[0].Sig[len(servMsg.Sigs[0].Sig)-1]
+	servMsg.Sigs[0].Sig = servMsg.Sigs[0].Sig[:len(servMsg.Sigs[0].Sig)-2]
 
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
 	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, 1)
 	tagAndCommitments, s = newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
-	S := tagAndCommitments.sCommits
+	S := tagAndCommitments.SCommits
 
 	S[2] = suite.Point().Null()
 	validChallenge = signDummyChallenge(cs, servers)
 	sendCommitsReceiveChallenge = newDummyServerChannels(validChallenge)
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage = AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Create the initial server message
 	servMsg = ServerMessage{
-		request: clientMessage,
-		proofs:  nil,
-		tags:    nil,
-		sigs:    nil,
-		indexes: nil,
+		Request: clientMessage,
+		Proofs:  nil,
+		Tags:    nil,
+		Sigs:    nil,
+		Indexes: nil,
 	}
 
 	//Run ServerProtocol on each server
@@ -250,25 +250,25 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// 1 server, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
 	//Assemble the client message
-	S = tagAndCommitments.sCommits
+	S = tagAndCommitments.SCommits
 	S[2] = suite.Point().Null()
-	tagAndCommitments.t0.Set(suite.Point().Null())
+	tagAndCommitments.T0.Set(suite.Point().Null())
 	validChallenge = signDummyChallenge(cs, servers)
 	sendCommitsReceiveChallenge = newDummyServerChannels(validChallenge)
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, suite.Scalar().Zero(), sendCommitsReceiveChallenge)
 	clientMessage = AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Create the initial server message
 	servMsg = ServerMessage{
-		request: clientMessage,
-		proofs:  nil,
-		tags:    nil,
-		sigs:    nil,
-		indexes: nil,
+		Request: clientMessage,
+		Proofs:  nil,
+		Tags:    nil,
+		Sigs:    nil,
+		Indexes: nil,
 	}
 
 	//Run ServerProtocol on each server
@@ -285,24 +285,24 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 	//Assemble the client message
 	tagAndCommitments, s = newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
-	S = tagAndCommitments.sCommits
+	S = tagAndCommitments.SCommits
 	S[2] = suite.Point().Null()
 	validChallenge = signDummyChallenge(cs, servers)
 	sendCommitsReceiveChallenge = newDummyServerChannels(validChallenge)
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage = AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Create the initial server message
 	servMsg = ServerMessage{
-		request: clientMessage,
-		proofs:  nil,
-		tags:    nil,
-		sigs:    nil,
-		indexes: nil,
+		Request: clientMessage,
+		Proofs:  nil,
+		Tags:    nil,
+		Sigs:    nil,
+		Indexes: nil,
 	}
 
 	//Run ServerProtocol on each server
@@ -333,9 +333,9 @@ func TestValidateClientMessage(t *testing.T) {
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage := AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Normal execution
@@ -344,42 +344,42 @@ func TestValidateClientMessage(t *testing.T) {
 
 	//Modifying the length of various elements
 	ScratchMsg := clientMessage
-	ScratchMsg.p0.c = append(ScratchMsg.p0.c, suite.Scalar().Pick(suite.RandomStream()))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.p0.c), len(clients))
+	ScratchMsg.P0.C = append(ScratchMsg.P0.C, suite.Scalar().Pick(suite.RandomStream()))
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
-	ScratchMsg.p0.c = ScratchMsg.p0.c[:len(clients)-1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.p0.c), len(clients))
-
-	ScratchMsg = clientMessage
-	ScratchMsg.p0.r = append(ScratchMsg.p0.r, suite.Scalar().Pick(suite.RandomStream()))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.p0.c), len(clients))
-
-	ScratchMsg.p0.r = ScratchMsg.p0.r[:2*len(clients)-1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.p0.c), len(clients))
+	ScratchMsg.P0.C = ScratchMsg.P0.C[:len(clients)-1]
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg = clientMessage
-	ScratchMsg.p0.t = append(ScratchMsg.p0.t, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.p0.c), len(clients))
+	ScratchMsg.P0.R = append(ScratchMsg.P0.R, suite.Scalar().Pick(suite.RandomStream()))
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
-	ScratchMsg.p0.t = ScratchMsg.p0.t[:3*len(clients)-1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.p0.c), len(clients))
+	ScratchMsg.P0.R = ScratchMsg.P0.R[:2*len(clients)-1]
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg = clientMessage
-	ScratchMsg.sCommits = append(ScratchMsg.sCommits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.sCommits), len(servers)+2)
+	ScratchMsg.P0.T = append(ScratchMsg.P0.T, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
-	ScratchMsg.sCommits = ScratchMsg.sCommits[:len(servers)+1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.sCommits), len(servers)+2)
+	ScratchMsg.P0.T = ScratchMsg.P0.T[:3*len(clients)-1]
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+
+	ScratchMsg = clientMessage
+	ScratchMsg.SCommits = append(ScratchMsg.SCommits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
+
+	ScratchMsg.SCommits = ScratchMsg.SCommits[:len(servers)+1]
+	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
 
 	//Modify the value of the generator in S[1]
 	ScratchMsg = clientMessage
-	ScratchMsg.sCommits[1] = suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil)
+	ScratchMsg.SCommits[1] = suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil)
 	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect check for the generator in S[1]")
 
-	ScratchMsg.sCommits[1] = suite.Point().Mul(suite.Scalar().One(), nil)
+	ScratchMsg.SCommits[1] = suite.Point().Mul(suite.Scalar().One(), nil)
 
 	//Remove T0
-	ScratchMsg.t0 = nil
+	ScratchMsg.T0 = nil
 	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Accepts a empty T0")
 }
 
@@ -396,9 +396,9 @@ func TestToBytes_ClientMessage(t *testing.T) {
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	proof, _ := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	clientMessage := AuthenticationMessage{
-		c:                        *context,
+		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
-		p0:                       proof,
+		P0:                       proof,
 	}
 
 	//Normal execution
