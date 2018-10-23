@@ -3,7 +3,7 @@ package daga
 import (
 	"crypto/sha512"
 	"github.com/dedis/kyber"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"testing"
@@ -14,23 +14,23 @@ func TestNewServer(t *testing.T) {
 	i := rand.Int()
 	s := suite.Scalar().Pick(suite.RandomStream())
 	server, err := NewServer(suite, i, s)
-	assert.NoError(t, err, "Cannot initialize a new server with a given private key")
-	assert.Equal(t, server.Index(), i, "Cannot initialize a new server with a given private key, wrong index")
-	assert.True(t, server.PrivateKey().Equal(s), "Cannot initialize a new server with a given private key, wrong key")
+	require.NoError(t, err, "Cannot initialize a new server with a given private key")
+	require.Equal(t, server.Index(), i, "Cannot initialize a new server with a given private key, wrong index")
+	require.True(t, server.PrivateKey().Equal(s), "Cannot initialize a new server with a given private key, wrong key")
 
 	server, err = NewServer(suite, i, nil)
-	assert.NoError(t, err, "Cannot create a new server without a private key")
-	assert.NotNil(t, server.PrivateKey(), "Cannot create a new server without a private key")
+	require.NoError(t, err, "Cannot create a new server without a private key")
+	require.NotNil(t, server.PrivateKey(), "Cannot create a new server without a private key")
 
 	//Invalid input
 	server, err = NewServer(suite, -2, s)
-	assert.Error(t, err, "Wrong check: Invalid index")
+	require.Error(t, err, "Wrong check: Invalid index")
 }
 
 func TestGetPublicKey_Server(t *testing.T) {
 	server, _ := NewServer(suite, 0, suite.Scalar().Pick(suite.RandomStream()))
 	P := server.PublicKey()
-	assert.NotNil(t, P, "Cannot get public key")
+	require.NotNil(t, P, "Cannot get public key")
 }
 
 func TestGenerateCommitment(t *testing.T) {
@@ -38,14 +38,14 @@ func TestGenerateCommitment(t *testing.T) {
 
 	//Normal execution
 	commit, opening, err := GenerateCommitment(suite, context, servers[0])
-	assert.NoError(t, err, "Cannot generate a commitment")
-	assert.True(t, commit.Commit.Equal(suite.Point().Mul(opening, nil)), "Cannot open the commitment")
+	require.NoError(t, err, "Cannot generate a commitment")
+	require.True(t, commit.Commit.Equal(suite.Point().Mul(opening, nil)), "Cannot open the commitment")
 
 	msg, err := commit.Commit.MarshalBinary()
-	assert.NoError(t, err, "failed to marshall commitment")
+	require.NoError(t, err, "failed to marshall commitment")
 
 	err = SchnorrVerify(suite, servers[0].PublicKey(), msg, commit.Sig)
-	assert.NoError(t, err, "wrong commitment signature, failed to verify")
+	require.NoError(t, err, "wrong commitment signature, failed to verify")
 }
 
 func TestVerifyCommitmentSignature(t *testing.T) {
@@ -60,13 +60,13 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 
 	//Normal execution
 	err := VerifyCommitmentSignature(suite, context, commits)
-	assert.NoError(t, err, "Cannot verify the signatures for a legit commit array")
+	require.NoError(t, err, "Cannot verify the signatures for a legit commit array")
 
 	//Change a random index
 	i := rand.Intn(len(servers))
 	commits[i].Index = i + 1
 	err = VerifyCommitmentSignature(suite, context, commits)
-	assert.Error(t, err, "Cannot verify matching indexes for %d", i)
+	require.Error(t, err, "Cannot verify matching indexes for %d", i)
 
 	commits[i].Index = i + 1
 
@@ -77,7 +77,7 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 	sig = sig[1:]
 	commits[i].Sig = sig
 	err = VerifyCommitmentSignature(suite, context, commits)
-	assert.Error(t, err, "Cannot verify signature for %d", i)
+	require.Error(t, err, "Cannot verify signature for %d", i)
 }
 
 func TestcheckOpenings(t *testing.T) {
@@ -94,46 +94,46 @@ func TestcheckOpenings(t *testing.T) {
 
 	//Normal execution
 	cs, err := checkOpenings(suite, context, commits, openings)
-	assert.NoError(t, err, "Cannot check the openings")
+	require.NoError(t, err, "Cannot check the openings")
 
 	challenge := suite.Scalar().Zero()
 	for _, temp := range openings {
 		challenge = suite.Scalar().Add(challenge, temp)
 	}
-	assert.True(t, cs.Equal(challenge), "Wrong computation of challenge cs: %s instead of %s", cs, challenge)
+	require.True(t, cs.Equal(challenge), "Wrong computation of challenge cs: %s instead of %s", cs, challenge)
 
 	//Empty inputs
 	cs, err = checkOpenings(suite, nil, commits, openings)
-	assert.Error(t, err, "Wrong check: Empty context")
+	require.Error(t, err, "Wrong check: Empty context")
 
-	assert.Nil(t, cs, "cs not nil on empty context")
+	require.Nil(t, cs, "cs not nil on empty context")
 
 	cs, err = checkOpenings(suite, context, nil, openings)
-	assert.Error(t, err, "Wrong check: Empty commits")
-	assert.Nil(t, cs, "cs not nil on empty commits")
+	require.Error(t, err, "Wrong check: Empty commits")
+	require.Nil(t, cs, "cs not nil on empty commits")
 
 	cs, err = checkOpenings(suite, context, commits, nil)
-	assert.Error(t, err, "Wrong check: Empty openings")
-	assert.Nil(t, cs, "cs not nil on empty openings")
+	require.Error(t, err, "Wrong check: Empty openings")
+	require.Nil(t, cs, "cs not nil on empty openings")
 
 	//Change the length of the openings
 	CutOpenings := openings[:len(openings)-1]
 	cs, err = checkOpenings(suite, context, commits, CutOpenings)
-	assert.Error(t, err, "Invalid length check on openings")
-	assert.Nil(t, cs, "cs not nil on opening length error")
+	require.Error(t, err, "Invalid length check on openings")
+	require.Nil(t, cs, "cs not nil on opening length error")
 
 	//Change the length of the commits
 	CutCommits := commits[:len(commits)-1]
 	cs, err = checkOpenings(suite, context, CutCommits, openings)
-	assert.Error(t, err, "Invalid length check on comits")
-	assert.Nil(t, cs, "cs not nil on commit length error")
+	require.Error(t, err, "Invalid length check on comits")
+	require.Nil(t, cs, "cs not nil on commit length error")
 
 	//Change a random opening
 	i := rand.Intn(len(servers))
 	openings[i] = suite.Scalar().Zero()
 	cs, err = checkOpenings(suite, context, commits, openings)
-	assert.Error(t, err, "Invalid opening check")
-	assert.Nil(t, cs, "cs not nil on opening error")
+	require.Error(t, err, "Invalid opening check")
+	require.Nil(t, cs, "cs not nil on opening error")
 }
 
 func TestInitializeChallenge(t *testing.T) {
@@ -150,32 +150,32 @@ func TestInitializeChallenge(t *testing.T) {
 
 	//Normal execution
 	challenge, err := InitializeChallenge(suite, context, commits, openings)
-	assert.NoError(t, err, "Cannot initialize challenge")
-	assert.NotNil(t, challenge, "Cannot initialize challenge")
+	require.NoError(t, err, "Cannot initialize challenge")
+	require.NotNil(t, challenge, "Cannot initialize challenge")
 
 	//Empty inputs
 	challenge, err = InitializeChallenge(suite, nil, commits, openings)
-	assert.Error(t, err, "Wrong check: Empty cs")
-	assert.Nil(t, challenge, "Wrong check: Empty cs")
+	require.Error(t, err, "Wrong check: Empty cs")
+	require.Nil(t, challenge, "Wrong check: Empty cs")
 
 	challenge, err = InitializeChallenge(suite, context, nil, openings)
-	assert.Error(t, err, "Wrong check: Empty commits")
-	assert.Nil(t, challenge, "Wrong check: Empty commits")
+	require.Error(t, err, "Wrong check: Empty commits")
+	require.Nil(t, challenge, "Wrong check: Empty commits")
 
 	challenge, err = InitializeChallenge(suite, context, commits, nil)
-	assert.Error(t, err, "Wrong check: Empty openings")
-	assert.Nil(t, challenge, "Wrong check: Empty openings")
+	require.Error(t, err, "Wrong check: Empty openings")
+	require.Nil(t, challenge, "Wrong check: Empty openings")
 
 	//Mismatch length between commits and openings
 	challenge, err = InitializeChallenge(suite, context, commits, openings[:len(openings)-2])
-	assert.Error(t, err, "Wrong check: Mismatched length between commits and openings")
-	assert.Nil(t, challenge, "Wrong check: Mismatched length between commits and openings")
+	require.Error(t, err, "Wrong check: Mismatched length between commits and openings")
+	require.Nil(t, challenge, "Wrong check: Mismatched length between commits and openings")
 
 	//Change an opening
 	openings[0] = suite.Scalar().Zero()
 	challenge, err = InitializeChallenge(suite, context, commits, openings[:len(openings)-2])
-	assert.Error(t, err, "Invalid opening check")
-	assert.Nil(t, challenge, "Invalid opening check")
+	require.Error(t, err, "Invalid opening check")
+	require.Nil(t, challenge, "Invalid opening check")
 }
 
 func TestCheckUpdateChallenge(t *testing.T) {
@@ -196,13 +196,13 @@ func TestCheckUpdateChallenge(t *testing.T) {
 
 	//Normal execution
 	err := CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.NoError(t, err, "Cannot update the challenge")
-	assert.Equal(t, len(challenge.Sigs), 1, "Did not correctly add the signature")
+	require.NoError(t, err, "Cannot update the challenge")
+	require.Equal(t, len(challenge.Sigs), 1, "Did not correctly add the signature")
 
 	//Duplicate signature
 	challenge.Sigs = append(challenge.Sigs, challenge.Sigs[0])
 	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.Error(t, err, "Does not check for duplicates signatures")
+	require.Error(t, err, "Does not check for duplicates signatures")
 
 	challenge.Sigs = []ServerSignature{challenge.Sigs[0]}
 
@@ -210,7 +210,7 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	fake := append([]byte("A"), challenge.Sigs[0].Sig...)
 	challenge.Sigs[0].Sig = fake[:len(challenge.Sigs[0].Sig)]
 	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.Error(t, err, "Wrond check of signature")
+	require.Error(t, err, "Wrond check of signature")
 
 	//Restore correct signature for the next tests
 	challenge.Sigs = nil
@@ -219,30 +219,30 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	//Modify the challenge
 	challenge.Cs = suite.Scalar().Zero()
 	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.Error(t, err, "Does not check the challenge")
+	require.Error(t, err, "Does not check the challenge")
 
 	challenge.Cs = cs
 
 	//Only appends if the challenge has not already done a round-robin
 	for _, server := range servers[1:] {
 		err = CheckUpdateChallenge(suite, context, challenge, server)
-		assert.NoError(t, err, "Error during the round-robin at server %d", server.Index())
+		require.NoError(t, err, "Error during the round-robin at server %d", server.Index())
 	}
 	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.NoError(t, err, "Error when closing the loop of the round-robin")
-	assert.Equal(t, len(challenge.Sigs), len(servers), "Invalid number of signatures: %d instead of %d", len(challenge.Sigs), len(servers))
+	require.NoError(t, err, "Error when closing the loop of the round-robin")
+	require.Equal(t, len(challenge.Sigs), len(servers), "Invalid number of signatures: %d instead of %d", len(challenge.Sigs), len(servers))
 
 	//Change a commitment
 	challenge.Commits[0].Commit = suite.Point().Mul(suite.Scalar().One(), nil)
 	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.Error(t, err, "Invalid commitment signature check")
+	require.Error(t, err, "Invalid commitment signature check")
 
 	challenge.Commits[0].Commit = suite.Point().Mul(challenge.Openings[0], nil)
 
 	//Change an opening
 	challenge.Openings[0] = suite.Scalar().Zero()
 	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
-	assert.Error(t, err, "Invalid opening check")
+	require.Error(t, err, "Invalid opening check")
 }
 
 func TestFinalizeChallenge(t *testing.T) {
@@ -264,41 +264,41 @@ func TestFinalizeChallenge(t *testing.T) {
 	var err error
 	for _, server := range servers[1:] {
 		err = CheckUpdateChallenge(suite, context, challenge, server)
-		assert.NoError(t, err, "Error during the round-robin at server %d", server.Index())
+		require.NoError(t, err, "Error during the round-robin at server %d", server.Index())
 	}
 
 	//Normal execution
 	//Let's say that server 0 is the leader and received the message back
 	CheckUpdateChallenge(suite, context, challenge, servers[0])
 	clientChallenge, err := FinalizeChallenge(context, challenge)
-	assert.NoError(t, err, "Error during finalization of the challenge")
+	require.NoError(t, err, "Error during finalization of the challenge")
 
 	//Check cs value
-	assert.True(t, clientChallenge.Cs.Equal(challenge.Cs), "cs values does not match")
+	require.True(t, clientChallenge.Cs.Equal(challenge.Cs), "cs values does not match")
 
 	//Check number of signatures
-	assert.Equal(t, len(clientChallenge.Sigs), len(challenge.Sigs), "Signature count does not match: got %d expected %d", len(clientChallenge.Sigs), len(challenge.Sigs))
+	require.Equal(t, len(clientChallenge.Sigs), len(challenge.Sigs), "Signature count does not match: got %d expected %d", len(clientChallenge.Sigs), len(challenge.Sigs))
 
 	//Empty inputs
 	clientChallenge, err = FinalizeChallenge(nil, challenge)
-	assert.Error(t, err, "Wrong check: Empty context")
-	assert.Zero(t, clientChallenge, "Wrong check: Empty context")
+	require.Error(t, err, "Wrong check: Empty context")
+	require.Zero(t, clientChallenge, "Wrong check: Empty context")
 
 	clientChallenge, err = FinalizeChallenge(context, nil)
-	assert.Error(t, err, "Wrong check: Empty challenge")
-	assert.Zero(t, clientChallenge, "Wrong check: Empty challenge")
+	require.Error(t, err, "Wrong check: Empty challenge")
+	require.Zero(t, clientChallenge, "Wrong check: Empty challenge")
 
 	//Add a signature
 	challenge.Sigs = append(challenge.Sigs, challenge.Sigs[0])
 	clientChallenge, err = FinalizeChallenge(context, challenge)
-	assert.Error(t, err, "Wrong check: Higher signature count")
-	assert.Zero(t, clientChallenge, "Wrong check: Higher signature count")
+	require.Error(t, err, "Wrong check: Higher signature count")
+	require.Zero(t, clientChallenge, "Wrong check: Higher signature count")
 
 	//Remove a signature
 	challenge.Sigs = challenge.Sigs[:len(challenge.Sigs)-2]
 	clientChallenge, err = FinalizeChallenge(context, challenge)
-	assert.Error(t, err, "Wrong check: Lower signature count")
-	assert.Zero(t, clientChallenge, "Wrong check: Lower signature count")
+	require.Error(t, err, "Wrong check: Lower signature count")
+	require.Zero(t, clientChallenge, "Wrong check: Lower signature count")
 }
 
 // TODO port to new implementation
@@ -331,7 +331,7 @@ func TestInitializeServerMessage(t *testing.T) {
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -346,14 +346,14 @@ func TestInitializeServerMessage(t *testing.T) {
 
 	//Empty request
 	servMsg, err = InitializeServerMessage(nil)
-	assert.Error(t, err, "Wrong check: Empty request")
-	assert.Nil(t, servMsg, "Wrong check: Empty request")
+	require.Error(t, err, "Wrong check: Empty request")
+	require.Nil(t, servMsg, "Wrong check: Empty request")
 }
 
 func TestServerProtocol(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(suite, 2, 2)
 	for _, server := range servers {
-		assert.NotNil(t, server.RoundSecret(), "Error in r for server %d", server.Index())
+		require.NotNil(t, server.RoundSecret(), "Error in r for server %d", server.Index())
 	}
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 
@@ -377,7 +377,7 @@ func TestServerProtocol(t *testing.T) {
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -396,49 +396,49 @@ func TestServerProtocol(t *testing.T) {
 
 	//Normal execution for correct client
 	err = ServerProtocol(suite, context, &servMsg, servers[0])
-	assert.NoError(t, err, "Error in Server Protocol\n%s", err)
+	require.NoError(t, err, "Error in Server Protocol\n%s", err)
 
 	err = ServerProtocol(suite, context, &servMsg, servers[1])
-	assert.NoError(t, err, "Error in Server Protocol for server 1\n%s", err)
+	require.NoError(t, err, "Error in Server Protocol for server 1\n%s", err)
 
 	//Check that elements were added to the message
-	assert.Equal(t, 2, len(servMsg.Indexes), "Incorrect number of elements added to the message: %d instead of 2", len(servMsg.Indexes))
+	require.Equal(t, 2, len(servMsg.Indexes), "Incorrect number of elements added to the message: %d instead of 2", len(servMsg.Indexes))
 
 	//Empty request
 	emptyMsg := ServerMessage{Request: AuthenticationMessage{}, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	err = ServerProtocol(suite, context, &emptyMsg, servers[0])
-	assert.Error(t, err, "Wrong check: Empty request")
+	require.Error(t, err, "Wrong check: Empty request")
 
 	//Different lengths
 	wrongMsg := ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Indexes = wrongMsg.Indexes[:len(wrongMsg.Indexes)-2]
 	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
-	assert.Error(t, err, "Wrong check: different field length of indexes")
+	require.Error(t, err, "Wrong check: different field length of indexes")
 
 	wrongMsg = ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Tags = wrongMsg.Tags[:len(wrongMsg.Tags)-2]
 	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
-	assert.Error(t, err, "Wrong check: different field length of tags")
+	require.Error(t, err, "Wrong check: different field length of tags")
 
 	wrongMsg = ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Proofs = wrongMsg.Proofs[:len(wrongMsg.Proofs)-2]
 	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
-	assert.Error(t, err, "Wrong check: different field length of proofs")
+	require.Error(t, err, "Wrong check: different field length of proofs")
 
 	wrongMsg = ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Sigs = wrongMsg.Sigs[:len(wrongMsg.Sigs)-2]
 	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
-	assert.Error(t, err, "Wrong check: different field length of signatures")
+	require.Error(t, err, "Wrong check: different field length of signatures")
 
 	//Modify the client proof
 	wrongClient := ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongClient.Request.P0 = ClientProof{}
 	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
-	assert.Error(t, err, "Wrong check: invalid client proof")
+	require.Error(t, err, "Wrong check: invalid client proof")
 
 	//Too many calls
 	err = ServerProtocol(suite, context, &servMsg, servers[0])
-	assert.Error(t, err, "Wrong check: Too many calls")
+	require.Error(t, err, "Wrong check: Too many calls")
 
 	//The client request is left untouched
 	hasher2 := sha512.New()
@@ -448,17 +448,17 @@ func TestServerProtocol(t *testing.T) {
 	hash2 := hasher2.Sum(nil)
 
 	for i := range hash {
-		assert.Equal(t, hash[i], hash2[i], "Client's request modified")
+		require.Equal(t, hash[i], hash2[i], "Client's request modified")
 	}
 
 	//Normal execution for misbehaving client
 	misbehavingMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 	misbehavingMsg.Request.SCommits[2] = suite.Point().Null() //change the commitment for server 0
 	err = ServerProtocol(suite, context, &misbehavingMsg, servers[0])
-	assert.NoError(t, err, "Error in Server Protocol for misbehaving client\n%s", err)
+	require.NoError(t, err, "Error in Server Protocol for misbehaving client\n%s", err)
 
 	err = ServerProtocol(suite, context, &misbehavingMsg, servers[1])
-	assert.NoError(t, err, "Error in Server Protocol for misbehaving client and server 1\n%s", err)
+	require.NoError(t, err, "Error in Server Protocol for misbehaving client and server 1\n%s", err)
 }
 
 func TestGenerateServerProof(t *testing.T) {
@@ -485,7 +485,7 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -511,34 +511,34 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Normal execution
 	serverProof, err := generateServerProof(suite, context, secret, T, &servMsg, servers[0])
-	assert.NoError(t, err, "Cannot generate normal server proof")
-	assert.NotNil(t, serverProof, "Cannot generate normal server proof")
+	require.NoError(t, err, "Cannot generate normal server proof")
+	require.NotNil(t, serverProof, "Cannot generate normal server proof")
 
 	//Correct format
 	if serverProof.T1 == nil || serverProof.T2 == nil || serverProof.T3 == nil {
 		t.Error("Incorrect tags in proof")
 	}
-	assert.NotNil(t, serverProof.C, "Incorrect challenge")
+	require.NotNil(t, serverProof.C, "Incorrect challenge")
 
-	assert.NotNil(t, serverProof.R1, "Incorrect responses")
-	assert.NotNil(t, serverProof.R2, "Incorrect responses")
+	require.NotNil(t, serverProof.R1, "Incorrect responses")
+	require.NotNil(t, serverProof.R2, "Incorrect responses")
 
 	//Invalid inputs
 	serverProof, err = generateServerProof(suite, nil, secret, T, &servMsg, servers[0])
-	assert.Error(t, err, "Wrong check: Invalid context")
-	assert.Nil(t, serverProof, "Wrong check: Invalid context")
+	require.Error(t, err, "Wrong check: Invalid context")
+	require.Nil(t, serverProof, "Wrong check: Invalid context")
 
 	serverProof, err = generateServerProof(suite, context, nil, T, &servMsg, servers[0])
-	assert.Error(t, err, "Wrong check: Invalid secret")
-	assert.Nil(t, serverProof, "Wrong check: Invalid secret")
+	require.Error(t, err, "Wrong check: Invalid secret")
+	require.Nil(t, serverProof, "Wrong check: Invalid secret")
 
 	serverProof, err = generateServerProof(suite, context, secret, nil, &servMsg, servers[0])
-	assert.Error(t, err, "Wrong check: Invalid tag")
-	assert.Nil(t, serverProof, "Wrong check: Invalid tag")
+	require.Error(t, err, "Wrong check: Invalid tag")
+	require.Nil(t, serverProof, "Wrong check: Invalid tag")
 
 	serverProof, err = generateServerProof(suite, context, secret, T, nil, servers[0])
-	assert.Error(t, err, "Wrong check: Invalid Server Message")
-	assert.Nil(t, serverProof, "Wrong check: Invalid Server Message")
+	require.Error(t, err, "Wrong check: Invalid Server Message")
+	require.Nil(t, serverProof, "Wrong check: Invalid Server Message")
 }
 
 func TestVerifyServerProof(t *testing.T) {
@@ -564,7 +564,7 @@ func TestVerifyServerProof(t *testing.T) {
 
 	//Assemble the client message
 	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -574,7 +574,7 @@ func TestVerifyServerProof(t *testing.T) {
 	servMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 
 	err = ServerProtocol(suite, context, &servMsg, servers[0])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// TODO, I replaced the commented code below by the call above (which is perfectly sound) but this triggers new questions,
 	// TODO => serverprotocol => verifyserverproof, reorganize tests or rewrite everything to follow testing guidelines or make sure everything is in the right place
 	////Prepare the proof
@@ -611,11 +611,11 @@ func TestVerifyServerProof(t *testing.T) {
 	//}
 
 	err = ServerProtocol(suite, context, &servMsg, servers[1])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	//Verify any server proof
 	check := verifyServerProof(suite, context, 1, &servMsg)
-	assert.True(t, check, "Cannot verify valid normal server proof")
+	require.True(t, check, "Cannot verify valid normal server proof")
 
 	saveProof := ServerProof{C: servMsg.Proofs[1].C,
 		T1: servMsg.Proofs[1].T1,
@@ -628,48 +628,48 @@ func TestVerifyServerProof(t *testing.T) {
 	//Check inputs
 	servMsg.Proofs[1].C = nil
 	check = verifyServerProof(suite, context, 1, &servMsg)
-	assert.False(t, check, "Error in challenge verification")
+	require.False(t, check, "Error in challenge verification")
 	servMsg.Proofs[1].C = saveProof.C
 
 	servMsg.Proofs[1].T1 = nil
 	check = verifyServerProof(suite, context, 1, &servMsg)
-	assert.False(t, check, "Error in t1 verification")
+	require.False(t, check, "Error in t1 verification")
 	servMsg.Proofs[1].T1 = saveProof.T1
 
 	servMsg.Proofs[1].T2 = nil
 	check = verifyServerProof(suite, context, 1, &servMsg)
-	assert.False(t, check, "Error in t2 verification")
+	require.False(t, check, "Error in t2 verification")
 	servMsg.Proofs[1].T2 = saveProof.T2
 
 	servMsg.Proofs[1].T3 = nil
 	check = verifyServerProof(suite, context, 1, &servMsg)
-	assert.False(t, check, "Error in t3 verification")
+	require.False(t, check, "Error in t3 verification")
 	servMsg.Proofs[1].T3 = saveProof.T3
 
 	servMsg.Proofs[1].R1 = nil
 	check = verifyServerProof(suite, context, 1, &servMsg)
-	assert.False(t, check, "Error in r1 verification")
+	require.False(t, check, "Error in r1 verification")
 	servMsg.Proofs[1].R1 = saveProof.R1
 
 	servMsg.Proofs[1].R2 = nil
 	check = verifyServerProof(suite, context, 1, &servMsg)
-	assert.False(t, check, "Error in r2 verification")
+	require.False(t, check, "Error in r2 verification")
 	servMsg.Proofs[1].R2 = saveProof.R2
 
 	//Invalid context
 	check = verifyServerProof(suite, nil, 1, &servMsg)
-	assert.False(t, check, "Wrong check: Invalid context")
+	require.False(t, check, "Wrong check: Invalid context")
 
 	//nil message
 	check = verifyServerProof(suite, context, 1, nil)
-	assert.False(t, check, "Wrong check: Invalid message")
+	require.False(t, check, "Wrong check: Invalid message")
 
 	//Invalid value of i
 	check = verifyServerProof(suite, context, 2, &servMsg)
-	assert.False(t, check, "Wrong check: Invalid i value")
+	require.False(t, check, "Wrong check: Invalid i value")
 
 	check = verifyServerProof(suite, context, -2, &servMsg)
-	assert.False(t, check, "Wrong check: Negative i value")
+	require.False(t, check, "Wrong check: Negative i value")
 }
 
 func TestGenerateMisbehavingProof(t *testing.T) {
@@ -699,7 +699,7 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -712,21 +712,21 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	}
 
 	//Correct format
-	assert.NotNil(t, serverProof.T1, "t1 nil for misbehaving proof")
-	assert.NotNil(t, serverProof.T2, "t2 nil for misbehaving proof")
-	assert.NotNil(t, serverProof.T3, "t3 nil for misbehaving proof")
-	assert.NotNil(t, serverProof.C, "c nil for misbehaving proof")
-	assert.NotNil(t, serverProof.R1, "r1 nil for misbehaving proof")
-	assert.Nil(t, serverProof.R2, "r2 not nil for misbehaving proof")
+	require.NotNil(t, serverProof.T1, "t1 nil for misbehaving proof")
+	require.NotNil(t, serverProof.T2, "t2 nil for misbehaving proof")
+	require.NotNil(t, serverProof.T3, "t3 nil for misbehaving proof")
+	require.NotNil(t, serverProof.C, "c nil for misbehaving proof")
+	require.NotNil(t, serverProof.R1, "r1 nil for misbehaving proof")
+	require.Nil(t, serverProof.R2, "r2 not nil for misbehaving proof")
 
 	//Invalid inputs
 	serverProof, err = generateMisbehavingProof(suite, nil, clientMessage.SCommits[0], servers[0])
-	assert.Error(t, err, "Wrong check: Invalid context")
-	assert.Nil(t, serverProof, "Wrong check: Invalid context")
+	require.Error(t, err, "Wrong check: Invalid context")
+	require.Nil(t, serverProof, "Wrong check: Invalid context")
 
 	serverProof, err = generateMisbehavingProof(suite, context, nil, servers[0])
-	assert.Error(t, err, "Wrong check: Invalid Z")
-	assert.Nil(t, serverProof, "Wrong check: Invalid Z")
+	require.Error(t, err, "Wrong check: Invalid Z")
+	require.Nil(t, serverProof, "Wrong check: Invalid Z")
 }
 
 func TestVerifyMisbehavingProof(t *testing.T) {
@@ -756,7 +756,7 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 
 	//Assemble the client message
 	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -766,23 +766,23 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	proof, _ := generateMisbehavingProof(suite, context, clientMessage.SCommits[0], servers[0])
 
 	check := verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.True(t, check, "Cannot verify valid misbehaving proof")
+	require.True(t, check, "Cannot verify valid misbehaving proof")
 
 	//Invalid inputs
 	check = verifyMisbehavingProof(suite, nil, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Wrong check: Invalid context")
+	require.False(t, check, "Wrong check: Invalid context")
 
 	check = verifyMisbehavingProof(suite, context, 1, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Wrong check: Invalid index")
+	require.False(t, check, "Wrong check: Invalid index")
 
 	check = verifyMisbehavingProof(suite, context, -1, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Wrong check: Negative index")
+	require.False(t, check, "Wrong check: Negative index")
 
 	check = verifyMisbehavingProof(suite, context, 0, nil, clientMessage.SCommits[0])
-	assert.False(t, check, "Wrong check: Missing proof")
+	require.False(t, check, "Wrong check: Missing proof")
 
 	check = verifyMisbehavingProof(suite, context, 0, proof, nil)
-	assert.False(t, check, "Wrong check: Invalid Z")
+	require.False(t, check, "Wrong check: Invalid Z")
 
 	//Modify proof values
 	proof, _ = generateMisbehavingProof(suite, context, clientMessage.SCommits[0], servers[0])
@@ -798,32 +798,32 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	//Check inputs
 	proof.C = nil
 	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Error in challenge verification")
+	require.False(t, check, "Error in challenge verification")
 	proof.C = saveProof.C
 
 	proof.T1 = nil
 	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Error in t1 verification")
+	require.False(t, check, "Error in t1 verification")
 	proof.T1 = saveProof.T1
 
 	proof.T2 = nil
 	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Error in t2 verification")
+	require.False(t, check, "Error in t2 verification")
 	proof.T2 = saveProof.T2
 
 	proof.T3 = nil
 	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Error in t3 verification")
+	require.False(t, check, "Error in t3 verification")
 	proof.T3 = saveProof.T3
 
 	proof.R1 = nil
 	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Error in r1 verification")
+	require.False(t, check, "Error in r1 verification")
 	proof.R1 = saveProof.R1
 
 	proof.R2 = suite.Scalar().One()
 	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
-	assert.False(t, check, "Error in r2 verification")
+	require.False(t, check, "Error in r2 verification")
 	proof.R2 = saveProof.R2
 	// TODO: Complete the tests
 }
@@ -832,10 +832,10 @@ func TestGenerateNewRoundSecret(t *testing.T) {
 	_, servers, _, _ := generateTestContext(suite, 1, 1)
 	R, server := GenerateNewRoundSecret(suite, servers[0])
 	servers[0] = server
-	assert.NotNil(t, R, "Cannot generate new round secret")
-	assert.False(t, R.Equal(suite.Point().Mul(suite.Scalar().One(), nil)), "R is the generator")
-	assert.NotNil(t, servers[0].RoundSecret(), "r was not saved to the server")
-	assert.True(t, R.Equal(suite.Point().Mul(servers[0].RoundSecret(), nil)), "Mismatch between r and R")
+	require.NotNil(t, R, "Cannot generate new round secret")
+	require.False(t, R.Equal(suite.Point().Mul(suite.Scalar().One(), nil)), "R is the generator")
+	require.NotNil(t, servers[0].RoundSecret(), "r was not saved to the server")
+	require.True(t, R.Equal(suite.Point().Mul(servers[0].RoundSecret(), nil)), "Mismatch between r and R")
 }
 
 func TestToBytes_ServerProof(t *testing.T) {
@@ -866,7 +866,7 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	//Assemble the client message
 	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "failed to generate client proof, this is not expected")
+	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
 		C:                        *context,
 		initialTagAndCommitments: *tagAndCommitments,
@@ -879,12 +879,12 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	//Normal execution for correct proof
 	data, err := servMsg.Proofs[0].ToBytes()
-	assert.NoError(t, err, "Cannot convert normal proof")
-	assert.NotNil(t, data, "Cannot convert normal proof")
+	require.NoError(t, err, "Cannot convert normal proof")
+	require.NotNil(t, data, "Cannot convert normal proof")
 
 	//Normal execution for correct misbehaving proof
 	proof, _ := generateMisbehavingProof(suite, context, S[0], servers[0])
 	data, err = proof.ToBytes()
-	assert.NoError(t, err, "Cannot convert misbehaving proof")
-	assert.NotNil(t, data, "Cannot convert misbehaving proof")
+	require.NoError(t, err, "Cannot convert misbehaving proof")
+	require.NotNil(t, data, "Cannot convert misbehaving proof")
 }

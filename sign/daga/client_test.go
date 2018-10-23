@@ -2,7 +2,7 @@ package daga
 
 import (
 	"github.com/dedis/kyber"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 )
@@ -15,16 +15,16 @@ func TestNewClient(t *testing.T) {
 	i := rand.Int()
 	s := suite.Scalar().Pick(suite.RandomStream())
 	client, err := NewClient(suite, i, s)
-	assert.NoError(t, err, "Cannot initialize a new client with a given private key")
-	assert.Equal(t, i, client.Index(), "Cannot initialize a new client with a given private key, wrong index")
-	assert.True(t, client.PrivateKey().Equal(s), "Cannot initialize a new client with a given private key, wrong key")
+	require.NoError(t, err, "Cannot initialize a new client with a given private key")
+	require.Equal(t, i, client.Index(), "Cannot initialize a new client with a given private key, wrong index")
+	require.True(t, client.PrivateKey().Equal(s), "Cannot initialize a new client with a given private key, wrong key")
 
 	client, err = NewClient(suite, i, nil)
-	assert.NoError(t, err, "Cannot create a new client without a private key")
+	require.NoError(t, err, "Cannot create a new client without a private key")
 
 	//Invalid input
 	client, err = NewClient(suite, -2, s)
-	assert.Error(t, err, "Wrong check: Invalid index")
+	require.Error(t, err, "Wrong check: Invalid index")
 }
 
 func TestNewInitialTagAndCommitments(t *testing.T) {
@@ -33,13 +33,13 @@ func TestNewInitialTagAndCommitments(t *testing.T) {
 	// normal execution
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	T0, S := tagAndCommitments.T0, tagAndCommitments.SCommits
-	assert.NotNil(t, T0, "T0 nil")
-	assert.NotNil(t, S, "sCommits nil")
-	assert.NotNil(t, s, "s nil")
-	assert.False(t, T0.Equal(suite.Point().Null()), "T0 is the null point")
-	assert.Equal(t, len(S), len(servers)+2, "S has the wrong length: %d instead of %d", len(S), len(servers)+2)
+	require.NotNil(t, T0, "T0 nil")
+	require.NotNil(t, S, "sCommits nil")
+	require.NotNil(t, s, "s nil")
+	require.False(t, T0.Equal(suite.Point().Null()), "T0 is the null point")
+	require.Equal(t, len(S), len(servers)+2, "S has the wrong length: %d instead of %d", len(S), len(servers)+2)
 	for i, temp := range S {
-		assert.False(t, temp.Equal(suite.Point().Null()), "Null point in sCommits at position %d", i)
+		require.False(t, temp.Equal(suite.Point().Null()), "Null point in sCommits at position %d", i)
 	}
 }
 
@@ -76,12 +76,12 @@ func TestNewClientProof(t *testing.T) {
 	// normal execution, create client proof
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
 	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	assert.NoError(t, err, "newClientProof returned an error on valid inputs")
+	require.NoError(t, err, "newClientProof returned an error on valid inputs")
 	commits, responses, subChallenges := proof.T, proof.R, proof.C
 	// FIXME not sure whether these tests are pertinent or well written... they are testing the proof framework...not my code
-	assert.Equal(t, len(commits), 3*len(clients))
-	assert.Equal(t, len(subChallenges), len(clients))
-	assert.Equal(t, len(responses), 2*len(clients))
+	require.Equal(t, len(commits), 3*len(clients))
+	require.Equal(t, len(subChallenges), len(clients))
+	require.Equal(t, len(responses), 2*len(clients))
 
 	//Incorrect challenges
 	var fake kyber.Scalar
@@ -95,8 +95,8 @@ func TestNewClientProof(t *testing.T) {
 	sendCommitsReceiveChallenge = newDummyServerChannels(invalidChallenge)
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	commits, responses, subChallenges = proof.T, proof.R, proof.C
-	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
-	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
+	require.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
+	require.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 
 	//Signature modification
 	newsig := append(validChallenge.Sigs[0].Sig, []byte("A")...)
@@ -109,8 +109,8 @@ func TestNewClientProof(t *testing.T) {
 
 	proof, err = newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	commits, responses, subChallenges = proof.T, proof.R, proof.C
-	assert.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
-	assert.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
+	require.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
+	require.Equal(t, ClientProof{}, proof, "proof not \"zero\" on error")
 }
 
 func TestVerifyClientProof(t *testing.T) {
@@ -134,31 +134,31 @@ func TestVerifyClientProof(t *testing.T) {
 	}
 
 	//Normal execution
-	assert.NoError(t, validateClientMessage(suite, clientMsg), "Cannot validate valid client message")
-	assert.NoError(t, verifyAuthenticationMessage(suite, clientMsg), "Cannot verify valid client proof")
+	require.NoError(t, validateClientMessage(suite, clientMsg), "Cannot validate valid client message")
+	require.NoError(t, verifyAuthenticationMessage(suite, clientMsg), "Cannot verify valid client proof")
 
 	//Modify the value of some commitments
 	scratchMsg := clientMsg
 	i := rand.Intn(len(clients))
 	ttemp := scratchMsg.P0.T[3*i].Clone()
 	scratchMsg.P0.T[3*i] = suite.Point().Null()
-	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i)
+	require.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i)
 
 	scratchMsg.P0.T[3*i] = ttemp.Clone()
 	ttemp = scratchMsg.P0.T[3*i+1].Clone()
 	scratchMsg.P0.T[3*i+1] = suite.Point().Null()
-	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i+1)
+	require.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i+1)
 
 	scratchMsg.P0.T[3*i+1] = ttemp.Clone()
 	ttemp = scratchMsg.P0.T[3*i+2].Clone()
 	scratchMsg.P0.T[3*i+2] = suite.Point().Null()
-	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i+2)
+	require.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of t at index %d", 3*i+2)
 
 	scratchMsg.P0.T[3*i+2] = ttemp.Clone()
 
 	//tamper the challenge
 	scratchMsg.P0.Cs = suite.Scalar().Zero()
-	assert.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of the challenge")
+	require.Error(t, verifyAuthenticationMessage(suite, scratchMsg), "Incorrect check of the challenge")
 }
 
 func TestGetFinalLinkageTag(t *testing.T) {
@@ -185,28 +185,28 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Run ServerProtocol on each server
 	for i := range servers {
 		err := ServerProtocol(suite, context, &servMsg, servers[i])
-		assert.NoError(t, err, "server %v returned an error while processing valid auth. request", i)
+		require.NoError(t, err, "server %v returned an error while processing valid auth. request", i)
 	}
 
 	//Normal execution for a normal client
 	Tf, err := GetFinalLinkageTag(suite, context, servMsg)
-	assert.NoError(t, err, "Cannot extract final linkage tag")
-	assert.NotNil(t, Tf, "Cannot extract final linkage tag")
+	require.NoError(t, err, "Cannot extract final linkage tag")
+	require.NotNil(t, Tf, "Cannot extract final linkage tag")
 
 	//Empty inputs
 	Tf, err = GetFinalLinkageTag(suite, nil, servMsg)
-	assert.Error(t, err, "wrong check: Empty context")
-	assert.Nil(t, Tf, "wrong check: Empty context")
+	require.Error(t, err, "wrong check: Empty context")
+	require.Nil(t, Tf, "wrong check: Empty context")
 
 	Tf, err = GetFinalLinkageTag(suite, context, ServerMessage{})
-	assert.Error(t, err, "wrong check: Empty context")
-	assert.Nil(t, Tf, "wrong check: Empty context")
+	require.Error(t, err, "wrong check: Empty context")
+	require.Nil(t, Tf, "wrong check: Empty context")
 
 	//Change a signature
 	servMsg.Sigs[0].Sig = append(servMsg.Sigs[0].Sig[1:], servMsg.Sigs[0].Sig[0])
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
-	assert.Error(t, err, "Invalid signature accepted")
-	assert.Nil(t, Tf, "Invalid signature accepted")
+	require.Error(t, err, "Invalid signature accepted")
+	require.Nil(t, Tf, "Invalid signature accepted")
 
 	//Revert the change
 	servMsg.Sigs[0].Sig = append([]byte{0x0}, servMsg.Sigs[0].Sig...)
@@ -242,11 +242,11 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Run ServerProtocol on each server
 	for i := range servers {
 		err := ServerProtocol(suite, context, &servMsg, servers[i])
-		assert.Error(t, err, "server %v returned no error while processing invalid auth. request", i)
+		require.Error(t, err, "server %v returned no error while processing invalid auth. request", i)
 	}
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
-	assert.Error(t, err, "can extract final linkage tag for an invalid request, should have returned an error")
-	assert.Nil(t, Tf, "Tf not nil on error")
+	require.Error(t, err, "can extract final linkage tag for an invalid request, should have returned an error")
+	require.Nil(t, Tf, "Tf not nil on error")
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// 1 server, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
 	//Assemble the client message
@@ -274,11 +274,11 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Run ServerProtocol on each server
 	for i := range servers {
 		err := ServerProtocol(suite, context, &servMsg, servers[i])
-		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
+		require.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
-	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
-	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
+	require.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
+	require.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
@@ -308,11 +308,11 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Run ServerProtocol on each server
 	for i := range servers {
 		err := ServerProtocol(suite, context, &servMsg, servers[i])
-		assert.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
+		require.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
-	assert.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
-	assert.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
+	require.NoError(t, err, "cannot extract final linkage tag for a misbehaving client")
+	require.True(t, Tf.Equal(suite.Point().Null()), "Tf not Null for a misbehaving client")
 }
 
 // TODO merge or rearrange with some tests above as lots of things are redundant...or should belong to same test
@@ -340,47 +340,47 @@ func TestValidateClientMessage(t *testing.T) {
 
 	//Normal execution
 	// TODO already tested somewhere above...
-	assert.NoError(t, verifyAuthenticationMessage(suite, clientMessage), "Cannot verify valid client proof")
+	require.NoError(t, verifyAuthenticationMessage(suite, clientMessage), "Cannot verify valid client proof")
 
 	//Modifying the length of various elements
 	ScratchMsg := clientMessage
 	ScratchMsg.P0.C = append(ScratchMsg.P0.C, suite.Scalar().Pick(suite.RandomStream()))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg.P0.C = ScratchMsg.P0.C[:len(clients)-1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg = clientMessage
 	ScratchMsg.P0.R = append(ScratchMsg.P0.R, suite.Scalar().Pick(suite.RandomStream()))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg.P0.R = ScratchMsg.P0.R[:2*len(clients)-1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg = clientMessage
 	ScratchMsg.P0.T = append(ScratchMsg.P0.T, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg.P0.T = ScratchMsg.P0.T[:3*len(clients)-1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg = clientMessage
 	ScratchMsg.SCommits = append(ScratchMsg.SCommits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
 
 	ScratchMsg.SCommits = ScratchMsg.SCommits[:len(servers)+1]
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
 
 	//Modify the value of the generator in S[1]
 	ScratchMsg = clientMessage
 	ScratchMsg.SCommits[1] = suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil)
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect check for the generator in S[1]")
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect check for the generator in S[1]")
 
 	ScratchMsg.SCommits[1] = suite.Point().Mul(suite.Scalar().One(), nil)
 
 	//Remove T0
 	ScratchMsg.T0 = nil
-	assert.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Accepts a empty T0")
+	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Accepts a empty T0")
 }
 
 func TestToBytes_ClientMessage(t *testing.T) {
@@ -403,8 +403,8 @@ func TestToBytes_ClientMessage(t *testing.T) {
 
 	//Normal execution
 	data, err := clientMessage.ToBytes()
-	assert.NoError(t, err, "Cannot convert valid Client Message to bytes")
-	assert.NotNil(t, data, "Data is empty for a correct Client Message")
+	require.NoError(t, err, "Cannot convert valid Client Message to bytes")
+	require.NotNil(t, data, "Data is empty for a correct Client Message")
 }
 
 func TestToBytes_ClientProof(t *testing.T) {
@@ -422,6 +422,6 @@ func TestToBytes_ClientProof(t *testing.T) {
 
 	//Normal execution
 	data, err := proof.ToBytes()
-	assert.NoError(t, err, "Cannot convert valid proof to bytes")
-	assert.NotNil(t, data, "Data is empty for a correct proof")
+	require.NoError(t, err, "Cannot convert valid proof to bytes")
+	require.NotNil(t, data, "Data is empty for a correct proof")
 }

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TODO use assert
+// TODO use require
 func TestSchnorrSign(t *testing.T) {
 	priv := suite.Scalar().Pick(suite.RandomStream())
 
