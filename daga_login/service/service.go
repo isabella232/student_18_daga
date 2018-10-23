@@ -12,10 +12,8 @@ import (
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/daga_login"
-	"github.com/dedis/student_18_daga/daga_login/protocol"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"sync"
-	"time"
 )
 
 // Used for tests
@@ -25,7 +23,7 @@ func init() {
 	var err error
 	templateID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
 	log.ErrFatal(err)
-	network.RegisterMessage(&storage{})
+	network.RegisterMessages(storage{}, daga_login.NetContext{})
 }
 
 // Service is our template-service // TODO
@@ -45,56 +43,63 @@ var storageID = []byte("main")
 
 // storage is used to save our data.
 type storage struct {
-	Context daga_login.NetContextEd25519
+	Context daga_login.NetContext
 	Count int
 	sync.Mutex
 }
 
-// Clock starts a template-protocol and returns the run-time.
-func (s *Service) Clock(req *daga_login.Clock) (*daga_login.ClockReply, error) {
-	s.storage.Lock()
-	s.storage.Count++
-	s.storage.Unlock()
-	s.save()
-	tree := req.Roster.GenerateNaryTreeWithRoot(2, s.ServerIdentity())
-	if tree == nil {
-		return nil, errors.New("couldn't create tree")
-	}
-	pi, err := s.CreateProtocol(protocol.Name, tree)
-	if err != nil {
-		return nil, err
-	}
-	start := time.Now()
-	pi.Start()
-	resp := &daga_login.ClockReply{  // FIXME not called when #nodes = 1 ..(why ?)
-		Children: <-pi.(*protocol.TemplateProtocol).ChildCount,
-	}
-	resp.Time = time.Now().Sub(start).Seconds()
-	return resp, nil
-}
-
-// Count returns the number of instantiations of the protocol.
-func (s *Service) Count(req *daga_login.Count) (*daga_login.CountReply, error) {
-	s.storage.Lock()
-	defer s.storage.Unlock()
-	return &daga_login.CountReply{Count: s.storage.Count}, nil
-}
+//// Clock starts a template-protocol and returns the run-time.
+//func (s *Service) Clock(req *daga_login.Clock) (*daga_login.ClockReply, error) {
+//	s.storage.Lock()
+//	s.storage.Count++
+//	s.storage.Unlock()
+//	s.save()
+//	tree := req.Roster.GenerateNaryTreeWithRoot(2, s.ServerIdentity())
+//	if tree == nil {
+//		return nil, errors.New("couldn't create tree")
+//	}
+//	pi, err := s.CreateProtocol(protocol.Name, tree)
+//	if err != nil {
+//		return nil, err
+//	}
+//	start := time.Now()
+//	pi.Start()
+//	resp := &daga_login.ClockReply{  // FIXME not called when #nodes = 1 ..(why ?)
+//		Children: <-pi.(*protocol.TemplateProtocol).ChildCount,
+//	}
+//	resp.Time = time.Now().Sub(start).Seconds()
+//	return resp, nil
+//}
 
 // Login starts the server's protocol (daga 4.3.6)
 func (s *Service) Login(req *daga.AuthenticationMessage) (*daga.ServerMessage, error) {
-	context, err := s.storage.Context.NetDecode(daga.NewSuiteEC())
+	context, err := s.storage.Context.NetDecode()
 	if err != nil {
 		return nil, err
 	}
-	// TODO ring "overlay"... or don't use protocols or see if enough info for each server to determine its position in ring or etc..
+	// TODO ring
 	// TODO will need a mapping from public keys to serveridentity/address
 	return nil, fmt.Errorf("unimplemented, %v", context)
 }
 
 // PKClient starts the challenge generation protocol
 func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKclientChallenge, error) {
-	// YEAH YEAH finally I arrive here !
-	return nil, fmt.Errorf("not implemented, but here is what I received: %v", *req)
+	dummyChallenge := daga.Challenge{
+		Cs:daga.NewSuiteEC().Scalar().SetInt64(42),
+	}
+
+	// QUESTION current conode kind of act as a RandHerd proxy => maybe bad idea.. If we use randherd maybe client/prover can request
+	// new randomness and since it is public, the servers can verify/accept the randomness / challenge only if it is timestamped after the recception of the commitments => prover cannot cheat
+	//randClient := randhound.NewClient()
+	//reply, err := randClient.Random(s.Context, c.Int("index"))
+	//if err != nil {
+	//	return err
+	//}
+	// and keep in mind of the daga traditional way to generate challenge
+
+	log.Lvl1("dfdsfsdfssdf")
+	return (*daga_login.PKclientChallenge)(&dummyChallenge), nil
+	//return nil, fmt.Errorf("not implemented")//, but here is what I received: %v", *req)
 }
 
 
@@ -133,19 +138,16 @@ func (s *Service) tryLoad() error {
 		// first time or nothing, load from setup files FIXME temp hack
 		context, err := daga_login.ReadContext("./context.bin")
 		if err != nil {
-			return err
+			return errors.New("tryLoad: first run, failed to read context from config file: " + err.Error())
 		}
-		netContext, err := daga_login.NetEncodeContext(context)
-		if err != nil {
-			return err
-		}
+		netContext := daga_login.NetEncodeContext(context)
 		s.storage.Context = *netContext
 		return nil
 	} else {
 		var ok bool
 		s.storage, ok = msg.(*storage)
 		if !ok {
-			return errors.New("Data of wrong type")
+			return errors.New("tryLoad: data of wrong type")
 		}
 		return nil
 	}
@@ -158,7 +160,7 @@ func newService(c *onet.Context) (onet.Service, error) {
 	s := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
 	}
-	if err := s.RegisterHandlers(s.Clock, s.Count, /*s.Login,*/ s.PKClient); err != nil {
+	if err := s.RegisterHandlers(s.Login, s.PKClient); err != nil {
 		return nil, errors.New("Couldn't register messages: " + err.Error())
 	}
 	if err := s.tryLoad(); err != nil {

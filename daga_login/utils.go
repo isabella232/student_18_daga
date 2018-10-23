@@ -1,27 +1,23 @@
 package daga_login
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
+	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"io/ioutil"
 )
 
 func ReadContext(path string) (*daga.AuthenticationContext, error) {
-	if data, err := ioutil.ReadFile(path); err != nil {
+	if bytes, err := ioutil.ReadFile(path); err != nil {
 		return nil, errors.New("readContext:" + err.Error())
 	} else {
-		var netContext NetContextEd25519
-		var buffer bytes.Buffer
-		buffer.Write(data)
-		if err = gob.NewDecoder(&buffer).Decode(&netContext); err != nil {
+		if _, msg, err := network.Unmarshal(bytes, suite); err != nil {
 			return nil, errors.New("readContext:" + err.Error())
 		} else {
-			if context, err := netContext.NetDecode(daga.NewSuiteEC()); err != nil {
-				return nil, errors.New("readContext:" + err.Error())
+			if netContext, ok := msg.(*NetContext); !ok {
+				return nil, errors.New("readContext: type assertion error")
 			} else {
-				return context, nil
+				return netContext.NetDecode()
 			}
 		}
 	}

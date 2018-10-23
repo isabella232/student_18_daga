@@ -24,6 +24,7 @@ import (
 	// Import your service:
 	_ "github.com/dedis/cothority/status/service"
 	_ "github.com/dedis/student_18_daga/daga_login/service"
+	//_ "github.com/dedis/pulsar/randhound/service"
 	// Here you can import any other needed service for your conode.
 	// For example, if your service needs cosi available in the server
 	// as well, uncomment this:
