@@ -93,7 +93,7 @@ func TestToBytes(t *testing.T) {
 	c := rand.Intn(10) + 1
 	s := rand.Intn(10) + 1
 	_, _, context, _ := generateTestContext(suite, c, s)
-	data, err := context.ToBytes()
+	data, err := authenticationContextToBytes(context)
 	if err != nil || data == nil || len(data) == 0 {
 		t.Error("Cannot convert valid context to bytes")
 	}

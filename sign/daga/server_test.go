@@ -34,10 +34,10 @@ func TestGetPublicKey_Server(t *testing.T) {
 }
 
 func TestGenerateCommitment(t *testing.T) {
-	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	_, servers, _, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	//Normal execution
-	commit, opening, err := GenerateCommitment(suite, context, servers[0])
+	commit, opening, err := NewChallengeCommitment(suite, servers[0])
 	require.NoError(t, err, "Cannot generate a commitment")
 	require.True(t, commit.Commit.Equal(suite.Point().Mul(opening, nil)), "Cannot open the commitment")
 
@@ -52,9 +52,9 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	for _, server := range servers {
-		commit, _, _ := GenerateCommitment(suite, context, server)
+		commit, _, _ := NewChallengeCommitment(suite, server)
 		commits = append(commits, *commit)
 	}
 
@@ -84,10 +84,10 @@ func TestcheckOpenings(t *testing.T) {
 	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -104,9 +104,9 @@ func TestcheckOpenings(t *testing.T) {
 
 	//Empty inputs
 	cs, err = checkOpenings(suite, nil, commits, openings)
-	require.Error(t, err, "Wrong check: Empty context")
+	require.Error(t, err, "Wrong check: Empty *context")
 
-	require.Nil(t, cs, "cs not nil on empty context")
+	require.Nil(t, cs, "cs not nil on empty *context")
 
 	cs, err = checkOpenings(suite, context, nil, openings)
 	require.Error(t, err, "Wrong check: Empty commits")
@@ -140,10 +140,10 @@ func TestInitializeChallenge(t *testing.T) {
 	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -183,10 +183,10 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+2)
 
 	//Generate commitments
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -250,10 +250,10 @@ func TestFinalizeChallenge(t *testing.T) {
 	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+2)
 
 	//Generate commitments
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -281,8 +281,8 @@ func TestFinalizeChallenge(t *testing.T) {
 
 	//Empty inputs
 	clientChallenge, err = FinalizeChallenge(nil, challenge)
-	require.Error(t, err, "Wrong check: Empty context")
-	require.Zero(t, clientChallenge, "Wrong check: Empty context")
+	require.Error(t, err, "Wrong check: Empty *context")
+	require.Zero(t, clientChallenge, "Wrong check: Empty *context")
 
 	clientChallenge, err = FinalizeChallenge(context, nil)
 	require.Error(t, err, "Wrong check: Empty challenge")
@@ -310,13 +310,14 @@ func TestInitializeServerMessage(t *testing.T) {
 			t.Errorf("Error in r for server %d", server.Index())
 		}
 	}
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -330,10 +331,10 @@ func TestInitializeServerMessage(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
 	}
@@ -355,13 +356,14 @@ func TestServerProtocol(t *testing.T) {
 	for _, server := range servers {
 		require.NotNil(t, server.RoundSecret(), "Error in r for server %d", server.Index())
 	}
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -376,10 +378,10 @@ func TestServerProtocol(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
 	}
@@ -463,14 +465,15 @@ func TestServerProtocol(t *testing.T) {
 
 func TestGenerateServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(suite, 2, 2)
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 	T0, _ := tagAndCommitments.T0, tagAndCommitments.SCommits
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -484,10 +487,10 @@ func TestGenerateServerProof(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
 	}
@@ -525,8 +528,8 @@ func TestGenerateServerProof(t *testing.T) {
 
 	//Invalid inputs
 	serverProof, err = generateServerProof(suite, nil, secret, T, &servMsg, servers[0])
-	require.Error(t, err, "Wrong check: Invalid context")
-	require.Nil(t, serverProof, "Wrong check: Invalid context")
+	require.Error(t, err, "Wrong check: Invalid *context")
+	require.Nil(t, serverProof, "Wrong check: Invalid *context")
 
 	serverProof, err = generateServerProof(suite, context, nil, T, &servMsg, servers[0])
 	require.Error(t, err, "Wrong check: Invalid secret")
@@ -543,13 +546,14 @@ func TestGenerateServerProof(t *testing.T) {
 
 func TestVerifyServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(suite, 2, rand.Intn(10)+2)
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -563,10 +567,10 @@ func TestVerifyServerProof(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	clientProof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       clientProof,
 	}
@@ -656,9 +660,9 @@ func TestVerifyServerProof(t *testing.T) {
 	require.False(t, check, "Error in r2 verification")
 	servMsg.Proofs[1].R2 = saveProof.R2
 
-	//Invalid context
+	//Invalid *context
 	check = verifyServerProof(suite, nil, 1, &servMsg)
-	require.False(t, check, "Wrong check: Invalid context")
+	require.False(t, check, "Wrong check: Invalid *context")
 
 	//nil message
 	check = verifyServerProof(suite, context, 1, nil)
@@ -674,13 +678,14 @@ func TestVerifyServerProof(t *testing.T) {
 
 func TestGenerateMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(suite, 2, 2)
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -698,15 +703,15 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	proof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
 	}
 
-	serverProof, err := generateMisbehavingProof(suite, context, clientMessage.SCommits[0], servers[0])
+	serverProof, err := generateMisbehavingProof(suite, clientMessage.SCommits[0], servers[0])
 	if err != nil || serverProof == nil {
 		t.Error("Cannot generate misbehaving proof")
 	}
@@ -720,24 +725,21 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	require.Nil(t, serverProof.R2, "r2 not nil for misbehaving proof")
 
 	//Invalid inputs
-	serverProof, err = generateMisbehavingProof(suite, nil, clientMessage.SCommits[0], servers[0])
-	require.Error(t, err, "Wrong check: Invalid context")
-	require.Nil(t, serverProof, "Wrong check: Invalid context")
-
-	serverProof, err = generateMisbehavingProof(suite, context, nil, servers[0])
+	serverProof, err = generateMisbehavingProof(suite, nil, servers[0])
 	require.Error(t, err, "Wrong check: Invalid Z")
 	require.Nil(t, serverProof, "Wrong check: Invalid Z")
 }
 
 func TestVerifyMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(suite, 2, 2)
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -755,37 +757,34 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	clientProof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       clientProof,
 	}
 
-	proof, _ := generateMisbehavingProof(suite, context, clientMessage.SCommits[0], servers[0])
+	proof, _ := generateMisbehavingProof(suite, clientMessage.SCommits[0], servers[0])
 
-	check := verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check := verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.True(t, check, "Cannot verify valid misbehaving proof")
 
 	//Invalid inputs
-	check = verifyMisbehavingProof(suite, nil, 0, proof, clientMessage.SCommits[0])
-	require.False(t, check, "Wrong check: Invalid context")
+	check = verifyMisbehavingProof(suite, nil, proof, clientMessage.SCommits[0])
+	require.False(t, check, "Wrong check: Invalid public key")
 
-	check = verifyMisbehavingProof(suite, context, 1, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[1].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Wrong check: Invalid index")
 
-	check = verifyMisbehavingProof(suite, context, -1, proof, clientMessage.SCommits[0])
-	require.False(t, check, "Wrong check: Negative index")
-
-	check = verifyMisbehavingProof(suite, context, 0, nil, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), nil, clientMessage.SCommits[0])
 	require.False(t, check, "Wrong check: Missing proof")
 
-	check = verifyMisbehavingProof(suite, context, 0, proof, nil)
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, nil)
 	require.False(t, check, "Wrong check: Invalid Z")
 
 	//Modify proof values
-	proof, _ = generateMisbehavingProof(suite, context, clientMessage.SCommits[0], servers[0])
+	proof, _ = generateMisbehavingProof(suite, clientMessage.SCommits[0], servers[0])
 	saveProof := ServerProof{
 		C:  proof.C,
 		T1: proof.T1,
@@ -797,32 +796,32 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 
 	//Check inputs
 	proof.C = nil
-	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Error in challenge verification")
 	proof.C = saveProof.C
 
 	proof.T1 = nil
-	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Error in t1 verification")
 	proof.T1 = saveProof.T1
 
 	proof.T2 = nil
-	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Error in t2 verification")
 	proof.T2 = saveProof.T2
 
 	proof.T3 = nil
-	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Error in t3 verification")
 	proof.T3 = saveProof.T3
 
 	proof.R1 = nil
-	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Error in r1 verification")
 	proof.R1 = saveProof.R1
 
 	proof.R2 = suite.Scalar().One()
-	check = verifyMisbehavingProof(suite, context, 0, proof, clientMessage.SCommits[0])
+	check = verifyMisbehavingProof(suite, servers[0].PublicKey(), proof, clientMessage.SCommits[0])
 	require.False(t, check, "Error in r2 verification")
 	proof.R2 = saveProof.R2
 	// TODO: Complete the tests
@@ -840,14 +839,15 @@ func TestGenerateNewRoundSecret(t *testing.T) {
 
 func TestToBytes_ServerProof(t *testing.T) {
 	clients, servers, context, _ := generateTestContext(suite, 2, 2)
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, context.g.y, context.h[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 	_, S := tagAndCommitments.T0, tagAndCommitments.SCommits
 
 	//Generate a valid challenge
-	var commits []Commitment
+	var commits []ChallengeCommitment
 	var openings []kyber.Scalar
 	for i := 0; i < len(servers); i++ {
-		commit, open, _ := GenerateCommitment(suite, context, servers[i])
+		commit, open, _ := NewChallengeCommitment(suite, servers[i])
 		commits = append(commits, *commit)
 		openings = append(openings, open)
 	}
@@ -865,10 +865,10 @@ func TestToBytes_ServerProof(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
 
 	//Assemble the client message
-	clientProof, err := newClientProof(suite, *context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	clientProof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "failed to generate client proof, this is not expected")
 	clientMessage := AuthenticationMessage{
-		C:                        *context,
+		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       clientProof,
 	}
@@ -883,7 +883,7 @@ func TestToBytes_ServerProof(t *testing.T) {
 	require.NotNil(t, data, "Cannot convert normal proof")
 
 	//Normal execution for correct misbehaving proof
-	proof, _ := generateMisbehavingProof(suite, context, S[0], servers[0])
+	proof, _ := generateMisbehavingProof(suite, S[0], servers[0])
 	data, err = proof.ToBytes()
 	require.NoError(t, err, "Cannot convert misbehaving proof")
 	require.NotNil(t, data, "Cannot convert misbehaving proof")

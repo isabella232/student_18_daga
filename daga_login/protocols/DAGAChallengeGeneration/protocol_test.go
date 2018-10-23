@@ -7,18 +7,18 @@ protocol, as in Test Driven Development.
 */
 
 import (
+	"github.com/dedis/student_18_daga/sign/daga"
 	"testing"
 	"time"
 
-	"github.com/dedis/cothority_template/protocol"
-	"github.com/dedis/kyber/suites"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
+	"github.com/dedis/student_18_daga/daga_login/protocol"
 	"github.com/stretchr/testify/require"
 )
 
-var tSuite = suites.MustFind("Ed25519")
+var tSuite = daga.NewSuiteEC()
 
 func TestMain(m *testing.M) {
 	log.MainTest(m)
@@ -33,9 +33,9 @@ func TestNode(t *testing.T) {
 		_, _, tree := local.GenTree(nbrNodes, true)
 		log.Lvl3(tree.Dump())
 
-		pi, err := local.StartProtocol("Template", tree)
-		require.Nil(t, err)
-		protocol := pi.(*protocol.TemplateProtocol)
+		pi, err := local.StartProtocol(protocol.Name, tree)
+		require.NoError(t, err)
+		protocol := pi.(*protocol.DAGAChallengeGenerationProtocol)
 		timeout := network.WaitRetry * time.Duration(network.MaxRetryConnect*nbrNodes*2) * time.Millisecond
 		select {
 		case children := <-protocol.ChildCount:

@@ -7,18 +7,18 @@ import (
 )
 
 // create a context with c clients, len(serverKeys) servers whose private keys are in serverKeys
-func GenerateContext(suite Suite, c int, serverKeys []kyber.Scalar) ([]Client, []Server, *AuthenticationContext, error) {
+func GenerateContext(suite Suite, c int, serverKeys []kyber.Scalar) ([]Client, []Server, AuthenticationContext, error) {
 	// TODO rename setup ?
 	return generateContext(suite, c, 0, serverKeys)
 }
 
 // creates a context to be used in the tests
-func generateTestContext(suite Suite, c, s int) ([]Client, []Server, *AuthenticationContext, error) {
+func generateTestContext(suite Suite, c, s int) ([]Client, []Server, AuthenticationContext, error) {
 	return generateContext(suite, c, s, nil)
 }
 
 // TODO doc
-func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Client, []Server, *AuthenticationContext, error) {
+func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Client, []Server, AuthenticationContext, error) {
 	if c <= 0 {
 		return nil, nil, nil, fmt.Errorf("invalid number of client: %d", c) // ...
 	}

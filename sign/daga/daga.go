@@ -60,7 +60,17 @@ type Suite interface {
 //
 // h contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
 // TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
-type AuthenticationContext struct {
+
+// TODO documente choice, I'm doing this because when integrating in cothority (or implementing it anywhere) will need to add practical informations (how to reach servers etc..)
+// this way in the user code we can define a context struct that will be usable both by daga functions and by our network related functions
+// then why not a struct that can be embedded too ? => to avoid having to cast everywhere daga functions accept interface parameter and basta, since embedded field's methods are promoted can use as intended
+type AuthenticationContext interface {
+	Members() ([]kyber.Point, []kyber.Point)
+	ClientsGenerators() []kyber.Point
+	ServersSecretsCommitments() []kyber.Point
+}
+
+type authenticationContext struct {
 	g struct {
 		x []kyber.Point
 		y []kyber.Point
@@ -69,7 +79,7 @@ type AuthenticationContext struct {
 	h []kyber.Point
 }
 
-// returns a pointer to a newly allocated authenticationContext initialized with :
+// returns an AuthenticationContext that holds a newly allocated authenticationContext initialized with :
 //
 // x the public keys of the clients
 //
@@ -78,11 +88,11 @@ type AuthenticationContext struct {
 // r the commitments of the servers to their unique per-round secrets
 //
 // h the unique per-round generators of the group associated to each clients
-func NewAuthenticationContext(x, y, r, h []kyber.Point) (*AuthenticationContext, error) {
+func NewAuthenticationContext(x, y, r, h []kyber.Point) (AuthenticationContext, error) {
 	if len(x) != len(h) || len(y) != len(r) || len(x) == 0 || len(y) == 0 {
 		return nil, errors.New("NewAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
-	return &AuthenticationContext{
+	return authenticationContext{
 		g: struct {
 			x []kyber.Point
 			y []kyber.Point
@@ -96,16 +106,16 @@ func NewAuthenticationContext(x, y, r, h []kyber.Point) (*AuthenticationContext,
 }
 
 // returns the public keys of the members of an authenticationContext, client keys in X and server keys in Y
-func (ac AuthenticationContext) Members() (X, Y []kyber.Point) {
+func (ac authenticationContext) Members() (X, Y []kyber.Point) {
 	return ac.g.x, ac.g.y
 }
 
 // returns the per-round generator of the clients for this authenticationContext
-func (ac AuthenticationContext) ClientsGenerators() []kyber.Point {
+func (ac authenticationContext) ClientsGenerators() []kyber.Point {
 	return ac.h
 }
 
-func (ac AuthenticationContext) ServersSecretsCommitments() []kyber.Point {
+func (ac authenticationContext) ServersSecretsCommitments() []kyber.Point {
 	return ac.r
 }
 
@@ -147,27 +157,28 @@ func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error)
 }
 
 /*ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures*/
-// QUESTION WTF no other way ?
-func (ac AuthenticationContext) ToBytes() (data []byte, err error) {
-	temp, e := PointArrayToBytes(ac.g.x)
+// QUESTION WTF no other way ? => FIXME used only to sign/verify etc => instead use hash ? ask Ewa Syta if ok (IMO it is ok..)(part of serverproof)
+func authenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
+	X, Y := ac.Members()
+	temp, e := PointArrayToBytes(X)
 	if e != nil {
 		return nil, fmt.Errorf("Error in X: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(ac.g.y)
+	temp, e = PointArrayToBytes(Y)
 	if e != nil {
 		return nil, fmt.Errorf("Error in Y: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(ac.h)
+	temp, e = PointArrayToBytes(ac.ClientsGenerators())
 	if e != nil {
 		return nil, fmt.Errorf("Error in H: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(ac.r)
+	temp, e = PointArrayToBytes(ac.ServersSecretsCommitments())
 	if e != nil {
 		return nil, fmt.Errorf("Error in R: %s", e)
 	}
@@ -177,7 +188,7 @@ func (ac AuthenticationContext) ToBytes() (data []byte, err error) {
 }
 
 /*PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures*/
-// QUESTION same as above + if this is the way to go make it a method of []kyber.Point for consistency and rename it marshalbinary
+// QUESTION same as above
 func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	for _, p := range array {
 		temp, e := p.MarshalBinary()
@@ -202,10 +213,10 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 	return data, nil
 }
 
-// TODO WTF, no other way ? + rename marshalbinary for consistency
+// TODO WTF, no other way ?
 /*ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures*/
 func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
-	data, e := msg.C.ToBytes()
+	data, e := authenticationContextToBytes(msg.C)
 	if e != nil {
 		return nil, fmt.Errorf("error in context: %s", e)
 	}

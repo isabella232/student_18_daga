@@ -99,12 +99,13 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
 	// FIXME create a validate context helper
-	if len(context.h) <= client.Index() {
+	if len(context.ClientsGenerators()) <= client.Index() {
 		return nil, errors.New("context not valid, or wrong client index")
 	}
 
 	// DAGA client Steps 1, 2, 3:
-	TAndS, s := newInitialTagAndCommitments(suite, context.g.y, context.h[client.Index()])
+	_, Y := context.Members()
+	TAndS, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[client.Index()])
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
 	if P, err := newClientProof(suite, context, client, *TAndS, s, sendCommitsReceiveChallenge); err != nil {
@@ -121,27 +122,30 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	}
 }
 
-// validateClientMessage is an utility function to validate that a client message is correctly formed
-func validateClientMessage(suite Suite, msg AuthenticationMessage) error {
-	// TODO rename validateAuthenticationMessage
+// validateAuthenticationMessage is an utility function to validate that a client message is correctly formed
+func validateAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
+	if msg.C == nil {
+		return errors.New("validateAuthenticationMessage: nil context")
+	}
+	X, Y := msg.C.Members()
 	//Number of clients
-	i := len(msg.C.g.x)
+	i := len(X)
 	//Number of servers
-	j := len(msg.C.g.y)
+	j := len(Y)
 	//A commitment for each server exists and the second element is the generator S=(Z,g,S1,..,Sj)
 	if len(msg.SCommits) != j+2 {
-		return fmt.Errorf("validateClientMessage: wrong number of commitments in sCommits (%d), expected: %d", len(msg.SCommits), j+2)
+		return fmt.Errorf("validateAuthenticationMessage: wrong number of commitments in sCommits (%d), expected: %d", len(msg.SCommits), j+2)
 	}
 	if !msg.SCommits[1].Equal(suite.Point().Base()) {
-		return errors.New("validateClientMessage: second group element in sCommits is not the group generator")
+		return errors.New("validateAuthenticationMessage: second group element in sCommits is not the group generator")
 	}
 	//T0 not empty
 	if msg.T0 == nil {
-		return errors.New("validateClientMessage: initial tag T0 is nil")
+		return errors.New("validateAuthenticationMessage: initial tag T0 is nil")
 	}
 	//Proof fields have the correct size
 	if len(msg.P0.C) != i || len(msg.P0.R) != 2*i || len(msg.P0.T) != 3*i || msg.P0.Cs == nil {
-		return fmt.Errorf("validateClientMessage: malformed ClientProof, %v", msg.P0)
+		return fmt.Errorf("validateAuthenticationMessage: malformed ClientProof, %v", msg.P0)
 	}
 	return nil
 }
@@ -150,7 +154,7 @@ func validateClientMessage(suite Suite, msg AuthenticationMessage) error {
 //
 // msg the authenticationMessage to verify
 func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
-	if err := validateClientMessage(suite, msg); err != nil {
+	if err := validateAuthenticationMessage(suite, msg); err != nil {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())
 	}
 	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
@@ -242,7 +246,7 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 
 // GetFinalLinkageTag checks the server's signatures and proofs
 // and outputs the final linkage tag or an error
-func GetFinalLinkageTag(suite Suite, context *AuthenticationContext, msg ServerMessage) (Tf kyber.Point, err error) {
+func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMessage) (Tf kyber.Point, err error) {
 	// FIXME QUESTION not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
 	// + not sure that this is how things were intended in the paper, maybe redefine what is sent to the client ! (only the final tag...) but why not... as it is now..
 	// TODO but guess this won't do any harm, will need to decide when building the service
@@ -256,6 +260,7 @@ func GetFinalLinkageTag(suite Suite, context *AuthenticationContext, msg ServerM
 	if e != nil {
 		return nil, fmt.Errorf("error in request: %s", e)
 	}
+	_, Y := context.Members()
 	for i, p := range msg.Proofs {
 		//verify signatures
 		temp, err := msg.Tags[i].MarshalBinary()
@@ -269,14 +274,14 @@ func GetFinalLinkageTag(suite Suite, context *AuthenticationContext, msg ServerM
 		}
 		data = append(data, temp...)
 		data = append(data, []byte(strconv.Itoa(msg.Indexes[i]))...)
-		err = SchnorrVerify(suite, context.g.y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
+		err = SchnorrVerify(suite, Y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
 		if err != nil {
 			return nil, fmt.Errorf("error in signature: %d\n%s", i, err)
 		}
 		//verify proofs
 		var valid bool
 		if p.R2 == nil {
-			valid = verifyMisbehavingProof(suite, context, i, &p, msg.Request.SCommits[0])
+			valid = verifyMisbehavingProof(suite, Y[i], &p, msg.Request.SCommits[0])
 		} else {
 			valid = verifyServerProof(suite, context, i, &msg)
 		}

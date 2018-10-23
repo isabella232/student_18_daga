@@ -318,7 +318,12 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	// TODO or other things lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
 	// TODO see later while building the protocols and services
 
-	if len(context.g.x) <= 1 {
+	if context == nil {
+		return ClientProof{}, errors.New("nil context")
+	}
+	X, Y := context.Members()
+
+	if len(X) <= 1 {
 		return ClientProof{}, errors.New("newClientProof: there is only one client in the context, this means DAGA is pointless")
 		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
 		// in the context/OR-predicate, if this condition is not met there won't be an "subChallenges" to generate by the
@@ -328,7 +333,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 
 	//construct the proof.Prover for client's PK predicate and its proof.ProverContext
 	prover := newClientProver(suite, context, tagAndCommitments, client, s)
-	proverCtx := newClientProverCtx(suite, len(context.g.x))
+	proverCtx := newClientProverCtx(suite, len(X))
 
 	//3-move interaction with server
 	//	start the proof.Prover and proof machinery in new goroutine  // TODO maybe create a function
@@ -352,7 +357,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	//	and receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code / client setup!!)
 	challenge := sendCommitsReceiveChallenge(P.T)
 
-	if err := challenge.verifySignatures(suite, context.g.y); err != nil {
+	if err := challenge.verifySignatures(suite, Y); err != nil {
 		// TODO log
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	}
@@ -382,7 +387,12 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 	proof ClientProof,
 	tagAndCommitments initialTagAndCommitments) error {
 
-	if len(context.g.x) <= 1 {
+	if context == nil {
+		return errors.New("nil context")
+	}
+	X, _ := context.Members()
+
+	if len(X) <= 1 {
 		return errors.New("verifyClientProof: there is only one client in the context, this means DAGA is pointless")
 		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
 		// in the context/OR-predicate, if this condition is not met there won't be any "subChallenges" to request by the
@@ -392,7 +402,7 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 
 	//construct the proof.Verifier for client's PK and its proof.VerifierContext
 	verifier := newClientVerifier(suite, context, tagAndCommitments)
-	verifierCtx := newClientVerifierCtx(suite, len(context.g.x))
+	verifierCtx := newClientVerifierCtx(suite, len(X))
 
 	//3-move interaction with client
 	//	start the proof.Verifier and proof machinery in new goroutine
@@ -438,17 +448,18 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 //
 // tagAndCommitments the initialTagAndCommitments of a client (see initialTagAndCommitments)
 func newClientProofPred(suite Suite, context AuthenticationContext, tagAndCommitments initialTagAndCommitments) (proof.Predicate, map[string]kyber.Point) {
+	X, _ := context.Members()
 	// build the OR-predicate
-	andPreds := make([]proof.Predicate, 0, len(context.g.x))
+	andPreds := make([]proof.Predicate, 0, len(X))
 
 	// map for public values needed to construct the Prover and Verifier from the predicate
-	pval := make(map[string]kyber.Point, 3+2*len(context.g.x))
+	pval := make(map[string]kyber.Point, 3+2*len(X))
 	pval["G"] = suite.Point().Base()
 	pval["T0"] = tagAndCommitments.T0
 	pval["Sm"] = tagAndCommitments.SCommits[len(tagAndCommitments.SCommits)-1]
 
 	//	build all the internal And predicates (one for each client in current auth. group)
-	for k, pubKey := range context.g.x {
+	for k, pubKey := range X {
 		// client AndPred
 		kStr := strconv.Itoa(k)
 		//		i) client i’s linkage tag T0 is created with respect to his per-round generator hi
@@ -462,7 +473,7 @@ func newClientProofPred(suite Suite, context AuthenticationContext, tagAndCommit
 
 		// update map of public values
 		pval["X"+kStr] = pubKey
-		pval["H"+kStr] = context.h[k]
+		pval["H"+kStr] = context.ClientsGenerators()[k]
 
 		andPreds = append(andPreds, clientAndPred)
 	}
