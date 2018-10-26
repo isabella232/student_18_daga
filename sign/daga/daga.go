@@ -53,24 +53,22 @@ type Suite interface {
 // securely erase their per-round secrets r making it impossible to process authentication
 // messages within this context.
 // See Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.3
-
-// g contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (g.x) and the servers (g.y)
-//
-// r contains the commitments of the servers to their unique per-round secrets
-//
-// h contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
-// TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
-
-// TODO documente choice, I'm doing this because when integrating in cothority (or implementing it anywhere) will need to add practical informations (how to reach servers etc..)
-// this way in the user code we can define a context struct that will be usable both by daga functions and by our network related functions
-// then why not a struct that can be embedded too ? => to avoid having to cast everywhere daga functions accept interface parameter and basta, since embedded field's methods are promoted can use as intended
 type AuthenticationContext interface {
 	Members() ([]kyber.Point, []kyber.Point)
 	ClientsGenerators() []kyber.Point
 	ServersSecretsCommitments() []kyber.Point
 }
 
-type authenticationContext struct {
+// minimum DAGA context, containing nothing but what DAGA needs to work internally
+// used only for the test suite and/or to build other more complete contexts !
+//
+// g contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (g.x) and the servers (g.y)
+//
+// r contains the commitments of the servers to their unique per-round secrets
+//
+// h contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
+// TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
+type minimumAuthenticationContext struct {
 	g struct {
 		x []kyber.Point
 		y []kyber.Point
@@ -79,7 +77,7 @@ type authenticationContext struct {
 	h []kyber.Point
 }
 
-// returns an AuthenticationContext that holds a newly allocated authenticationContext initialized with :
+// returns an AuthenticationContext that holds a newly allocated minimumAuthenticationContext initialized with :
 //
 // x the public keys of the clients
 //
@@ -92,7 +90,7 @@ func NewAuthenticationContext(x, y, r, h []kyber.Point) (AuthenticationContext, 
 	if len(x) != len(h) || len(y) != len(r) || len(x) == 0 || len(y) == 0 {
 		return nil, errors.New("NewAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
-	return authenticationContext{
+	return minimumAuthenticationContext{
 		g: struct {
 			x []kyber.Point
 			y []kyber.Point
@@ -105,17 +103,17 @@ func NewAuthenticationContext(x, y, r, h []kyber.Point) (AuthenticationContext, 
 	}, nil
 }
 
-// returns the public keys of the members of an authenticationContext, client keys in X and server keys in Y
-func (ac authenticationContext) Members() (X, Y []kyber.Point) {
+// returns the public keys of the members of an AuthenticationContext, client keys in X and server keys in Y
+func (ac minimumAuthenticationContext) Members() (X, Y []kyber.Point) {
 	return ac.g.x, ac.g.y
 }
 
-// returns the per-round generator of the clients for this authenticationContext
-func (ac authenticationContext) ClientsGenerators() []kyber.Point {
+// returns the per-round generator of the clients for this AuthenticationContext
+func (ac minimumAuthenticationContext) ClientsGenerators() []kyber.Point {
 	return ac.h
 }
 
-func (ac authenticationContext) ServersSecretsCommitments() []kyber.Point {
+func (ac minimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point {
 	return ac.r
 }
 

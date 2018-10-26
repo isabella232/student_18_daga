@@ -1,6 +1,6 @@
 package daga
 
-// FIXME audit/verify + change receivers pointer => value where possible + rename "everything"
+// FIXME audit/verify + rename "everything" + maybe see how to nicify external api (make some functions methods etc..)
 
 import (
 	"crypto/sha512"
@@ -12,69 +12,48 @@ import (
 	"strconv"
 )
 
-// TODO doc + we love P2P right ? seems that a server is a client too why not embed client interface and share code with client
+// TODO doc
 type Server interface {
-	Index() int
+	Client  // client interface (a server can be a client.. why not..)
 	RoundSecret() kyber.Scalar //Per round secret
 	SetRoundSecret(scalar kyber.Scalar)
-	PublicKey()   kyber.Point
-	PrivateKey()  kyber.Scalar
+	//NewChallengeCommitment(suite Suite) (*ChallengeCommitment, kyber.Scalar, error)
 }
 
-// TODO same as above, only struct. dif between client and server is the per round secret
 type server struct {
-	key   key.Pair
-	index int
+	Client
 	r     kyber.Scalar //Per round secret
 }
 
-//CreateServer is used to initialize a new server with a given index
+//NewServer is used to initialize a new server with a given index
 //If no private key is given, a random one is chosen
 func NewServer(suite Suite, i int, s kyber.Scalar) (Server, error) {
-	if i < 0 {
-		return nil, fmt.Errorf("invalid parameters")
-	}
-
-	var kp *key.Pair
-	if s == nil {
-		kp = key.NewKeyPair(suite)
-	} else {
-		// FIXME check if s is a proper secret (see small subgroup attacks on some groups/curves)... or remove this option ..or make it a proper secret..
-		kp = &key.Pair{
-			Private: s, // <- could (e.g. edwards25519) be attacked if not in proper form
-			Public:  suite.Point().Mul(s, nil),
-		}
+	client, err := NewClient(suite, i, s)
+	if err != nil {
+		return nil, errors.New("NewServer: " + err.Error())
 	}
 	return &server{
-		index: i,
-		key:   *kp,
+		Client: client,
 	}, nil
 }
 
-//returns the server's index
-func (s server) Index() int {
-	return s.index
-}
-
-//returns the public key of the server
-func (s server) PublicKey() kyber.Point {
-	return s.key.Public
-}
-
-//returns the private key of the server
-func (s server) PrivateKey() kyber.Scalar {
-	return s.key.Private
-}
-
-//returns the (current) per round secret of the server
+//returns the (current) per round (auth. round) secret of the server
 func (s server) RoundSecret() kyber.Scalar {
 	return s.r
 }
 
-//set the server's round secret to be secret
+//set the server's round secret to be the provided secret
 func (s *server) SetRoundSecret(secret kyber.Scalar) {
 	s.r = secret
 }
+
+// "philosophical" decision either stick with first idea of designing daga in kyber as a set of functions/primitives
+// to be used by user implementations
+// or make them methods on clients / servers etc..
+//func (s server) NewChallengeCommitment(suite Suite) (commit *ChallengeCommitment, opening kyber.Scalar, err error) {
+//	// TODO move content of newChallengeCommitment here
+//	return newChallengeCommitment(suite, &s)
+//}
 
 /*ServerMessage stores the message sent by a server to one or many others*/
 type ServerMessage struct {
@@ -92,6 +71,9 @@ type ChallengeCommitment struct {
 }
 
 /*ServerSignature stores a signature created by a server and the server's index*/
+// FIXME see why index needed and if we cannot get rid of it, when receiveing a challengecommit the receiver knows who the sender is
+// > can probably know its public key => can probably verify signature without looking it up in context using index
+// mhh seems that it is only used to check/assert same index when traversing the slice of commitments in verify... maybe remove it..
 type ServerSignature struct {
 	Index int
 	Sig   []byte
@@ -115,49 +97,65 @@ type ServerProof struct {
 	R2 kyber.Scalar
 }
 
-// FIXME rename .... pff
 /*NewChallengeCommitment creates the server's commitment and its opening for the distributed challenge generation*/
 func NewChallengeCommitment(suite Suite, server Server) (commit *ChallengeCommitment, opening kyber.Scalar, err error) {
-	// TODO rename
 	opening = suite.Scalar().Pick(suite.RandomStream())
 	com := suite.Point().Mul(opening, nil)
 	msg, err := com.MarshalBinary()
 	if err != nil {
-		return nil, nil, fmt.Errorf("error in conversion of commit: %s", err)
+		return nil, nil, fmt.Errorf("failed to encode commitment: %s", err)
 	}
 	sig, err := SchnorrSign(suite, server.PrivateKey(), msg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error in commit signature generation: %s", err)
+		return nil, nil, fmt.Errorf("failed to sign commitment: %s", err)
 	}
-	return &ChallengeCommitment{ServerSignature: ServerSignature{Index: server.Index(), Sig: sig}, Commit: com}, opening, nil
+	return &ChallengeCommitment{
+		ServerSignature: ServerSignature{
+			Index: server.Index(),
+			Sig: sig,
+		},
+		Commit: com,
+	}, opening, nil
 }
 
-/*VerifyCommitmentSignature verifies that all the commitments are valid and correctly signed*/
-func VerifyCommitmentSignature(suite Suite, context AuthenticationContext, commits []ChallengeCommitment) (err error) {
+func VerifyChallengeCommitmentSignature(suite Suite, commit ChallengeCommitment, pubKey kyber.Point) error {
+	// QUESTION FIXME: How to check that a point is on the curve (and correct subgroup of curve) ? (don't remember why but the answer is you don't need if you use edwards curve25519)
+	// FIXME but still this is a valid concern since if we change the curve/suite_implementation we would like the code to remain correct or ?
+	//Convert the commitment and verify the signature
+	msg, err := commit.Commit.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to encode commitment: %s", err)
+	}
+	err = SchnorrVerify(suite, pubKey, msg, commit.Sig)
+	if err != nil {
+		return fmt.Errorf("failed to verify signature of %dth server's commitment: %s", commit.Index, err)
+	}
+	return nil
+}
+
+// FIXME remove probably, unused and maybe..bof
+/*VerifyChallengeCommitmentsSignatures verifies that all the commitments are valid and correctly signed*/
+func VerifyChallengeCommitmentsSignatures(suite Suite, context AuthenticationContext, commits []ChallengeCommitment) error {
 	for i, com := range commits {
 		if i != com.Index {
-			return fmt.Errorf("wrong index: got %d expected %d", com.Index, i)
-		}
-		// QUESTION FIXME: How to check that a point is on the curve? (don't remember why but the answer is you don't need if you use edwards curve25519)
-		// FIXME but still this is a valid concern since if we change the curve/suite_implementation we would like the code to remain correct or ?
-
-		//Convert the commitment and verify the signature
-		msg, e := com.Commit.MarshalBinary()
-		if e != nil {
-			return fmt.Errorf("error in conversion of commit for verification: %s", err)
+			return fmt.Errorf("wrong commitment index: got %d expected %d", com.Index, i)
 		}
 		_, Y := context.Members()
-		err = SchnorrVerify(suite, Y[i], msg, com.Sig)
-		if err != nil {
+		if err := VerifyChallengeCommitmentSignature(suite, com, Y[i]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-/*CheckOpenings verifies each opening and returns the computed master challenge*/
+// returns whether opening is a valid opening of commitment
+func CheckOpening(suite Suite, commitment kyber.Point, opening kyber.Scalar) bool {
+	return commitment.Equal(suite.Point().Mul(opening, nil))
+}
+
+/*CheckOpenings verifies each commitment/opening and returns the computed master challenge*/
 func checkOpenings(suite Suite, context AuthenticationContext, commits []ChallengeCommitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
-	// FIXME rename or split in 2
+	// FIXME rename (compute master challenge + verify)
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
 	}
@@ -171,8 +169,7 @@ func checkOpenings(suite Suite, context AuthenticationContext, commits []Challen
 
 	cs = suite.Scalar().Zero()
 	for i := 0; i < len(commits); i++ {
-		c := suite.Point().Mul(openings[i], nil)
-		if !commits[i].Commit.Equal(c) {
+		if !CheckOpening(suite, commits[i].Commit, openings[i]) {
 			return nil, fmt.Errorf("mismatch opening for server %d", i)
 		}
 		cs = suite.Scalar().Add(cs, openings[i])
@@ -180,12 +177,13 @@ func checkOpenings(suite Suite, context AuthenticationContext, commits []Challen
 	return cs, nil
 }
 
-/*InitializeChallenge creates a Challenge structure from a challenge value
-It checks the openings before doing so*/
+/*InitializeChallenge creates a ChallengeCheck structure, It checks the openings before doing so*/
 func InitializeChallenge(suite Suite, context AuthenticationContext, commits []ChallengeCommitment, openings []kyber.Scalar) (*ChallengeCheck, error) {
 	if context == nil || len(commits) == 0 || len(commits) != len(openings) {
 		return nil, fmt.Errorf("invalid inputs")
 	}
+
+	// FIXME maybe remove, will already be done by CheckUpdateChallenge
 	cs, err := checkOpenings(suite, context, commits, openings)
 	if err != nil {
 		return nil, err
@@ -199,48 +197,48 @@ It also adds the server's signature to the list if the round-robin is not comple
 It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
 func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challenge *ChallengeCheck, server Server) error {
 	//Check the signatures and check for duplicates
-	msg, e := challenge.Cs.MarshalBinary()
-	if e != nil {
-		return fmt.Errorf("error in challenge conversion: %s", e)
+	msg, err := challenge.Cs.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("CheckUpdateChallenge: error marshalling master challenge: %s", err)
 	}
 	encountered := map[int]bool{}
 	for _, sig := range challenge.Sigs {
 		if encountered[sig.Index] == true {
-			return fmt.Errorf("duplicate signature")
+			return fmt.Errorf("CheckUpdateChallenge: duplicate signature")  // FIXME WTF ? duplicate index I'd say... (ok since we use index to infer key..cannot replay)
 		}
 		encountered[sig.Index] = true
 
 		_, Y := context.Members()
-		e = SchnorrVerify(suite, Y[sig.Index], msg, sig.Sig)
-		if e != nil {
-			return fmt.Errorf("%s", e)
+		if err := SchnorrVerify(suite, Y[sig.Index], msg, sig.Sig); err != nil {
+			return fmt.Errorf("CheckUpdateChallenge: failed to verify signature %s", err)
 		}
 	}
 
 	//Checks the signatures of the commitments
-	err := VerifyCommitmentSignature(suite, context, challenge.Commits)
-	if err != nil {
-		return err
+	if err := VerifyChallengeCommitmentsSignatures(suite, context, challenge.Commits); err != nil {
+		return fmt.Errorf("CheckUpdateChallenge: failed to verify commitment signature %s", err)
 	}
 	//Checks the openings
 	cs, err := checkOpenings(suite, context, challenge.Commits, challenge.Openings)
 	if err != nil {
-		return err
+		return fmt.Errorf("CheckUpdateChallenge: failed to verify commitment openings %s", err)
 	}
 	//Checks that the challenge values match
 	if !cs.Equal(challenge.Cs) {
-		return fmt.Errorf("challenge values does not match")
+		return fmt.Errorf("CheckUpdateChallenge: master challenge values does not match")
 	}
 
-	//Add the server's signature to the list if it is not the last one
+	//Add the server's signature to the list if it is not the last challengeCheck call (by leader/root once every server added its grain of salt)
 	_, Y := context.Members()
 	if len(challenge.Sigs) == len(Y) {
 		return nil
 	}
-	sig, e := SchnorrSign(suite, server.PrivateKey(), msg)
-	if e != nil {
-		return e
+	sig, err := SchnorrSign(suite, server.PrivateKey(), msg)
+	if err != nil {
+		return fmt.Errorf("CheckUpdateChallenge: failed to sign master challenge")
 	}
+
+	// FIXME why not store it at index ?
 	challenge.Sigs = append(challenge.Sigs, ServerSignature{Index: server.Index(), Sig: sig})
 
 	return nil
@@ -290,12 +288,13 @@ func ServerProtocol(suite Suite, context AuthenticationContext, msg *ServerMessa
 	}
 
 	_, Y := context.Members()
-	//Checks that not all servers already did the protocol
+	//Checks that not all servers already did the protocols
 	if len(msg.Indexes) >= len(Y) {
-		return fmt.Errorf("ServerProtocol: too many calls of the protocol") //... ok... smells like fish..
+		return fmt.Errorf("ServerProtocol: too many calls of the protocols") //... ok... smells like fish..
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
+	// FIXME dafuck is this ? nowhere to be found in DAGA or ?? is it out of scope ?? (to me it should be the network/session layer that perform those checks...)
 	data, e := msg.Request.ToBytes()
 	if e != nil {
 		return errors.New("ServerProtocol: failed to marshall client's msg, " + e.Error())
@@ -363,7 +362,7 @@ func ServerProtocol(suite Suite, context AuthenticationContext, msg *ServerMessa
 		return e
 	}
 
-	//Signs our message
+	//Signs our message // FIXME QUESTION AGAIN ?? to me this thing has nothing to do here (and guess that it is/should be handled by Onet (TLS) or ??)
 	temp, e := T.MarshalBinary()
 	if e != nil {
 		return fmt.Errorf("error in T: %s", e)

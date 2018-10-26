@@ -59,13 +59,13 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 	}
 
 	//Normal execution
-	err := VerifyCommitmentSignature(suite, context, commits)
+	err := VerifyChallengeCommitmentsSignatures(suite, context, commits)
 	require.NoError(t, err, "Cannot verify the signatures for a legit commit array")
 
 	//Change a random index
 	i := rand.Intn(len(servers))
 	commits[i].Index = i + 1
-	err = VerifyCommitmentSignature(suite, context, commits)
+	err = VerifyChallengeCommitmentsSignatures(suite, context, commits)
 	require.Error(t, err, "Cannot verify matching indexes for %d", i)
 
 	commits[i].Index = i + 1
@@ -76,7 +76,7 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 	sig = append(sig, []byte("A")...)
 	sig = sig[1:]
 	commits[i].Sig = sig
-	err = VerifyCommitmentSignature(suite, context, commits)
+	err = VerifyChallengeCommitmentsSignatures(suite, context, commits)
 	require.Error(t, err, "Cannot verify signature for %d", i)
 }
 

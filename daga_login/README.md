@@ -39,7 +39,7 @@ https://github.com/dedis/onet, this
 repo holds templates to build the different parts necessary for a cothority
 addition:
 
-- [protocol](protocol) - define an ephemeral, distributed, decentralized protocol
+- [protocol](protocols) - define an ephemeral, distributed, decentralized protocol
 - [service](service) - create a long-term service that can spawn any number of protocols
 - [app](app) - write an app that will interact with, or spawn, a cothority
 - [simulation](simulation) - how to create a simulation of a protocol or service
@@ -88,7 +88,7 @@ done using our framework in EPFL and other Universities. Here is some overview
 of what you can do and what not.
 
 - Template descriptions and overviews of the different parts of this repository.
-  - [Protocol](protocol/README.md) - what is in a protocol
+  - [Protocol](protocols/README.md) - what is in a protocol
   - [Service](service/README.md) - the basics of a service
 	- [Simulation](simulation/README.md) - how to run the protocol on different platforms
   - [App](app/README.md) - how to create an app for your service

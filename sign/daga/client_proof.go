@@ -414,6 +414,10 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 
 	//	forward commitments to running Verifier
 	commitments := proof.T
+	// FIXME here don't blindly trust the commitments sent with proof, before server must check that it is the same commitments that were
+	// FIXME sent when prover requested the collective challenge
+	// see https://github.com/dedis/student_18_daga/issues/24 => new signed commitments struct
+
 	if err := verifierCtx.receiveCommitments(commitments); err != nil {
 		// TODO log
 		return errors.New("verifyClientProof:" + err.Error())
@@ -484,7 +488,7 @@ func newClientProofPred(suite Suite, context AuthenticationContext, tagAndCommit
 
 // returns a proof.Verifier for PKclient
 //
-// context the AuthenticationContext
+// context the AuthenticationContext (used to build the PKclient predicate)
 //
 // tagAndCommitments the initialTagAndCommitments sent by the client that generated the proof we want to verify (see initialTagAndCommitments)
 func newClientVerifier(suite Suite, context AuthenticationContext, tagAndCommitments initialTagAndCommitments) proof.Verifier {

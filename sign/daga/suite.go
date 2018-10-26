@@ -47,7 +47,6 @@ func (s suiteEC) RandomStream() cipher.Stream {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // used to give to the kyber.proof framework/package the methods it needs to operate, satisfy both proof.Suite and daga.Suite
 type SuiteProof struct {
 	Suite
@@ -63,18 +62,16 @@ func (s SuiteProof) XOF(key []byte) kyber.XOF {
 }
 
 func (s SuiteProof) Write(w io.Writer, objs ...interface{}) error {
-	// TODO/QUESTION what codec to choose ?
 	return fixbuf.Write(w, objs)
 }
 
 func (s SuiteProof) Read(r io.Reader, objs ...interface{}) error {
-	// TODO/QUESTION what codec to choose ?
 	return fixbuf.Read(r, s, objs...)
 }
 
 // New implements the kyber.Encoding interface, needed to satisfy the kyber.Proof.Suite interface
 func (s SuiteProof) New(t reflect.Type) interface{} {
-	// QUESTION FIXME not totally sure if this is working, but a quick go playground hints it is ok.. https://play.golang.org/p/pkcd2RzlZad
+	// QUESTION not totally sure if this is working, but a quick go playground hints it is ok.. https://play.golang.org/p/pkcd2RzlZad
 	// TODO if this is ok, this implementation might be better that the one used in group/internal/marshalling/marshal.go
 	// TODO (and to my current understanding completely equivalent...only no need to have those package vars only to get their reflect type)
 	scalarInterface := reflect.TypeOf((*kyber.Scalar)(nil)).Elem()

@@ -6,7 +6,7 @@ import (
 	"github.com/dedis/kyber"
 )
 
-// create a context with c clients, len(serverKeys) servers whose private keys are in serverKeys
+// create a context with c clients, len(serverKeys) servers whose private keys are in serverKeys to be used in tests
 func GenerateContext(suite Suite, c int, serverKeys []kyber.Scalar) ([]Client, []Server, AuthenticationContext, error) {
 	// TODO rename setup ?
 	return generateContext(suite, c, 0, serverKeys)

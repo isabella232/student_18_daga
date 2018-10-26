@@ -8,28 +8,43 @@ import (
 	"strconv"
 )
 
+// TODO doc
 type Client interface {
 	PublicKey() kyber.Point
 	PrivateKey() kyber.Scalar
 	Index() int
+	//NewAuthenticationMessage(suite Suite, context AuthenticationContext,
+	//						 sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (*AuthenticationMessage, error)
 }
 
-type client struct {
+// minimum daga client containing nothing but what DAGA needs to work internally (and implement Client interface)
+// used only for the test suite and/or to build other more complete Clients !
+type minimumClient struct {
 	key key.Pair
 	index int
 }
 
-func (c client) PublicKey() kyber.Point {
+//returns the public key of the client/server
+func (c minimumClient) PublicKey() kyber.Point {
 	return c.key.Public
 }
 
-func (c client) PrivateKey() kyber.Scalar {
+//returns the private key of the client/server
+func (c minimumClient) PrivateKey() kyber.Scalar {
 	return c.key.Private
 }
 
-func (c client) Index() int {
+//returns the client's (or server's) index in auth. contex
+func (c minimumClient) Index() int {
 	return c.index
 }
+
+// "philosophical" question
+//func (c client) NewAuthenticationMessage(suite Suite, context AuthenticationContext,
+//										 sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (*AuthenticationMessage, error) {
+//	return newAuthenticationMessage(suite, context, c, sendCommitsReceiveChallenge)
+//
+//}
 
 //func ClientToBytes(c Client) (data []byte, err error) {
 //	b, err := c.PublicKey().MarshalBinary()
@@ -49,6 +64,8 @@ func (c client) Index() int {
 //	data = append(data, b...)
 //}
 
+// returns a Client that holds a newly allocated minimumClient initialized with index i and secret key s (if provided)
+// if not provided a new key is picked at random
 func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 	if i < 0 {
 		return nil, errors.New("invalid parameters, negative index")
@@ -67,7 +84,7 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 		}
 	}
 
-	return client{
+	return minimumClient{
 		index: i,
 		key:   *kp,
 	}, nil
@@ -79,13 +96,15 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 // Upon receiving the client’s message, all servers collectively process M0
 // and either accept or reject the client's authentication request.
 //
-// c holds the authenticationContext used by the client to authenticate.
+// c holds the AuthenticationContext used by the client to authenticate.
 //
 // initialTagAndCommitments contains the client's commitments to the secrets shared with all the servers
 // and the client's initial linkage tag (see initialTagAndCommitments).
 //
-// p0 is the client's proof that he correctly followed the protocol and
+// p0 is the client's proof that he correctly followed the protocols and
 // that he belongs to the authorized clients in the context. (see ClientProof).
+// TODO FIXME consider removing context from daga.authmsg, user code will send a request that will contain daga authmsg AND a context (this way user code can add practical info to context such as addresses etc..)
+// this has been done in daga/cothority
 type AuthenticationMessage struct {
 	C AuthenticationContext
 	initialTagAndCommitments
@@ -95,7 +114,7 @@ type AuthenticationMessage struct {
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 							  client Client,
 	                          sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (*AuthenticationMessage, error) {
-	// TODO see if context big enough to justify transforming the parameter into *authenticationContext
+	// TODO see if context big enough to justify transforming the parameter into *AuthenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
 	// FIXME create a validate context helper
@@ -160,6 +179,8 @@ func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
 	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
 	// FIXME here challenge ~~should~~ MUST be picked from server state IMO but QUESTION ask Ewa Syta
 	// TODO resolve all these when building the actual service
+	// related thread : https://github.com/dedis/student_18_daga/issues/24
+	// => a solution maybe change ClientProof struct to embed Challenge struct (contains signatures) and new signed commitment struct
 	if err := verifyClientProof(suite, msg.C, msg.P0, msg.initialTagAndCommitments); err != nil {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())
 	}
@@ -170,11 +191,11 @@ func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
 //
 // sCommits the client's commitments to the secrets shared with the servers.
 // that is a set of commitments sCommits = { Z, S0, .., Sj, .., Sm } s.t.
-// S0 = g, Sj = g^(∏sk : k=1..j) (see 4.3.5 client's protocol step 2-3).
+// S0 = g, Sj = g^(∏sk : k=1..j) (see 4.3.5 client's protocols step 2-3).
 //
 // t0 the client's initial linkage tag. t0 = h^(∏sk : k=1..m)
 //
-// here above, (Z,z) is the client's ephemeral DH key pair, (see 4.3.5 client's protocol step 1)
+// here above, (Z,z) is the client's ephemeral DH key pair, (see 4.3.5 client's protocols step 1)
 // and sk=Hash1(Yk^z)
 type initialTagAndCommitments struct {
 	SCommits []kyber.Point
@@ -185,9 +206,9 @@ type initialTagAndCommitments struct {
 // TODO decide if better to make this function a method of client that accept context, or better add a method to client that use it internally
 // Returns a pointer to a newly allocated initialTagAndCommitments struct correctly initialized
 // and an opening s (product of all secrets that client shares with the servers) of Sm (that is needed later to build client's proof PKclient)
-// (i.e. performs client protocol Steps 1,2 and 3)
+// (i.e. performs client protocols Steps 1,2 and 3)
 //
-// serverKeys the public keys of the servers (of a particular authenticationContext)
+// serverKeys the public keys of the servers (of a particular AuthenticationContext)
 //
 // clientGenerator the client's per-round generator
 //

@@ -10,7 +10,7 @@ conode, and then talk to it.
 We will look at the app, which is a client that talks to the server (one
 conode). Then we'll see how to start the server and interact with it. The
 protocol running inside the server is discussed in
-[Protocol](../protocol/README.md). Finally we will see how to use the `test.sh`
+[Protocol](../protocols/README.md). Finally we will see how to use the `test.sh`
 script to do integration testing.
 
 ## The app
