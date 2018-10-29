@@ -20,7 +20,7 @@ type Client interface {
 // minimum daga client containing nothing but what DAGA needs to work internally (and implement Client interface)
 // used only for the test suite and/or to build other more complete Clients !
 type minimumClient struct {
-	key key.Pair
+	key   key.Pair
 	index int
 }
 
@@ -112,8 +112,8 @@ type AuthenticationMessage struct {
 }
 
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
-							  client Client,
-	                          sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (*AuthenticationMessage, error) {
+	client Client,
+	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (*AuthenticationMessage, error) {
 	// TODO see if context big enough to justify transforming the parameter into *AuthenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 

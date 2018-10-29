@@ -397,10 +397,10 @@ func TestServerProtocol(t *testing.T) {
 	servMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 
 	//Normal execution for correct client
-	err = ServerProtocol(suite, context, &servMsg, servers[0])
+	err = ServerProtocol(suite, &servMsg, servers[0])
 	require.NoError(t, err, "Error in Server Protocol\n%s", err)
 
-	err = ServerProtocol(suite, context, &servMsg, servers[1])
+	err = ServerProtocol(suite, &servMsg, servers[1])
 	require.NoError(t, err, "Error in Server Protocol for server 1\n%s", err)
 
 	//Check that elements were added to the message
@@ -408,38 +408,38 @@ func TestServerProtocol(t *testing.T) {
 
 	//Empty request
 	emptyMsg := ServerMessage{Request: AuthenticationMessage{}, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
-	err = ServerProtocol(suite, context, &emptyMsg, servers[0])
+	err = ServerProtocol(suite, &emptyMsg, servers[0])
 	require.Error(t, err, "Wrong check: Empty request")
 
 	//Different lengths
 	wrongMsg := ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Indexes = wrongMsg.Indexes[:len(wrongMsg.Indexes)-2]
-	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
+	err = ServerProtocol(suite, &wrongMsg, servers[0])
 	require.Error(t, err, "Wrong check: different field length of indexes")
 
 	wrongMsg = ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Tags = wrongMsg.Tags[:len(wrongMsg.Tags)-2]
-	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
+	err = ServerProtocol(suite, &wrongMsg, servers[0])
 	require.Error(t, err, "Wrong check: different field length of tags")
 
 	wrongMsg = ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Proofs = wrongMsg.Proofs[:len(wrongMsg.Proofs)-2]
-	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
+	err = ServerProtocol(suite, &wrongMsg, servers[0])
 	require.Error(t, err, "Wrong check: different field length of proofs")
 
 	wrongMsg = ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongMsg.Sigs = wrongMsg.Sigs[:len(wrongMsg.Sigs)-2]
-	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
+	err = ServerProtocol(suite, &wrongMsg, servers[0])
 	require.Error(t, err, "Wrong check: different field length of signatures")
 
 	//Modify the client proof
 	wrongClient := ServerMessage{Request: clientMessage, Proofs: servMsg.Proofs, Tags: servMsg.Tags, Sigs: servMsg.Sigs, Indexes: servMsg.Indexes}
 	wrongClient.Request.P0 = ClientProof{}
-	err = ServerProtocol(suite, context, &wrongMsg, servers[0])
+	err = ServerProtocol(suite, &wrongMsg, servers[0])
 	require.Error(t, err, "Wrong check: invalid client proof")
 
 	//Too many calls
-	err = ServerProtocol(suite, context, &servMsg, servers[0])
+	err = ServerProtocol(suite, &servMsg, servers[0])
 	require.Error(t, err, "Wrong check: Too many calls")
 
 	//The client request is left untouched
@@ -456,10 +456,10 @@ func TestServerProtocol(t *testing.T) {
 	//Normal execution for misbehaving client
 	misbehavingMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 	misbehavingMsg.Request.SCommits[2] = suite.Point().Null() //change the commitment for server 0
-	err = ServerProtocol(suite, context, &misbehavingMsg, servers[0])
+	err = ServerProtocol(suite, &misbehavingMsg, servers[0])
 	require.NoError(t, err, "Error in Server Protocol for misbehaving client\n%s", err)
 
-	err = ServerProtocol(suite, context, &misbehavingMsg, servers[1])
+	err = ServerProtocol(suite, &misbehavingMsg, servers[1])
 	require.NoError(t, err, "Error in Server Protocol for misbehaving client and server 1\n%s", err)
 }
 
@@ -577,7 +577,7 @@ func TestVerifyServerProof(t *testing.T) {
 
 	servMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 
-	err = ServerProtocol(suite, context, &servMsg, servers[0])
+	err = ServerProtocol(suite, &servMsg, servers[0])
 	require.NoError(t, err)
 	// TODO, I replaced the commented code below by the call above (which is perfectly sound) but this triggers new questions,
 	// TODO => serverprotocol => verifyserverproof, reorganize tests or rewrite everything to follow testing guidelines or make sure everything is in the right place
@@ -614,7 +614,7 @@ func TestVerifyServerProof(t *testing.T) {
 	//	t.Error("Cannot verify first valid normal server proof")
 	//}
 
-	err = ServerProtocol(suite, context, &servMsg, servers[1])
+	err = ServerProtocol(suite, &servMsg, servers[1])
 	require.NoError(t, err)
 
 	//Verify any server proof
@@ -875,7 +875,7 @@ func TestToBytes_ServerProof(t *testing.T) {
 
 	servMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 
-	ServerProtocol(suite, context, &servMsg, servers[0])
+	ServerProtocol(suite, &servMsg, servers[0])
 
 	//Normal execution for correct proof
 	data, err := servMsg.Proofs[0].ToBytes()

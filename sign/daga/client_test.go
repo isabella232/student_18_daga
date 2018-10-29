@@ -58,8 +58,8 @@ func signDummyChallenge(cs kyber.Scalar, servers []Server) Challenge {
 
 // test helper that returns dummy "channel" to act as a dummy server/verifier
 // that return challenge upon reception of the prover's commitments
-func newDummyServerChannels(challenge Challenge) func([]kyber.Point)Challenge {
-	sendCommitsReceiveChallenge := func([]kyber.Point)Challenge {
+func newDummyServerChannels(challenge Challenge) func([]kyber.Point) Challenge {
+	sendCommitsReceiveChallenge := func([]kyber.Point) Challenge {
 		return challenge
 	}
 	return sendCommitsReceiveChallenge
@@ -190,7 +190,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Run ServerProtocol on each server
 	for i := range servers {
-		err := ServerProtocol(suite, context, &servMsg, servers[i])
+		err := ServerProtocol(suite, &servMsg, servers[i])
 		require.NoError(t, err, "server %v returned an error while processing valid auth. request", i)
 	}
 
@@ -248,7 +248,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Run ServerProtocol on each server
 	for i := range servers {
-		err := ServerProtocol(suite, context, &servMsg, servers[i])
+		err := ServerProtocol(suite, &servMsg, servers[i])
 		require.Error(t, err, "server %v returned no error while processing invalid auth. request", i)
 	}
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
@@ -280,7 +280,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Run ServerProtocol on each server
 	for i := range servers {
-		err := ServerProtocol(suite, context, &servMsg, servers[i])
+		err := ServerProtocol(suite, &servMsg, servers[i])
 		require.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)
@@ -315,7 +315,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Run ServerProtocol on each server
 	for i := range servers {
-		err := ServerProtocol(suite, context, &servMsg, servers[i])
+		err := ServerProtocol(suite, &servMsg, servers[i])
 		require.NoError(t, err, "server %v returned an error while processing auth. request of a misbehaving client", i)
 	}
 	Tf, err = GetFinalLinkageTag(suite, context, servMsg)

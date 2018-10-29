@@ -31,18 +31,18 @@ func main() {
 	groupsDef := "the group-definition-file"
 	cliApp.Commands = []cli.Command{
 		{
-			Name: 		"login",
-			Usage:		"create and send a new daga auth. request",
-			Aliases:	[]string{"l"},
-			ArgsUsage:	"the index (in auth. context) of the client being run",
-			Action:		cmdLogin,
+			Name:      "login",
+			Usage:     "create and send a new daga auth. request",
+			Aliases:   []string{"l"},
+			ArgsUsage: "the index (in auth. context) of the client being run",
+			Action:    cmdLogin,
 		},
-		{// FIXME, for now here but move where more appropriate if still used later
-			Name:       "setup",
-			Usage:		"setup c clients, servers and a daga auth. context and save them to FS TODO",
-			Aliases: 	[]string{"s"},
-			ArgsUsage:	groupsDef + ", c the number of clients",
-			Action: 	cmdSetup,
+		{ // FIXME, for now here but move where more appropriate if still used later
+			Name:      "setup",
+			Usage:     "setup c clients, servers and a daga auth. context and save them to FS TODO",
+			Aliases:   []string{"s"},
+			ArgsUsage: groupsDef + ", c the number of clients",
+			Action:    cmdSetup,
 		},
 	}
 	cliApp.Flags = []cli.Flag{
@@ -202,7 +202,7 @@ func readNodesPrivateKeys(group *app.Group) ([]kyber.Scalar, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse the cothority config of server %d: %s", i, err)
 			}
-			privateKey, err := encoding.StringHexToScalar(suite, config.Private)  // let's hope that this will work (the suite)
+			privateKey, err := encoding.StringHexToScalar(suite, config.Private) // let's hope that this will work (the suite)
 			serverKeys = append(serverKeys, privateKey)
 		}
 	}

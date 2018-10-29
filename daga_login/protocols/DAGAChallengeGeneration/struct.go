@@ -28,7 +28,7 @@ type Announce struct {
 // process the message in the framework.
 // QUESTION not sure to understand why needed => hack that framework uses to communicate sender info ? cannot hide this in framework instead ?)
 type StructAnnounce struct {
-	*onet.TreeNode  // sender
+	*onet.TreeNode // sender
 	Announce
 }
 

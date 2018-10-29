@@ -12,6 +12,7 @@ import (
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/daga_login"
+	"github.com/dedis/student_18_daga/daga_login/protocols/DAGA"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAChallengeGeneration"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"sync"
@@ -25,7 +26,7 @@ func init() {
 	var err error
 	templateID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
 	log.ErrFatal(err)
-	network.RegisterMessages(storage{}, daga_login.NetContext{})
+	network.RegisterMessages(storage{}, daga_login.NetContext{}, daga_login.NetServer{})
 }
 
 // Service is our template-service // TODO doc + rename (or QUESTION maybe rename only package DAGA.service DAGA.ChallengeGenerationProtocol etc.. what is the best ?)
@@ -44,17 +45,38 @@ var storageID = []byte("main")
 // storage is used to save our data.
 // always access storage through the helpers/getters !
 type storage struct {
-	Context daga_login.NetContext   // current DAGA context and respective roster
-	DagaServer daga_login.NetServer // daga server (for context)
+	Context    daga_login.NetContext // current DAGA context and respective roster
+	DagaServer daga_login.NetServer  // daga server (for context)
 	// (TODO/enhancement add facilities to handle multiple contexts at once, with possibly multiple DAGA server identities)
 	sync.Mutex
 }
 
+// helper to quickly validate Auth requests before proceeding further
+func (s Service) validateAuthReq(req *daga_login.Auth) (daga_login.Context, error) {
+	if req == nil || len(req.SCommits) == 0 || req.T0 == nil {
+		return daga_login.Context{}, errors.New("validateAuthReq: nil or empty request")
+	}
+	// TODO validate proof (FIXME check commitments and challenge same as at proof construction time..etc..) => probably better in the corresponding daga function
+	return s.validateContext(req.Context)
+}
+
 // Auth starts the server's protocols (daga 4.3.6)
+// QUESTION FIXME decide what is returned to client, tag only or full final servermsg ?
 func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
-	// TODO validate req
-	// TODO ring
-	return nil, fmt.Errorf("unimplemented")
+	// verify that submitted request is valid and accepted by our node
+	context, err := s.validateAuthReq(req)
+	if err != nil {
+		return nil, errors.New("Auth: " + err.Error())
+	}
+
+	// start daga server's protocol
+	if dagaProtocol, err := s.newDAGAServerProtocol(daga_login.NetAuthenticationMessage(*req)); err != nil {
+		return nil, errors.New("Auth: " + err.Error())
+	} else {
+		serverMsg, err := dagaProtocol.WaitForResult()
+		netServerMsg := daga_login.NetEncodeServerMessage(context, &serverMsg)
+		return (*daga_login.AuthReply)(netServerMsg), err
+	}
 }
 
 // helper that check if received context is valid, (fully populated, accepted, etc..)
@@ -104,6 +126,8 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 
+	// TODO do something with the commitments, see issue in github
+
 	// start challenge generation protocol
 	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(context); err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
@@ -111,6 +135,36 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 		challenge, err := challengeGeneration.WaitForResult()
 		return (*daga_login.PKclientChallenge)(&challenge), err
 	}
+}
+
+// function called to initialize and start a new DAGA (Server's) protocol where current node takes a "Leader" role
+func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage) (*DAGA.DAGAProtocol, error) {
+	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
+
+	// build tree with leader as root
+	roster := req.Context.Roster
+	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
+	// QUESTION would be convenient to have a ring topology out of tree (each node as one and only one parent AND one and only one child)
+	// => what can go wrong if I do that ? (would solve the multiple daga server and context issues) while being nice and readable (simplify protocol code)
+
+	// create and setup protocol instance
+	pi, err := s.CreateProtocol(DAGA.Name, tree)
+	if err != nil {
+		return nil, errors.New("failed to create " + DAGA.Name + " protocol: " + err.Error())
+	}
+	dagaProtocol := pi.(*DAGA.DAGAProtocol)
+	dagaServer, err := s.dagaServer()
+	if err != nil {
+		return nil, errors.New("failed to retrieve daga server from service state: " + err.Error())
+	}
+	dagaProtocol.LeaderSetup(req, dagaServer)
+
+	// start
+	if err = dagaProtocol.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start %s protocol: %s", DAGA.Name, err)
+	}
+	log.Lvl3("service started DAGAChallengeGeneration protocol, waiting for completion")
+	return dagaProtocol, nil
 }
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
@@ -121,6 +175,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
 	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
+	// FIXME lacks a generateStarwithRoot for that purpose
 
 	// create and setup protocol instance
 	pi, err := s.CreateProtocol(DAGAChallengeGeneration.Name, tree)
@@ -145,7 +200,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 // NewProtocol is called upon reception of a Protocol's first message when Onet needs
 // to instantiate the protocol. A Service is expected to manually create
 // the ProtocolInstance it is using. So this method will be potentially called on all nodes of a Tree (except the root, since it is
-// the one starting the protocols) to generate the PI on those nodes.
+// the one starting the protocols) to generate the PI on those other nodes.
 // if it returns nil, nil then the default NewProtocol is called (the one defined in protocol)
 // FIXME outdated documentation in template
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
@@ -163,6 +218,18 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		}
 		challengeGeneration.ChildrenSetup(dagaServer)
 		return challengeGeneration, nil
+	case DAGA.Name:
+		pi, err := DAGA.NewProtocol(tn)
+		if err != nil {
+			return nil, err
+		}
+		dagaServerProtocol := pi.(*DAGA.DAGAProtocol)
+		dagaServer, err := s.dagaServer()
+		if err != nil {
+			log.Panic("failed to retrieve daga server from service state: " + err.Error())
+		}
+		dagaServerProtocol.ChildrenSetup(dagaServer, s.acceptContext)
+		return dagaServerProtocol, nil
 	default:
 		log.Panic("not implemented")
 	}
@@ -199,7 +266,7 @@ func (s *Service) tryLoad() error {
 
 		// build daga server // TODO FIXME QUESTION how to do it when we are no longer hacking... ? (pass setup info to service) + how to allow mutliple servers ?
 		indexInContext, _ := context.ServerIndexOf(s.ServerIdentity().Public)
-		dagaServer, err := daga.NewServer(suite, indexInContext, s.ServerIdentity().GetPrivate())
+		dagaServer, err := daga_login.ReadServer(fmt.Sprintf("./server%d.bin", indexInContext))
 		if err != nil {
 			return errors.New("tryLoad: first run, failed to setup daga Server from config file: " + err.Error())
 		}

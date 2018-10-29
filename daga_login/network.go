@@ -23,33 +23,33 @@ type NetMembers struct {
 // (which has interface field (daga.AuthenticationContext))
 type NetContext struct {
 	Roster onet.Roster
-	G NetMembers
-	R []kyber.Point
-	H []kyber.Point
+	G      NetMembers
+	R      []kyber.Point
+	H      []kyber.Point
 }
 
 // to represent a daga.Client (which is an interface)
 // used only to dump client to disk while developing for now
 type NetClient struct {
 	PrivateKey kyber.Scalar
-	Index int
+	Index      int
 }
 
 // to represent a daga.Server (which is an interface)
 // used only to dump server to disk while developing for now
 type NetServer struct {
-	PrivateKey kyber.Scalar
-	Index int
+	PrivateKey     kyber.Scalar
+	Index          int
 	PerRoundSecret kyber.Scalar
 }
 
 // NetAuthenticationMessage provides a net compatible representation of the daga.AuthenticationMessage struct
 // (which embeds a context which has interface fields)
 type NetAuthenticationMessage struct {
-	Context NetContext
-	SCommits  []kyber.Point
-	T0      kyber.Point
-	Proof   daga.ClientProof
+	Context  NetContext
+	SCommits []kyber.Point
+	T0       kyber.Point
+	Proof    daga.ClientProof
 }
 
 // NetServerMessage provides a net compatible representation of the daga.ServerMessage struct
@@ -65,8 +65,8 @@ type NetServerMessage struct {
 // TODO not sure necessary
 func NetEncodeMembers(x, y []kyber.Point) *NetMembers {
 	return &NetMembers{
-		X:x,
-		Y:y,
+		X: x,
+		Y: y,
 	}
 }
 
@@ -77,9 +77,9 @@ func (netmembers NetMembers) NetDecode() ([]kyber.Point, []kyber.Point) {
 func (context Context) NetEncode() *NetContext {
 	G := NetEncodeMembers(context.Members())
 	return &NetContext{
-		G:*G,
-		H:context.ClientsGenerators(),
-		R:context.ServersSecretsCommitments(),
+		G:      *G,
+		H:      context.ClientsGenerators(),
+		R:      context.ServersSecretsCommitments(),
 		Roster: context.Roster,
 	}
 }
@@ -99,7 +99,7 @@ func (netcontext NetContext) NetDecode() (Context, error) {
 
 func NetEncodeClient(c daga.Client) *NetClient {
 	return &NetClient{
-		Index: c.Index(),
+		Index:      c.Index(),
 		PrivateKey: c.PrivateKey(),
 	}
 }
@@ -137,8 +137,8 @@ func NetDecodeClients(netClients []NetClient) ([]daga.Client, error) {
 
 func NetEncodeServer(s daga.Server) *NetServer {
 	return &NetServer{
-		PrivateKey: s.PrivateKey(),
-		Index: s.Index(),
+		PrivateKey:     s.PrivateKey(),
+		Index:          s.Index(),
 		PerRoundSecret: s.RoundSecret(),
 	}
 }
@@ -167,48 +167,48 @@ func (s NetServer) NetDecode() (daga.Server, error) {
 func NetEncodeAuthenticationMessage(context Context, msg *daga.AuthenticationMessage) *NetAuthenticationMessage {
 	netContext := context.NetEncode()
 	return &NetAuthenticationMessage{
-		Context: *netContext,
-		T0:msg.T0,
-		SCommits:msg.SCommits,
-		Proof: msg.P0,
+		Context:  *netContext, // i.e. discard context part of message and use the one provided (FIXME seems I was tired)
+		T0:       msg.T0,
+		SCommits: msg.SCommits,
+		Proof:    msg.P0,
 	}
 }
 
-func (netmsg *NetAuthenticationMessage) NetDecode(suite daga.Suite) (*daga.AuthenticationMessage, Context, error) {
+func (netmsg *NetAuthenticationMessage) NetDecode() (*daga.AuthenticationMessage, Context, error) {
 	context, err := netmsg.Context.NetDecode()
 	if err != nil {
-		return nil, Context{}, fmt.Errorf("Decode error for context\n%s", err)
+		return nil, Context{}, fmt.Errorf("failed to decode context: %s", err)
 	}
 	msg := daga.AuthenticationMessage{
-		C:context.AuthenticationContext,
-		P0:netmsg.Proof,
+		C:  context.AuthenticationContext,
+		P0: netmsg.Proof,
 	}
 	msg.SCommits = netmsg.SCommits
 	msg.T0 = netmsg.T0
 	return &msg, context, nil
 }
 
-func NetEncodeServerMessage(suite daga.Suite, context Context, msg *daga.ServerMessage)  *NetServerMessage {
+func NetEncodeServerMessage(context Context, msg *daga.ServerMessage) *NetServerMessage {
 	request := NetEncodeAuthenticationMessage(context, &msg.Request)
 	return &NetServerMessage{
-		Request:*request,
-		Sigs:msg.Sigs,
-		Proofs:msg.Proofs,
-		Tags:msg.Tags,
+		Request: *request,
+		Sigs:    msg.Sigs,
+		Proofs:  msg.Proofs,
+		Tags:    msg.Tags,
 		Indexes: msg.Indexes,
 	}
 }
 
-func (netmsg *NetServerMessage) NetDecode(suite daga.Suite) (*daga.ServerMessage, Context, error) {
-	request, context, err := netmsg.Request.NetDecode(suite)
+func (netmsg *NetServerMessage) NetDecode() (*daga.ServerMessage, Context, error) {
+	request, context, err := netmsg.Request.NetDecode()
 	if err != nil {
-		return nil, Context{}, fmt.Errorf("Decode error in request\n%s", err)
+		return nil, Context{}, fmt.Errorf("failed to decode request: %s", err)
 	}
 	return &daga.ServerMessage{
-		Request:*request,
-		Tags:netmsg.Tags,
-		Proofs:netmsg.Proofs,
-		Sigs:netmsg.Sigs,
-		Indexes:netmsg.Indexes,
+		Request: *request,
+		Tags:    netmsg.Tags,
+		Proofs:  netmsg.Proofs,
+		Sigs:    netmsg.Sigs,
+		Indexes: netmsg.Indexes,
 	}, context, nil
 }

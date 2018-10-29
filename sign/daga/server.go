@@ -14,7 +14,7 @@ import (
 
 // TODO doc
 type Server interface {
-	Client  // client interface (a server can be a client.. why not..)
+	Client                     // client interface (a server can be a client.. why not..)
 	RoundSecret() kyber.Scalar //Per round secret
 	SetRoundSecret(scalar kyber.Scalar)
 	//NewChallengeCommitment(suite Suite) (*ChallengeCommitment, kyber.Scalar, error)
@@ -22,7 +22,7 @@ type Server interface {
 
 type server struct {
 	Client
-	r     kyber.Scalar //Per round secret
+	r kyber.Scalar //Per round secret
 }
 
 //NewServer is used to initialize a new server with a given index
@@ -112,7 +112,7 @@ func NewChallengeCommitment(suite Suite, server Server) (commit *ChallengeCommit
 	return &ChallengeCommitment{
 		ServerSignature: ServerSignature{
 			Index: server.Index(),
-			Sig: sig,
+			Sig:   sig,
 		},
 		Commit: com,
 	}, opening, nil
@@ -204,7 +204,7 @@ func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challenge 
 	encountered := map[int]bool{}
 	for _, sig := range challenge.Sigs {
 		if encountered[sig.Index] == true {
-			return fmt.Errorf("CheckUpdateChallenge: duplicate signature")  // FIXME WTF ? duplicate index I'd say... (ok since we use index to infer key..cannot replay)
+			return fmt.Errorf("CheckUpdateChallenge: duplicate signature") // FIXME WTF ? duplicate index I'd say... (ok since we use index to infer key..cannot replay)
 		}
 		encountered[sig.Index] = true
 
@@ -275,10 +275,11 @@ func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage
 
 /*ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client*/
 // TODO DRY see what can be shared with GetFinalLinkageTag ...
-func ServerProtocol(suite Suite, context AuthenticationContext, msg *ServerMessage, server Server) error {
+func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
+
 	// input checks
-	if context == nil || msg == nil || len(msg.Indexes) != len(msg.Proofs) || len(msg.Proofs) != len(msg.Tags) || len(msg.Tags) != len(msg.Sigs) {
-		return fmt.Errorf("invalid message")
+	if msg == nil || len(msg.Indexes) != len(msg.Proofs) || len(msg.Proofs) != len(msg.Tags) || len(msg.Tags) != len(msg.Sigs) {
+		return fmt.Errorf("ServerProtocol: invalid message")
 	}
 
 	//Step 1
@@ -286,6 +287,8 @@ func ServerProtocol(suite Suite, context AuthenticationContext, msg *ServerMessa
 	if err := verifyAuthenticationMessage(suite, msg.Request); err != nil {
 		return errors.New("ServerProtocol: malformed client message or wrong proof")
 	}
+
+	context := msg.Request.C
 
 	_, Y := context.Members()
 	//Checks that not all servers already did the protocols

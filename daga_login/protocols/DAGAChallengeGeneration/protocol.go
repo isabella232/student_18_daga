@@ -23,6 +23,7 @@ import (
 	"github.com/dedis/kyber"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/daga_login"
+	"github.com/dedis/student_18_daga/daga_login/protocols"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"time"
 
@@ -36,7 +37,7 @@ var suite = daga.NewSuiteEC()
 const Timeout = 5 * time.Second
 
 func init() {
-	network.RegisterMessage(Announce{})  // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
+	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
 	// QUESTION protocol is tied to service => according to documentation I need to call Server.ProtocolRegisterName
 	// QUESTION Where ?
 	// QUESTION need more info on all of this works and what are the possible scenarios, documentation not clear enough nor up to date
@@ -50,7 +51,7 @@ type DAGAChallengeGenerationProtocol struct {
 	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments at correct index (in auth. context), on the children to store leaderCommitment at 0
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
-	dagaServer daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time
+	dagaServer daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildrenSetup)
 	context    daga_login.Context // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
 }
 
@@ -61,8 +62,8 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		TreeNodeInstance: n,
 	}
 	for _, handler := range []interface{}{t.HandleAnnounce, t.HandleAnnounceReply,
-										  t.HandleOpen, t.HandleOpenReply,
-										  t.HandleFinalize} {
+		t.HandleOpen, t.HandleOpenReply,
+		t.HandleFinalize} {
 		if err := t.RegisterHandler(handler); err != nil {
 			return nil, errors.New("couldn't register handler: " + err.Error())
 		}
@@ -94,7 +95,7 @@ func (p *DAGAChallengeGenerationProtocol) ChildrenSetup(dagaServer daga.Server) 
 
 // setter that service needs to call to give to the protocol instance "which daga.Server it is"
 func (p *DAGAChallengeGenerationProtocol) setDagaServer(dagaServer daga.Server) {
-	if dagaServer == nil {//|| reflect.ValueOf(dagaServer).IsNil() {
+	if dagaServer == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
 		log.Panic("protocol setup: nil daga server")
 	}
 	p.dagaServer = dagaServer
@@ -183,7 +184,7 @@ func (p *DAGAChallengeGenerationProtocol) Start() error {
 		Context:      *p.context.NetEncode(), // TODO maybe use setconfig for that purpose instead but... pff..
 	})
 	if len(errs) != 0 {
-		return fmt.Errorf(Name+": failed to start: "+"broadcast of Announce failed with error(s): %v", errs)
+		return fmt.Errorf(Name+": failed to start: broadcast of Announce failed with error(s): %v", errs)
 	}
 	return nil
 }
@@ -221,6 +222,7 @@ func (p *DAGAChallengeGenerationProtocol) HandleAnnounce(msg StructAnnounce) err
 	// FIXME => have the context be passed from service to protocol on start then context !ok
 	// FIXME propagated to other instances in announce message !ok
 	// FIXME/TODO then validated before proceeding see discussion in https://github.com/dedis/student_18_daga/issues/25
+	// ==> need ways for the service to communicate the accepted context to the protocol instance at
 
 	if context, err := msg.Context.NetDecode(); err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: cannot decode context:" + err.Error())
@@ -345,12 +347,12 @@ func (p *DAGAChallengeGenerationProtocol) HandleOpenReply(msg []StructOpenReply)
 }
 
 // handler that will be called by framework when node received a Finalize msg from a previous node in ring
-// Step 4 of daga challenge generation protocol described in Syta - 4.7.4
+// Step 4.5 of daga challenge generation protocol described in Syta - 4.7.4
 func (p *DAGAChallengeGenerationProtocol) HandleFinalize(msg StructFinalize) error {
 
 	log.Lvlf3("%s: Received Finalize", Name)
 
-	// check if we are the leader (last node..)
+	// check if we are the leader
 	_, Y := p.context.Members()
 	weAreNotLeader := len(msg.ChallengeCheck.Sigs) != len(Y)
 
@@ -362,32 +364,20 @@ func (p *DAGAChallengeGenerationProtocol) HandleFinalize(msg StructFinalize) err
 	if weAreNotLeader {
 		// not all nodes have received Finalize => send to next node in ring
 
-		// figure out the node of the next-server in "ring"
-		nextServerIndex := (p.dagaServer.Index() + 1) % len(Y)
-		nextServerPubKey := Y[nextServerIndex]
-		nextServerTreeNode := func() *onet.TreeNode {
-			for _, treeNode := range p.Tree().List() {
-				// TODO use indexOf helper
-				// TODO for now ok but if in future we allow nodes to have multiple daga.Server identities => doesn't work, we need sort of a directory service or protocol..
-				// TODO kind of service that answer with a signature when called with a publicKey areYou(pubKey)? => {yes, sign} | { no }
-				// TODO what would be a real solution to get correct treenode (if multiple daga identitities) ?
-				if treeNode.ServerIdentity.Public.Equal(nextServerPubKey) {
-					return treeNode
-				}
-			}
-			return nil
-		}()
+		// figure out the node of the next-server in "ring" and send to it
+		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), Y, p.Tree().List())
 		if nextServerTreeNode == nil {
-			fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
+			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
 		}
 		return p.SendTo(nextServerTreeNode, &Finalize{
 			ChallengeCheck: msg.ChallengeCheck,
 		})
 	} else {
+		// step 5
 		// we are the leader, and all nodes already updated the challengecheck struct => Finalize the challenge
 		clientChallenge, err := daga.FinalizeChallenge(p.context, &msg.ChallengeCheck)
 		if err != nil {
-			fmt.Errorf("%s: failed to handle Finalize, leader failed to finalize the challenge: %s", Name, err.Error())
+			return fmt.Errorf("%s: failed to handle Finalize, leader failed to finalize the challenge: %s", Name, err.Error())
 		}
 		// make result available to service that will send it back to client
 		p.result <- clientChallenge

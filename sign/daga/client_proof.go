@@ -313,7 +313,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
-	sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (ClientProof, error) {
+	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (ClientProof, error) {
 	// TODO FIXME maybe, pack the 2 channels in a new Proxy type and add methods sendReceive etc NewTestProxy NewProxy etc..
 	// TODO or other things lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
 	// TODO see later while building the protocols and services
@@ -517,7 +517,7 @@ func newClientProver(suite Suite, context AuthenticationContext, tagAndCommitmen
 		finalOrPred: client.Index(), // indicate to prover which clause is actually true
 	}
 	sval := map[string]kyber.Scalar{
-		"s":                              s,
+		"s":                                s,
 		"x" + strconv.Itoa(client.Index()): client.PrivateKey(),
 	}
 	// retrieve sigma-protocol Prover for the OR-predicate

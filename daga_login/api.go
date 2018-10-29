@@ -19,7 +19,7 @@ import (
 )
 
 // ServiceName is used for registration on the onet.
-const ServiceName = "daga_login"  // FIXME rename to daga, for now there is no "login"
+const ServiceName = "daga_login" // FIXME rename to daga, for now there is no "login"
 
 var suite = daga.NewSuiteEC()
 
@@ -43,7 +43,7 @@ func NewClient(i int, s kyber.Scalar) (*Client, error) {
 	} else {
 		return &Client{
 			Client: dagaClient,
-			onet: onet.NewClient(suite, ServiceName),
+			onet:   onet.NewClient(suite, ServiceName),
 		}, nil
 	}
 }
@@ -82,7 +82,7 @@ func NewContext(dagaContext daga.AuthenticationContext, fullRoster onet.Roster) 
 	dagaRoster := onet.NewRoster(dagaList)
 	return &Context{
 		AuthenticationContext: dagaContext,
-		Roster: *dagaRoster,
+		Roster:                *dagaRoster,
 	}, nil
 }
 
@@ -92,14 +92,14 @@ func NewContext(dagaContext daga.AuthenticationContext, fullRoster onet.Roster) 
 // after the check done, to proceed remember to keep context that is in message/request/reply for all computations.
 func (c Context) Equals(other Context) bool {
 	// TODO consider moving this in kyber daga
-	containsSameElems := func(a, b []kyber.Point)bool {
+	containsSameElems := func(a, b []kyber.Point) bool {
 		// use maps to mimic set, first traverse first slice and populate map
 		// then traverse second slice checking if value present in map and indeed equal (stringEq ==> eq)
 		if len(a) != len(b) {
 			return false
 		}
 		set := make(map[string]struct{}, len(a))
-		exist := struct {}{}
+		exist := struct{}{}
 		for _, p := range a {
 			set[p.String()] = exist
 		}
@@ -114,26 +114,27 @@ func (c Context) Equals(other Context) bool {
 	//if reflect.DeepEqual(c, other) {  // TODO check if it is useful... maybe can never work..
 	//	return true
 	//} else {
-		X1, Y1 := c.Members()
-		X2, Y2 := other.Members()
-		return containsSameElems(X1, X2) &&
-				containsSameElems(Y1, Y2) &&
-				containsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
-				containsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
-		// TODO QUESTION FIXME should I compare rosters (and then how ? actual content or IDs..) ? what can go wrong if same daga context and different rosters
-		// IMO nothing since if another server has knowledge of key then ... either this is bad but out of our reach or maybe legitimate use to balance workload ??
+	X1, Y1 := c.Members()
+	X2, Y2 := other.Members()
+	return containsSameElems(X1, X2) &&
+		containsSameElems(Y1, Y2) &&
+		containsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
+		containsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
+	// TODO QUESTION FIXME should I compare rosters (and then how ? actual content or IDs..) ? what can go wrong if same daga context and different rosters
+	// IMO nothing since if another server has knowledge of key then ... either this is bad but out of our reach or maybe legitimate use to balance workload ??
 	//}
 }
 
 func (c Context) ServerIndexOf(publicKey kyber.Point) (int, error) {
 	_, Y := c.Members()
-	return indexOf(Y, publicKey)
+	return IndexOf(Y, publicKey)
 }
 
-type PKclientVerifier func([]kyber.Point)daga.Challenge
+type PKclientVerifier func([]kyber.Point) daga.Challenge
+
 func (c Client) newPKclientVerifier(context Context, dst *network.ServerIdentity) PKclientVerifier {
 	// poor man's curry
-	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point)daga.Challenge {
+	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) daga.Challenge {
 		return c.pKClient(dst, context, proverCommitments)
 	}
 	return sendCommitsReceiveChallenge
@@ -151,22 +152,21 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 		return nil, errors.New("failed to build new authentication message: " + err.Error())
 	} else {
 		// send it to random server (API call to Auth)
-		request := NetEncodeAuthenticationMessage(context, M0)
+		request := Auth(*NetEncodeAuthenticationMessage(context, M0))
 		reply := NetServerMessage{}
 
 		dst := context.RandomServerIdentity()
-		err = c.onet.SendProtobuf(dst, request, &reply)
+		err = c.onet.SendProtobuf(dst, &request, &reply)
 		if err != nil {
 			log.Panic("error sending auth. request to", dst, ":", err)
 			return nil, err
 		}
-		serverMsg, context, err := reply.NetDecode(suite)
+		serverMsg, context, err := reply.NetDecode()
 		if err != nil {
 			log.Panic("error decoding auth. reply from", dst, ":", err)
 			return nil, err
 		}
 		// TODO FIXME check that received context match sent context
-		log.Panic("c.Auth: remaining parts not implemented")
 
 		if Tf, err := daga.GetFinalLinkageTag(suite, context.AuthenticationContext, *serverMsg); err != nil {
 			return nil, errors.New("failed to extract final linkage tag from server reply: " + err.Error())
@@ -181,7 +181,7 @@ func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitmen
 	log.Lvl4("PKclient, sending commitments to:", dst)
 	reply := PKclientChallenge{}
 	request := PKclientCommitments{
-		Data:commitments,
+		Data:    commitments,
 		Context: *context.NetEncode(),
 	}
 	err := c.onet.SendProtobuf(dst, &request, &reply)

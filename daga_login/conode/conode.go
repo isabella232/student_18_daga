@@ -68,7 +68,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "config, c",
-			Value: path.Join(cfgpath.GetConfigPath(cliApp.Name), app.DefaultServerConfig),  // TODO verify that it is still working (replaced a "magic app name" with what I think is populated by default app name)
+			Value: path.Join(cfgpath.GetConfigPath(cliApp.Name), app.DefaultServerConfig), // TODO verify that it is still working (replaced a "magic app name" with what I think is populated by default app name)
 			Usage: "Configuration file of the server",
 		},
 	}
