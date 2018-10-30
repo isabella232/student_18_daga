@@ -10,7 +10,7 @@ import (
 	"github.com/dedis/student_18_daga/sign/daga"
 )
 
-// We need to register all messages so the network knows how to handle/marshall/unmarshal them.
+// register all API messages s.t. the network knows how to handle/marshal/unmarshal them.
 func init() {
 	network.RegisterMessages(
 		PKclientCommitments{}, PKclientChallenge{},
@@ -18,6 +18,7 @@ func init() {
 	)
 }
 
+// QUESTION ?
 const (
 	// ErrorParse indicates an error while parsing the protobuf-file.
 	ErrorParse = iota + 4000
@@ -28,9 +29,8 @@ type PKclientCommitments struct {
 	Context NetContext // to early reject auth requests for context that the server doesn't care about
 	Data    []kyber.Point
 }
-
 type PKclientChallenge daga.Challenge
 
+// Auth will start the authentication of client that will result (on success) in an AuthReply
 type Auth NetAuthenticationMessage
-
 type AuthReply NetServerMessage

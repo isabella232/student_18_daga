@@ -1,17 +1,16 @@
 package DAGA
 
-// QUESTION not sure if each protocol deserve its own package but if I put them all in same package (say protocol) will need to change a little the template conventions
-// QUESTION : purpose of shutdown, cleanup when protocol done ?, automatically called or manually called ?
+// QUESTION not sure if each protocol deserve its own package + what would be a sound organization
+// QUESTION (if I put them all in same package (say protocol or DAGA) will need to change a little the template conventions
+// IMO better: DAGA.PKCLientChallengeGenerationProtocol, DAGA.ServerProtocol, DAGA.Service etc..
+// FIXME rename everything to follow conventions when decided
 
 /*
-The `NewProtocol` method is used to define the protocol and to register
-the handlers that will be called if a certain type of message is received.
-The handlers will be treated according to their signature.
+This file provides a Onet-protocol implementing the "DAGA Server's protocol" described in
+Syta - Identity Management Through Privacy Preserving Aut Chapter 4.3.6
 
-The protocol-file defines the actions that the protocol needs to do in each
-step. The root-node will call the `Start`-method of the protocol. Each
-node will only use the `Handle`-methods, and not call `Start` again.
-
+The protocol is meant to be launched upon reception of an Auth request by the DAGA service using the
+`newDAGAServerProtocol`-method of the service (that will take care of doing things right.)
 */
 
 import (
@@ -29,28 +28,33 @@ import (
 
 var suite = daga.NewSuiteEC()
 
-// TODO educated timeout formula that scale with number of nodes etc..
+// QUESTION TODO educated timeout formula that scale with number of nodes etc..
 const Timeout = 10 * time.Second
 
 func init() {
 	network.RegisterMessage(ServerMsg{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
 	// QUESTION protocol is tied to service => according to documentation I need to call Server.ProtocolRegisterName
 	// QUESTION Where ?
-	// QUESTION need more info on all of this works and what are the possible scenarios, documentation not clear enough nor up to date
-	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove
+	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove or ?? see question above
 }
 
-// DAGAChallengeGenerationProtocol holds the state of the challenge generation protocol.
+// DAGAProtocol holds the state of the protocol instance.
 type DAGAProtocol struct {
 	*onet.TreeNodeInstance
-	result        chan daga.ServerMessage
+	result        chan daga.ServerMessage             // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
 	dagaServer    daga.Server                         // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildrenSetup)
 	request       daga_login.NetAuthenticationMessage // the client's request (set by service using LeaderSetup), used only by leader/first node
 	acceptContext func(daga_login.Context) bool       // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
-// NewProtocol initialises the structure for use in one round (at the root/leader), callback passed to onet upon protocol registration
-// and used to instantiate protocol instances, if service.NewProtocol returns nil, nil this one will be called on children too.
+// General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
+// and used to instantiate protocol instances, on the Leader/root done by onet.CreateProtocol and on other nodes upon reception of
+// first protocol message, by the serviceManager that will call service.NewProtocol.
+// if service.NewProtocol returns nil, nil this one will be called on children too.
+//
+// Relevant for this protocol implementation: it is expected that the service DO implement the service.NewProtocol (don't returns nil, nil),
+// to manually call this method before calling the ChildrenSetup method to provide children-node specific state.
+// (similarly for the leader-node, it is expected that the service call LeaderSetup)
 func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	t := &DAGAProtocol{
 		TreeNodeInstance: n,
@@ -82,6 +86,7 @@ func (p *DAGAProtocol) ChildrenSetup(dagaServer daga.Server, acceptContext func(
 	p.setAcceptContext(acceptContext)
 }
 
+// setter to let know the protocol instance "what is the daga Context validation strategy"
 func (p *DAGAProtocol) setAcceptContext(acceptContext func(ctx daga_login.Context) bool) {
 	if acceptContext == nil {
 		log.Panic("protocol setup: nil context validator (acceptContext())")
@@ -94,17 +99,18 @@ func (p *DAGAProtocol) setDagaServer(dagaServer daga.Server) {
 	if dagaServer == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
 		log.Panic("protocol setup: nil daga server")
 	}
-
 	p.dagaServer = dagaServer
 }
 
+// setter used to provide the client request to the root protocol instance
 func (p *DAGAProtocol) setRequest(request daga_login.NetAuthenticationMessage) {
 	// TODO see what to check here, everything should already be ok...
 	p.request = request
 }
 
-// Start sends TODO
-// Step 1 of daga server's protocol described in Syta - 4.3.6
+// Start initialize the daga.ServerMessage, run the "daga.ServerProtocol" on it and forward it to the next node
+//
+// Step 1-4 of of daga server's protocol described in Syta - 4.3.6
 func (p *DAGAProtocol) Start() error {
 	// TODO check tree shape
 	log.Lvlf3("leader (%s) started %s", p.ServerIdentity(), Name)
@@ -126,11 +132,12 @@ func (p *DAGAProtocol) Start() error {
 	})
 }
 
-// Wait for protocol result or timeout, must be called on root instance
+// Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
 func (p *DAGAProtocol) WaitForResult() (daga.ServerMessage, error) {
 	if p.result == nil {
 		log.Panic("WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance")
 	}
+
 	// wait for protocol result or timeout
 	select {
 	case serverMsg := <-p.result:
@@ -141,7 +148,12 @@ func (p *DAGAProtocol) WaitForResult() (daga.ServerMessage, error) {
 	}
 }
 
-// TODO
+// Handler that is called upon reception of the daga.ServerMessage from previous node.
+// will check that the context of the request is accepted by current node before
+// running the "daga.ServerProtocol" on it and either forwarding it to next node or broadcasting it to all nodes
+// if current node is last node
+//
+// Step 1-4 of of daga server's protocol described in Syta - 4.3.6
 func (p *DAGAProtocol) HandleServerMsg(msg StructServerMsg) error {
 	log.Lvlf3("%s: Received ServerMsg", Name)
 
@@ -151,6 +163,7 @@ func (p *DAGAProtocol) HandleServerMsg(msg StructServerMsg) error {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
 
+	// check if context accepted by our node
 	if !p.acceptContext(context) {
 		return fmt.Errorf("%s: context not accepted by node", Name)
 	}
@@ -160,6 +173,7 @@ func (p *DAGAProtocol) HandleServerMsg(msg StructServerMsg) error {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
 
+	// forward to next node or broadcast to everyone if we are the last one
 	_, Y := context.Members()
 	weAreLastServer := len(serverMsg.Indexes) == len(Y)
 
@@ -197,7 +211,7 @@ func (p *DAGAProtocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) erro
 	}
 
 	if !weAreLeader {
-		// TODO do something.. don't know ..keep somewhere tag for later usage in login service
+		// TODO/FIXME do something.. don't know now..keep somewhere tag for later usage in login service
 	} else {
 		// make resulting message (and hence final linkage tag available to service => send back to client
 		p.result <- *serverMsg // TODO maybe send netServerMsg instead => save one encoding to the service
@@ -213,6 +227,8 @@ func (p *DAGAProtocol) sendToNextServer(context daga_login.Context, msg interfac
 	if nextServerTreeNode == nil {
 		return fmt.Errorf("failed to find next node")
 	}
+
+	// TODO FIXME would be nice to just call send to children ==> "ring-tree"
 
 	// TODO FIXME if possible and if make sense would like to check if same serverIdentity that the one in Context.Roster...
 	// TODO Or should we always trust Tree etc.. ? and if that doesnt make sense maybe the Roster in Context in superfluous and only complexify the code

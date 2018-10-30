@@ -13,7 +13,7 @@ import (
 // TODO QUESTION ask, dumb IMO but feel kind of bad exporting things that are intended to be immutable so the in between solution is to have a separate struct
 // TODO ~messy IMO, how to do it in a idiomatic and educated way ?
 
-/*NetMembers provides a net compatible representation of the Members struct*/
+// NetMembers provides a net compatible representation of the Members struct
 type NetMembers struct {
 	X []kyber.Point
 	Y []kyber.Point
@@ -164,7 +164,7 @@ func (s NetServer) NetDecode() (daga.Server, error) {
 	return server, nil
 }
 
-func NetEncodeAuthenticationMessage(context Context, msg *daga.AuthenticationMessage) *NetAuthenticationMessage {
+func NetEncodeAuthenticationMessage(context Context, msg daga.AuthenticationMessage) *NetAuthenticationMessage {
 	netContext := context.NetEncode()
 	return &NetAuthenticationMessage{
 		Context:  *netContext, // i.e. discard context part of message and use the one provided (FIXME seems I was tired)
@@ -174,7 +174,7 @@ func NetEncodeAuthenticationMessage(context Context, msg *daga.AuthenticationMes
 	}
 }
 
-func (netmsg *NetAuthenticationMessage) NetDecode() (*daga.AuthenticationMessage, Context, error) {
+func (netmsg NetAuthenticationMessage) NetDecode() (*daga.AuthenticationMessage, Context, error) {
 	context, err := netmsg.Context.NetDecode()
 	if err != nil {
 		return nil, Context{}, fmt.Errorf("failed to decode context: %s", err)
@@ -189,7 +189,7 @@ func (netmsg *NetAuthenticationMessage) NetDecode() (*daga.AuthenticationMessage
 }
 
 func NetEncodeServerMessage(context Context, msg *daga.ServerMessage) *NetServerMessage {
-	request := NetEncodeAuthenticationMessage(context, &msg.Request)
+	request := NetEncodeAuthenticationMessage(context, msg.Request)
 	return &NetServerMessage{
 		Request: *request,
 		Sigs:    msg.Sigs,
@@ -199,7 +199,7 @@ func NetEncodeServerMessage(context Context, msg *daga.ServerMessage) *NetServer
 	}
 }
 
-func (netmsg *NetServerMessage) NetDecode() (*daga.ServerMessage, Context, error) {
+func (netmsg NetServerMessage) NetDecode() (*daga.ServerMessage, Context, error) {
 	request, context, err := netmsg.Request.NetDecode()
 	if err != nil {
 		return nil, Context{}, fmt.Errorf("failed to decode request: %s", err)

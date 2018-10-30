@@ -1,8 +1,11 @@
 package service
 
 /*
+
+// TODO: implements DAGA, Deniable Anonymous Group Authentication Protocol
+
 The service.go defines what to do for each API-call. This part of the service
-runs on the node.
+runs on the cothority node.
 */
 
 import (
@@ -20,6 +23,8 @@ import (
 
 // Used for tests
 var templateID onet.ServiceID
+
+// DAGA crypto suite
 var suite = daga.NewSuiteEC()
 
 func init() {
@@ -29,12 +34,12 @@ func init() {
 	network.RegisterMessages(storage{}, daga_login.NetContext{}, daga_login.NetServer{})
 }
 
-// Service is our template-service // TODO doc + rename (or QUESTION maybe rename only package DAGA.service DAGA.ChallengeGenerationProtocol etc.. what is the best ?)
+// Service is our DAGA-service
+// TODO doc + rename ?? (or QUESTION maybe rename only package DAGA.service DAGA.ChallengeGenerationProtocol DAGA.ServersProtocol etc.. or keep template organization what is the best ?)
 type Service struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
 	*onet.ServiceProcessor
-
 	storage *storage
 }
 
@@ -46,7 +51,7 @@ var storageID = []byte("main")
 // always access storage through the helpers/getters !
 type storage struct {
 	Context    daga_login.NetContext // current DAGA context and respective roster
-	DagaServer daga_login.NetServer  // daga server (for context)
+	DagaServer daga_login.NetServer  // daga server identity of our node (part of context)
 	// (TODO/enhancement add facilities to handle multiple contexts at once, with possibly multiple DAGA server identities)
 	sync.Mutex
 }
@@ -56,12 +61,14 @@ func (s Service) validateAuthReq(req *daga_login.Auth) (daga_login.Context, erro
 	if req == nil || len(req.SCommits) == 0 || req.T0 == nil {
 		return daga_login.Context{}, errors.New("validateAuthReq: nil or empty request")
 	}
-	// TODO validate proof (FIXME check commitments and challenge same as at proof construction time..etc..) => probably better in the corresponding daga function
+	// TODO validate proof
+	// FIXME check commitments and challenge same as at proof construction time..etc..see github issue) => probably better in the corresponding daga function
 	return s.validateContext(req.Context)
 }
 
-// Auth starts the server's protocols (daga 4.3.6)
-// QUESTION FIXME decide what is returned to client, tag only or full final servermsg ?
+// API endpoint Auth,
+// starts the server's protocols (daga 4.3.6)
+// QUESTION FIXME decide what is returned to client, tag only or full final servermsg ? => if tag only malicious server can identify client..
 func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
 	// verify that submitted request is valid and accepted by our node
 	context, err := s.validateAuthReq(req)
@@ -99,7 +106,7 @@ func (s Service) validateContext(netReqContext daga_login.NetContext) (daga_logi
 	}
 }
 
-// helper to check if we accept the context that was sent part of the Auth request
+// helper to check if we accept the context that was sent part of the Auth/PKClient request
 func (s Service) acceptContext(reqContext daga_login.Context) bool {
 	// TODO enhancement instead of supporting a single context add facilities to be part of multiple daga auth. context
 	currentContext, err := s.storage.Context.NetDecode()
@@ -118,7 +125,8 @@ func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga_
 	return s.validateContext(req.Context)
 }
 
-// PKClient starts the challenge generation protocols, the server will take the role of Leader
+// API endpoint PKClient, upon reception of a valid request,
+// starts the challenge generation protocols, the current server/node will take the role of Leader
 func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKclientChallenge, error) {
 	// verify that submitted request is valid and accepted by our node
 	context, err := s.validatePKClientReq(req)
@@ -145,7 +153,7 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 	roster := req.Context.Roster
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
 	// QUESTION would be convenient to have a ring topology out of tree (each node as one and only one parent AND one and only one child)
-	// => what can go wrong if I do that ? (would solve the multiple daga server and context issues) while being nice and readable (simplify protocol code)
+	// => what can go wrong if I do that ? (would solve the "multiple daga server and context issues") while being nice and readable (simplify protocol code, see sendToNextNode)
 
 	// create and setup protocol instance
 	pi, err := s.CreateProtocol(DAGA.Name, tree)
@@ -163,7 +171,7 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 	if err = dagaProtocol.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start %s protocol: %s", DAGA.Name, err)
 	}
-	log.Lvl3("service started DAGAChallengeGeneration protocol, waiting for completion")
+	log.Lvlf3("service started %s protocol, waiting for completion", DAGA.Name)
 	return dagaProtocol, nil
 }
 
@@ -175,7 +183,6 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
 	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
-	// FIXME lacks a generateStarwithRoot for that purpose
 
 	// create and setup protocol instance
 	pi, err := s.CreateProtocol(DAGAChallengeGeneration.Name, tree)
@@ -193,7 +200,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 	if err = challengeGeneration.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start %s protocol: %s", DAGAChallengeGeneration.Name, err)
 	}
-	log.Lvl3("service started DAGAChallengeGeneration protocol, waiting for completion")
+	log.Lvl3("service started %s protocol, waiting for completion", DAGAChallengeGeneration.Name)
 	return challengeGeneration, nil
 }
 
@@ -231,7 +238,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		dagaServerProtocol.ChildrenSetup(dagaServer, s.acceptContext)
 		return dagaServerProtocol, nil
 	default:
-		log.Panic("not implemented")
+		log.Panic("protocol not implemented/known")
 	}
 	return nil, errors.New("should not be reached")
 }
@@ -255,7 +262,10 @@ func (s *Service) tryLoad() error {
 		return err
 	}
 	if msg == nil {
-		// first time or nothing, load from setup files FIXME temp hack
+		// first time or nothing, load from setup files
+		// FIXME temp hack while lacking a proper boot method
+		// FIXME QUESTION how to do it when we are no longer hacking... ? (pass setup info to service)
+
 		context, err := daga_login.ReadContext("./context.bin")
 		// TODO FIXME facilities to check context validity (are we part of the context, are all generators generators, etc..)
 		if err != nil {
@@ -264,11 +274,11 @@ func (s *Service) tryLoad() error {
 		netContext := context.NetEncode()
 		s.storage.Context = *netContext
 
-		// build daga server // TODO FIXME QUESTION how to do it when we are no longer hacking... ? (pass setup info to service) + how to allow mutliple servers ?
+		// retrieve daga server
 		indexInContext, _ := context.ServerIndexOf(s.ServerIdentity().Public)
 		dagaServer, err := daga_login.ReadServer(fmt.Sprintf("./server%d.bin", indexInContext))
 		if err != nil {
-			return errors.New("tryLoad: first run, failed to setup daga Server from config file: " + err.Error())
+			return errors.New("tryLoad: first run, failed to load daga Server from config file: " + err.Error())
 		}
 		s.storage.DagaServer = *daga_login.NetEncodeServer(dagaServer)
 		return nil
@@ -301,7 +311,7 @@ func newService(c *onet.Context) (onet.Service, error) {
 		ServiceProcessor: onet.NewServiceProcessor(c),
 	}
 	if err := s.RegisterHandlers(s.Auth, s.PKClient); err != nil {
-		return nil, errors.New("Couldn't register messages: " + err.Error())
+		return nil, errors.New("Couldn't register service's API handlers/messages: " + err.Error())
 	}
 	if err := s.tryLoad(); err != nil {
 		log.Error(err)
