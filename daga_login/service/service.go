@@ -111,7 +111,7 @@ func (s Service) acceptContext(reqContext daga_login.Context) bool {
 	// TODO enhancement instead of supporting a single context add facilities to be part of multiple daga auth. context
 	currentContext, err := s.storage.Context.NetDecode()
 	if err != nil {
-		log.Error("failed to decode stored context: %s", err)
+		log.Errorf("failed to decode stored context: %s", err)
 		return false
 	}
 	return currentContext.Equals(reqContext)
@@ -200,7 +200,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 	if err = challengeGeneration.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start %s protocol: %s", DAGAChallengeGeneration.Name, err)
 	}
-	log.Lvl3("service started %s protocol, waiting for completion", DAGAChallengeGeneration.Name)
+	log.Lvlf3("service started %s protocol, waiting for completion", DAGAChallengeGeneration.Name)
 	return challengeGeneration, nil
 }
 

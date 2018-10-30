@@ -151,7 +151,7 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 
 // send PKclient commitments and receive master challenge
 func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitments []kyber.Point) daga.Challenge {
-	log.Lvl4("PKclient, sending commitments to:", dst)
+	log.Lvl4("pKClient, sending commitments to: ", dst)
 	request := PKclientCommitments{
 		Data:    commitments,
 		Context: *context.NetEncode(),
@@ -159,9 +159,9 @@ func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitmen
 	reply := PKclientChallenge{}
 	err := c.onet.SendProtobuf(dst, &request, &reply)
 	if err != nil {
-		log.Panic("PKclient, error sending commitments to", dst, ":", err)
+		log.Panic("pKClient, error sending commitments to ", dst, ":", err)
 		return daga.Challenge{}
 	}
-	log.Lvl4("PKclient, received master challenge from:", dst)
+	log.Lvl4("pKClient, received master challenge from: ", dst)
 	return daga.Challenge(reply)
 }
