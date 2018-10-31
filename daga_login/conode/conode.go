@@ -21,14 +21,14 @@ import (
 	"github.com/dedis/onet/cfgpath"
 	"github.com/dedis/onet/log"
 	"gopkg.in/urfave/cli.v1"
-	// Import your service:
-	_ "github.com/dedis/cothority/status/service"
-	_ "github.com/dedis/student_18_daga/daga_login/service"
-	//_ "github.com/dedis/pulsar/randhound/service"
 	// Here you can import any other needed service for your conode.
 	// For example, if your service needs cosi available in the server
 	// as well, uncomment this:
 	//_ "github.com/dedis/cothority/cosi/service"
+	// Import your service:
+	_ "github.com/dedis/cothority/status/service"				// "side-effect" import => will run the init function of package => will register the service
+	_ "github.com/dedis/student_18_daga/daga_login/service"
+	//_ "github.com/dedis/pulsar/randhound/service"
 )
 
 func main() {

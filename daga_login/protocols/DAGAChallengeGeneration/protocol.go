@@ -139,8 +139,9 @@ func (p *DAGAChallengeGenerationProtocol) opening(index int) kyber.Scalar {
 // method called to update state of the protocol (add commitment) (doesn't check commitment signature, add only commitment whose signature is verified !)
 func (p *DAGAChallengeGenerationProtocol) saveCommitment(index int, commitment daga.ChallengeCommitment) {
 	if index >= len(p.commitments) {
-		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d", index, len(p.commitments))
+		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d, you probably forgot to call ChildrenSetup", index, len(p.commitments))
 	}
+	// FIXME QUESTION what is the correct way to panic ? in such cases
 	if p.commitments[index].Commit != nil {
 		log.Panicf("already one commitment at p.commitment[%d]", index)
 	}
@@ -370,9 +371,11 @@ func (p *DAGAChallengeGenerationProtocol) HandleFinalize(msg StructFinalize) err
 		if nextServerTreeNode == nil {
 			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
 		}
-		return p.SendTo(nextServerTreeNode, &Finalize{
+		err := p.SendTo(nextServerTreeNode, &Finalize{
 			ChallengeCheck: msg.ChallengeCheck,
 		})
+		p.Done()
+		return err
 	} else {
 		// step 5
 		// we are the leader, and all nodes already updated the challengecheck struct => Finalize the challenge
@@ -383,6 +386,7 @@ func (p *DAGAChallengeGenerationProtocol) HandleFinalize(msg StructFinalize) err
 		// TODO/FIXME make result available to other nodes and see https://github.com/dedis/student_18_daga/issues/24
 		// make result available to service that will send it back to client
 		p.result <- clientChallenge
+		p.Done()
 		return nil
 	}
 }
