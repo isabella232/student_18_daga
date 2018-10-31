@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/dedis/student_18_daga.svg?branch=onet_cothority)](https://travis-ci.org/dedis/student_18_daga)
+
 # Integrating DAGA in the cothority framework and using it for a login service
 
 
