@@ -109,7 +109,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Panics(t, func() {
 		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
-	}, "should panic on already initialized server")
+	}, "should panic on already initialized node")
 	pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 
@@ -119,7 +119,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 	pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	require.Panics(t, func() {
 		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
-	}, "should panic on already initialized server")
+	}, "should panic on already initialized node")
 }
 
 func TestChildrenSetup(t *testing.T) {
@@ -164,7 +164,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 	pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	require.Panics(t, func() {
 		pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
-	}, "should panic on already initialized server")
+	}, "should panic on already initialized node")
 	pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 
@@ -174,7 +174,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Panics(t, func() {
 		pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
-	}, "should panic on already initialized server")
+	}, "should panic on already initialized node")
 }
 
 func TestStartShouldErrorOnInvalidTreeShape(t *testing.T) {

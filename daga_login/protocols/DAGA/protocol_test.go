@@ -13,6 +13,8 @@ import (
 
 var tSuite = daga.NewSuiteEC()
 
+
+
 func TestMain(m *testing.M) {
 	log.MainTest(m)
 }
@@ -45,3 +47,178 @@ func runProtocol(t *testing.T, nbrNodes int) {
 	require.NoError(t, err, "failed to extract tag from the resulting serverMsg")
 	require.NotZero(t, Tf)
 }
+
+
+func TestLeaderSetup(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	// valid setup, should not panic
+	nbrNodes := 1
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
+	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
+
+	require.NotPanics(t, func() {
+		pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
+	}, "should not panic on valid input")
+}
+
+func TestLeaderSetupShouldPanicOnNilServer(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	nbrNodes := 1
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
+	_, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
+
+
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).LeaderSetup(*netRequest, nil)
+	}, "should panic on nil server")
+}
+
+func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	nbrNodes := 1
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
+	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+
+	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
+
+
+	pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
+	}, "should panic on already initialized node")
+	pi.(*DAGA.Protocol).Done()
+
+
+	pi, _ = local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+		return true
+	})
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
+	}, "should panic on already initialized node")
+}
+
+func TestChildrenSetup(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	// valid setup, should not panic
+	nbrNodes := 1
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
+	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	require.NotPanics(t, func() {
+		pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+			return true
+		})
+	}, "should not panic on valid input")
+}
+
+func TestChildrenSetupShouldPanicOnNilServer(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	nbrNodes := 1
+	_, _, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).ChildrenSetup(nil, func(ctx daga_login.Context) bool {
+			return true
+		})
+	}, "should panic on nil server")
+}
+
+func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	nbrNodes := 1
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
+	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+
+	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+		return true
+	})
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+			return true
+		})
+	}, "should panic on already initialized node")
+	pi.(*DAGA.Protocol).Done()
+
+	pi, _ = local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
+
+	pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+			return true
+		})
+	}, "should panic on already initialized node")
+}
+
+func TestWaitForResultShouldPanicIfCalledBeforeStart(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	nbrNodes := 5
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
+	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
+
+	pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).WaitForResult()
+	})
+}
+
+func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	nbrNodes := 5
+	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
+	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	pi, _ := local.CreateProtocol(DAGA.Name, tree)
+	defer pi.(*DAGA.Protocol).Done()
+
+	// TODO test name little misleading but ..
+
+	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+		return true
+	})
+	require.Panics(t, func() {
+		pi.(*DAGA.Protocol).WaitForResult()
+	})
+}
+
+// QUESTION TODO don't know how to test more advanced things, how to simulate bad behavior from some nodes
+// now I'm only assured that it works when setup like intended + some little bad things
+// but no guarantees on what happens otherwise

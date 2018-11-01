@@ -136,7 +136,7 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaServers []d
 	for _, server := range servers {
 		serverKeys = append(serverKeys, local.GetPrivate(server))
 	}
-	dagaClients, dagaServers, minDagaContext, _ := daga.GenerateContext(tSuite, rand.Intn(10)+1, serverKeys)
+	dagaClients, dagaServers, minDagaContext, _ := daga.GenerateContext(tSuite, rand.Intn(10)+2, serverKeys)
 	dummyContext, _ = daga_login.NewContext(minDagaContext, *roster)
 
 	// TODO QUESTION what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package with all helper ?

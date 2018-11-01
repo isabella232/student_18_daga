@@ -74,7 +74,6 @@ func (p *Protocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServ
 	}
 	p.setRequest(req)
 	p.setDagaServer(dagaServer)
-	p.result = make(chan daga.ServerMessage)
 }
 
 // setup function that needs to be called after protocol creation on other tree nodes
@@ -104,7 +103,6 @@ func (p *Protocol) setDagaServer(dagaServer daga.Server) {
 
 // setter used to provide the client request to the root protocol instance
 func (p *Protocol) setRequest(request daga_login.NetAuthenticationMessage) {
-	// TODO see what to check here, everything should already be ok...
 	p.request = request
 }
 
@@ -114,6 +112,9 @@ func (p *Protocol) setRequest(request daga_login.NetAuthenticationMessage) {
 func (p *Protocol) Start() error {
 	// TODO check tree shape
 	log.Lvlf3("leader (%s) started %s", p.ServerIdentity(), Name)
+
+	// initialize the channel used to grab results / synchronize with WaitForResult
+	p.result = make(chan daga.ServerMessage)
 
 	// leader initialize the server message with the request from the client
 	request, context, _ := p.request.NetDecode()
