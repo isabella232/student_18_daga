@@ -38,8 +38,8 @@ func init() {
 	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove or ?? see question above
 }
 
-// DAGAProtocol holds the state of the protocol instance.
-type DAGAProtocol struct {
+// Protocol holds the state of the protocol instance.
+type Protocol struct {
 	*onet.TreeNodeInstance
 	result        chan daga.ServerMessage             // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
 	dagaServer    daga.Server                         // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildrenSetup)
@@ -56,7 +56,7 @@ type DAGAProtocol struct {
 // to manually call this method before calling the ChildrenSetup method to provide children-node specific state.
 // (similarly for the leader-node, it is expected that the service call LeaderSetup)
 func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	t := &DAGAProtocol{
+	t := &Protocol{
 		TreeNodeInstance: n,
 	}
 	for _, handler := range []interface{}{t.HandleServerMsg, t.HandleFinishedServerMsg} {
@@ -68,7 +68,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 }
 
 // setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
-func (p *DAGAProtocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServer daga.Server) {
+func (p *Protocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServer daga.Server) {
 	if p.dagaServer != nil || p.result != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
@@ -78,7 +78,7 @@ func (p *DAGAProtocol) LeaderSetup(req daga_login.NetAuthenticationMessage, daga
 }
 
 // setup function that needs to be called after protocol creation on other tree nodes
-func (p *DAGAProtocol) ChildrenSetup(dagaServer daga.Server, acceptContext func(ctx daga_login.Context) bool) {
+func (p *Protocol) ChildrenSetup(dagaServer daga.Server, acceptContext func(ctx daga_login.Context) bool) {
 	if p.dagaServer != nil || p.result != nil {
 		log.Panic("protocol setup: ChildrenSetup called on an already initialized node.")
 	}
@@ -87,7 +87,7 @@ func (p *DAGAProtocol) ChildrenSetup(dagaServer daga.Server, acceptContext func(
 }
 
 // setter to let know the protocol instance "what is the daga Context validation strategy"
-func (p *DAGAProtocol) setAcceptContext(acceptContext func(ctx daga_login.Context) bool) {
+func (p *Protocol) setAcceptContext(acceptContext func(ctx daga_login.Context) bool) {
 	if acceptContext == nil {
 		log.Panic("protocol setup: nil context validator (acceptContext())")
 	}
@@ -95,7 +95,7 @@ func (p *DAGAProtocol) setAcceptContext(acceptContext func(ctx daga_login.Contex
 }
 
 // setter to let know the protocol instance "which daga.Server it is"
-func (p *DAGAProtocol) setDagaServer(dagaServer daga.Server) {
+func (p *Protocol) setDagaServer(dagaServer daga.Server) {
 	if dagaServer == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
 		log.Panic("protocol setup: nil daga server")
 	}
@@ -103,7 +103,7 @@ func (p *DAGAProtocol) setDagaServer(dagaServer daga.Server) {
 }
 
 // setter used to provide the client request to the root protocol instance
-func (p *DAGAProtocol) setRequest(request daga_login.NetAuthenticationMessage) {
+func (p *Protocol) setRequest(request daga_login.NetAuthenticationMessage) {
 	// TODO see what to check here, everything should already be ok...
 	p.request = request
 }
@@ -111,7 +111,7 @@ func (p *DAGAProtocol) setRequest(request daga_login.NetAuthenticationMessage) {
 // Start initialize the daga.ServerMessage, run the "daga.ServerProtocol" on it and forward it to the next node
 //
 // Step 1-4 of of daga server's protocol described in Syta - 4.3.6
-func (p *DAGAProtocol) Start() error {
+func (p *Protocol) Start() error {
 	// TODO check tree shape
 	log.Lvlf3("leader (%s) started %s", p.ServerIdentity(), Name)
 
@@ -133,7 +133,7 @@ func (p *DAGAProtocol) Start() error {
 }
 
 // Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
-func (p *DAGAProtocol) WaitForResult() (daga.ServerMessage, error) {
+func (p *Protocol) WaitForResult() (daga.ServerMessage, error) {
 	if p.result == nil {
 		log.Panic("WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance")
 	}
@@ -154,7 +154,7 @@ func (p *DAGAProtocol) WaitForResult() (daga.ServerMessage, error) {
 // if current node is last node
 //
 // Step 1-4 of of daga server's protocol described in Syta - 4.3.6
-func (p *DAGAProtocol) HandleServerMsg(msg StructServerMsg) error {
+func (p *Protocol) HandleServerMsg(msg StructServerMsg) error {
 	log.Lvlf3("%s: Received ServerMsg", Name)
 
 	// decode
@@ -179,13 +179,14 @@ func (p *DAGAProtocol) HandleServerMsg(msg StructServerMsg) error {
 
 	netServerMsg := *daga_login.NetEncodeServerMessage(context, serverMsg)
 	if weAreLastServer {
-		errs := p.Broadcast(&FinishedServerMsg{
+		msg := FinishedServerMsg{
 			NetServerMessage: netServerMsg,
-		})
+		}
+		errs := p.Broadcast(&msg)
 		if len(errs) != 0 {
 			return fmt.Errorf(Name+": failed to terminate: broadcast of FinishedServerMsg failed with error(s): %v", errs)
 		}
-		return nil
+		return p.SendTo(p.TreeNode(), &msg)  // send to self
 	} else {
 		return p.sendToNextServer(context, &ServerMsg{
 			NetServerMessage: netServerMsg,
@@ -193,7 +194,7 @@ func (p *DAGAProtocol) HandleServerMsg(msg StructServerMsg) error {
 	}
 }
 
-func (p *DAGAProtocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
+func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
 
 	log.Lvlf3("%s: Received FinishedServerMsg", Name)
 
@@ -216,11 +217,11 @@ func (p *DAGAProtocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) erro
 		// make resulting message (and hence final linkage tag available to service => send back to client
 		p.result <- *serverMsg // TODO maybe send netServerMsg instead => save one encoding to the service
 	}
-
+	p.Done()
 	return nil
 }
 
-func (p *DAGAProtocol) sendToNextServer(context daga_login.Context, msg interface{}) error {
+func (p *Protocol) sendToNextServer(context daga_login.Context, msg interface{}) error {
 	// figure out the node of the next-server in "ring"
 	_, Y := context.Members()
 	nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), Y, p.Tree().List())

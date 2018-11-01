@@ -1,56 +1,47 @@
-package DAGA
-//
-///*
-//The test-file should at the very least run the protocols for a varying number
-//of nodes. It is even better practice to test the different methods of the
-//protocols, as in Test Driven Development.
-//*/
-//
-//import (
-//	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAChallengeGeneration"
-//	"github.com/dedis/student_18_daga/sign/daga"
-//	"testing"
-//	"time"
-//
-//	"github.com/dedis/onet"
-//	"github.com/dedis/onet/log"
-//	"github.com/dedis/onet/network"
-//	"github.com/stretchr/testify/require"
-//)
-//
-//var tSuite = daga.NewSuiteEC()
-//
-//func TestMain(m *testing.M) {
-//	log.MainTest(m)
-//}
-//
-//// Tests a 2, 5 and 13-node system.
-//func TestChallengeGeneration(t *testing.T) {
-//	nodes := []int{2, 5, 13}
-//	for _, nbrNodes := range nodes {
-//		testNode(t, nbrNodes)
-//	}
-//}
-//
-//func testNode(t *testing.T, nbrNodes int) {
-//	local := onet.NewLocalTest(tSuite)
-//	defer local.CloseAll()
-//	_, _, tree := local.GenTree(nbrNodes, true)
-//	log.Lvl3(tree.Dump())
-//
-//	// QUESTION how to give state to services (my protocol is not testable as is without services..need state)
-//	// here I can give state to leader, fine but how to control
-//
-//	local.StartProtocol()
-//	pi, err := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-//	require.NoError(t, err)
-//	protocol := pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol)
-//	timeout := network.WaitRetry * time.Duration(network.MaxRetryConnect*nbrNodes*2) * time.Millisecond
-//	select {
-//	case children := <-protocol.ChildCount:
-//		log.Lvl2("Instance 1 is done")
-//		require.Equal(t, children, nbrNodes, "Didn't get a child-cound of", nbrNodes)
-//	case <-time.After(timeout):
-//		t.Fatal("Didn't finish in time")
-//	}
-//}
+package DAGA_test
+
+import (
+	"github.com/dedis/onet"
+	"github.com/dedis/onet/log"
+	"github.com/dedis/student_18_daga/daga_login"
+	"github.com/dedis/student_18_daga/daga_login/protocols/DAGA"
+	protocols_testing "github.com/dedis/student_18_daga/daga_login/protocols/testing"
+	"github.com/dedis/student_18_daga/sign/daga"
+	"github.com/stretchr/testify/require"
+	"testing"
+)
+
+var tSuite = daga.NewSuiteEC()
+
+func TestMain(m *testing.M) {
+	log.MainTest(m)
+}
+
+// Tests a 2, 5 and 13-node system. (complete protocol run)
+func TestServerProtocol(t *testing.T) {
+	nodes := []int{2, 5, 13}
+	for _, nbrNodes := range nodes {
+		runProtocol(t, nbrNodes)
+	}
+}
+
+func runProtocol(t *testing.T, nbrNodes int) {
+	log.Lvl2("Running", DAGA.Name, "with", nbrNodes, "nodes")
+	local := onet.NewLocalTest(tSuite)
+	defer local.CloseAll()
+
+	services, dummyRequest, dummyContext := protocols_testing.ValidServiceSetup(local, nbrNodes)
+
+	// create and setup root protocol instance + start protocol
+	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
+	dagaProtocol := services[0].(*protocols_testing.DummyService).NewDAGAServerProtocol(t, *netRequest)
+
+	serverMsg, err := dagaProtocol.WaitForResult()
+	require.NoError(t, err, "failed to get result of protocol run")
+	require.NotZero(t, serverMsg)
+
+	// verify / extract tag
+	Tf, err := daga.GetFinalLinkageTag(tSuite, dummyContext, serverMsg)
+	require.NoError(t, err, "failed to extract tag from the resulting serverMsg")
+	require.NotZero(t, Tf)
+}

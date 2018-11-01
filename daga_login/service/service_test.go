@@ -21,7 +21,7 @@ package service
 //	hosts, roster, _ := local.GenTree(5, true)
 //	defer local.CloseAll()
 //
-//	services := local.GetServices(hosts, templateID)
+//	services := local.GetServices(hosts, dagaID)
 //
 //	// QUESTION again not well testable... I'd need to mock/stub/fake some parts of the service (provide its storage, or fake tryload..)
 //
@@ -43,7 +43,7 @@ package service
 //	hosts, roster, _ := local.GenTree(5, true)
 //	defer local.CloseAll()
 //
-//	services := local.GetServices(hosts, templateID)
+//	services := local.GetServices(hosts, dagaID)
 //
 //	for _, s := range services {
 //		log.Lvl2("Sending request to", s)

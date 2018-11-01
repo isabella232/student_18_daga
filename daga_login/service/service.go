@@ -22,14 +22,14 @@ import (
 )
 
 // Used for tests
-var templateID onet.ServiceID
+var dagaID onet.ServiceID
 
 // DAGA crypto suite
 var suite = daga.NewSuiteEC()
 
 func init() {
 	var err error
-	templateID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
+	dagaID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
 	log.ErrFatal(err)
 	network.RegisterMessages(storage{}, daga_login.NetContext{}, daga_login.NetServer{})
 }
@@ -146,7 +146,7 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 }
 
 // function called to initialize and start a new DAGA (Server's) protocol where current node takes a "Leader" role
-func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage) (*DAGA.DAGAProtocol, error) {
+func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage) (*DAGA.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 
 	// build tree with leader as root
@@ -160,7 +160,7 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 	if err != nil {
 		return nil, errors.New("failed to create " + DAGA.Name + " protocol: " + err.Error())
 	}
-	dagaProtocol := pi.(*DAGA.DAGAProtocol)
+	dagaProtocol := pi.(*DAGA.Protocol)
 	dagaServer, err := s.dagaServer()
 	if err != nil {
 		return nil, errors.New("failed to retrieve daga server from service state: " + err.Error())
@@ -230,7 +230,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			return nil, err
 		}
-		dagaServerProtocol := pi.(*DAGA.DAGAProtocol)
+		dagaServerProtocol := pi.(*DAGA.Protocol)
 		dagaServer, err := s.dagaServer()
 		if err != nil {
 			log.Panic("failed to retrieve daga server from service state: " + err.Error())

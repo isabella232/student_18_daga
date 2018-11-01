@@ -1,9 +1,10 @@
 package DAGAChallengeGeneration
 
 // FIXME better namings + remember to address https://github.com/dedis/student_18_daga/issues/24
+// FIXME impersonations and replay attacks ? (what if someone answer faster than intented node with previous data)
+
 // QUESTION not sure if each protocol deserve its own package but if I put them all in same package (say protocol) will need to change a little the template conventions
 // QUESTION : purpose of shutdown, cleanup when protocol done ?, automatically called or manually called ?
-
 // FIXME share code with server's protocol (waitresult setDagaServer etc..leadersetup )=> maybe create interface etc..
 
 /*
