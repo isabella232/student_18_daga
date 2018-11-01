@@ -80,7 +80,7 @@ func (context Context) NetEncode() *NetContext {
 		G:      *G,
 		H:      context.ClientsGenerators(),
 		R:      context.ServersSecretsCommitments(),
-		Roster: context.Roster,
+		Roster: *context.Roster,
 	}
 }
 
@@ -93,7 +93,7 @@ func (netcontext NetContext) NetDecode() (Context, error) {
 	roster := netcontext.Roster
 	return Context{
 		dagaContext,
-		roster,
+		&roster,
 	}, nil
 }
 

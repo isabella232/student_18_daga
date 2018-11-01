@@ -114,10 +114,9 @@ type AuthenticationMessage struct {
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	client Client,
 	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (*AuthenticationMessage, error) {
-	// TODO see if context big enough to justify transforming the parameter into *AuthenticationContext
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
+	// FIXME create a validate context helper and see where it belongs (I started to write context validation related code in the cothority implementation)
 
-	// FIXME create a validate context helper
 	if len(context.ClientsGenerators()) <= client.Index() {
 		return nil, errors.New("context not valid, or wrong client index")
 	}

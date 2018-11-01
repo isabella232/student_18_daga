@@ -28,7 +28,7 @@ func (c Challenge) verifySignatures(suite Suite, serverKeys []kyber.Point) error
 		}
 		return nil
 	} else {
-		return errors.New("Error while marshalling challenge: " + e.Error())
+		return errors.New("failed to marshal challenge: " + e.Error())
 	}
 }
 
@@ -314,9 +314,6 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
 	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (ClientProof, error) {
-	// TODO FIXME maybe, pack the 2 channels in a new Proxy type and add methods sendReceive etc NewTestProxy NewProxy etc..
-	// TODO or other things lambdas/callerpassedclosures higherorder functions whatever to call to communicate with remote server
-	// TODO see later while building the protocols and services
 
 	if context == nil {
 		return ClientProof{}, errors.New("nil context")

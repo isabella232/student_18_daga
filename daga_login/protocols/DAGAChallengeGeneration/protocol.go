@@ -84,10 +84,10 @@ func (p *DAGAChallengeGenerationProtocol) LeaderSetup(reqContext daga_login.Cont
 	p.setDagaServer(dagaServer)
 	p.commitments = make([]daga.ChallengeCommitment, len(p.Tree().List()))
 	p.openings = make([]kyber.Scalar, len(p.Tree().List()))
-	p.result = make(chan daga.Challenge)
 }
 
 // setup function that needs to be called after protocol creation on other tree nodes
+// FIXME rename ChildSetup
 func (p *DAGAChallengeGenerationProtocol) ChildrenSetup(dagaServer daga.Server) {
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
 		log.Panic("protocol setup: ChildrenSetup called on an already initialized node.")
@@ -99,7 +99,7 @@ func (p *DAGAChallengeGenerationProtocol) ChildrenSetup(dagaServer daga.Server) 
 
 // setter to let know the protocol instance "which daga.Server it is"
 func (p *DAGAChallengeGenerationProtocol) setDagaServer(dagaServer daga.Server) {
-	if dagaServer == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
+	if dagaServer == nil || dagaServer.PrivateKey() == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
 		log.Panic("protocol setup: nil daga server")
 	}
 	p.dagaServer = dagaServer
@@ -107,7 +107,9 @@ func (p *DAGAChallengeGenerationProtocol) setDagaServer(dagaServer daga.Server) 
 
 // setter used to provide the context of the original PKClient request to the protocol instance
 func (p *DAGAChallengeGenerationProtocol) setContext(reqContext daga_login.Context) {
-	// TODO maybe armor with sanity checks
+	if reqContext == (daga_login.Context{}) {
+		log.Panic("protocol setup: empty Context")
+	}
 	p.context = reqContext
 }
 
@@ -174,6 +176,9 @@ func (p *DAGAChallengeGenerationProtocol) Start() error {
 	}
 	log.Lvlf3("leader (%s) started %s protocol", p.ServerIdentity(), Name)
 
+	// initialize the channel used to grab results / synchronize with WaitForResult
+	p.result = make(chan daga.Challenge)
+
 	// create leader challenge, signed commitment and opening
 	leaderChallengeCommit, leaderOpening, err := daga.NewChallengeCommitment(suite, p.dagaServer)
 	if err != nil {
@@ -198,7 +203,7 @@ func (p *DAGAChallengeGenerationProtocol) Start() error {
 // Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
 func (p *DAGAChallengeGenerationProtocol) WaitForResult() (daga.Challenge, error) {
 	if p.result == nil {
-		log.Panicf("%s: WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance", Name)
+		log.Panicf("%s: WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance or before Start", Name)
 	}
 	// wait for protocol result or timeout
 	select {

@@ -23,7 +23,7 @@ var suite = daga.NewSuiteEC()
 // and embed a corresponding Onet roster (how to reach the DAGA servers)
 type Context struct {
 	daga.AuthenticationContext
-	onet.Roster
+	*onet.Roster
 }
 
 // returns a pointer to newly allocated Context struct initialized with the provided daga.AuthenticationContext
@@ -52,7 +52,7 @@ func NewContext(dagaContext daga.AuthenticationContext, fullRoster onet.Roster) 
 	dagaRoster := onet.NewRoster(dagaList)
 	return &Context{
 		AuthenticationContext: dagaContext,
-		Roster:                *dagaRoster,
+		Roster:                dagaRoster,
 	}, nil
 }
 
