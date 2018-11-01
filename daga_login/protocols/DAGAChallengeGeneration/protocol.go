@@ -42,8 +42,8 @@ func init() {
 	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove
 }
 
-// DAGAChallengeGenerationProtocol holds the state of the challenge generation protocol instance.
-type DAGAChallengeGenerationProtocol struct {
+// Protocol holds the state of the challenge generation protocol instance.
+type Protocol struct {
 	*onet.TreeNodeInstance
 	result      chan daga.Challenge        // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
 	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments at correct index (in auth. context), on the children to store leaderCommitment at 0
@@ -62,7 +62,7 @@ type DAGAChallengeGenerationProtocol struct {
 // to manually call this method before calling the ChildrenSetup method to provide children-node specific state.
 // (similarly for the leader-node, it is expected that the service call LeaderSetup)
 func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	t := &DAGAChallengeGenerationProtocol{
+	t := &Protocol{
 		TreeNodeInstance: n,
 	}
 	for _, handler := range []interface{}{t.HandleAnnounce, t.HandleAnnounceReply,
@@ -76,7 +76,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 }
 
 // setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
-func (p *DAGAChallengeGenerationProtocol) LeaderSetup(reqContext daga_login.Context, dagaServer daga.Server) {
+func (p *Protocol) LeaderSetup(reqContext daga_login.Context, dagaServer daga.Server) {
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
@@ -88,7 +88,7 @@ func (p *DAGAChallengeGenerationProtocol) LeaderSetup(reqContext daga_login.Cont
 
 // setup function that needs to be called after protocol creation on other tree nodes
 // FIXME rename ChildSetup
-func (p *DAGAChallengeGenerationProtocol) ChildrenSetup(dagaServer daga.Server) {
+func (p *Protocol) ChildrenSetup(dagaServer daga.Server) {
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
 		log.Panic("protocol setup: ChildrenSetup called on an already initialized node.")
 	}
@@ -98,7 +98,7 @@ func (p *DAGAChallengeGenerationProtocol) ChildrenSetup(dagaServer daga.Server) 
 }
 
 // setter to let know the protocol instance "which daga.Server it is"
-func (p *DAGAChallengeGenerationProtocol) setDagaServer(dagaServer daga.Server) {
+func (p *Protocol) setDagaServer(dagaServer daga.Server) {
 	if dagaServer == nil || dagaServer.PrivateKey() == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
 		log.Panic("protocol setup: nil daga server")
 	}
@@ -106,7 +106,7 @@ func (p *DAGAChallengeGenerationProtocol) setDagaServer(dagaServer daga.Server) 
 }
 
 // setter used to provide the context of the original PKClient request to the protocol instance
-func (p *DAGAChallengeGenerationProtocol) setContext(reqContext daga_login.Context) {
+func (p *Protocol) setContext(reqContext daga_login.Context) {
 	if reqContext == (daga_login.Context{}) {
 		log.Panic("protocol setup: empty Context")
 	}
@@ -114,7 +114,7 @@ func (p *DAGAChallengeGenerationProtocol) setContext(reqContext daga_login.Conte
 }
 
 // method called to update state of the protocol (add opening) (sanity checks)
-func (p *DAGAChallengeGenerationProtocol) saveOpening(index int, opening kyber.Scalar) {
+func (p *Protocol) saveOpening(index int, opening kyber.Scalar) {
 	if index >= len(p.openings) {
 		log.Panicf("index (%d) out of bound while setting openings in state, len(p.openings) = %d", index, len(p.openings))
 	}
@@ -128,7 +128,7 @@ func (p *DAGAChallengeGenerationProtocol) saveOpening(index int, opening kyber.S
 }
 
 // method called to retrieve opening from protocol state (sanity checks)
-func (p *DAGAChallengeGenerationProtocol) opening(index int) kyber.Scalar {
+func (p *Protocol) opening(index int) kyber.Scalar {
 	if index >= len(p.openings) {
 		log.Panicf("index (%d) out of bound while getting openings from state, len(p.openings) = %d", index, len(p.openings))
 	}
@@ -139,7 +139,7 @@ func (p *DAGAChallengeGenerationProtocol) opening(index int) kyber.Scalar {
 }
 
 // method called to update state of the protocol (add commitment) (doesn't check commitment signature, add only commitment whose signature is verified !)
-func (p *DAGAChallengeGenerationProtocol) saveCommitment(index int, commitment daga.ChallengeCommitment) {
+func (p *Protocol) saveCommitment(index int, commitment daga.ChallengeCommitment) {
 	if index >= len(p.commitments) {
 		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d, you probably forgot to call ChildrenSetup", index, len(p.commitments))
 	}
@@ -154,7 +154,7 @@ func (p *DAGAChallengeGenerationProtocol) saveCommitment(index int, commitment d
 }
 
 // method called to retrieve commitment from protocol state (sanity checks)
-func (p *DAGAChallengeGenerationProtocol) commitment(index int) daga.ChallengeCommitment {
+func (p *Protocol) commitment(index int) daga.ChallengeCommitment {
 	if index >= len(p.commitments) {
 		log.Panicf("index (%d) out of bound while getting commitment from state, len(p.commitments) = %d", index, len(p.commitments))
 	}
@@ -166,7 +166,7 @@ func (p *DAGAChallengeGenerationProtocol) commitment(index int) daga.ChallengeCo
 
 // Start sends the Announce-message to all children,
 // Step 1 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *DAGAChallengeGenerationProtocol) Start() error {
+func (p *Protocol) Start() error {
 
 	// quick check that give hint that every other node is indeed a direct child of root.
 	// when leader create and start protocol upon reception of PKclient commitments (in the service)
@@ -201,7 +201,7 @@ func (p *DAGAChallengeGenerationProtocol) Start() error {
 }
 
 // Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
-func (p *DAGAChallengeGenerationProtocol) WaitForResult() (daga.Challenge, error) {
+func (p *Protocol) WaitForResult() (daga.Challenge, error) {
 	if p.result == nil {
 		log.Panicf("%s: WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance or before Start", Name)
 	}
@@ -223,7 +223,7 @@ func (p *DAGAChallengeGenerationProtocol) WaitForResult() (daga.Challenge, error
 
 // handler that is called on "slaves" upon reception of Leader's Announce message
 // Step 2 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *DAGAChallengeGenerationProtocol) HandleAnnounce(msg StructAnnounce) error {
+func (p *Protocol) HandleAnnounce(msg StructAnnounce) error {
 
 	log.Lvlf3("%s: Received Leader's Announce", Name)
 	leaderTreeNode := msg.TreeNode
@@ -269,7 +269,7 @@ func (p *DAGAChallengeGenerationProtocol) HandleAnnounce(msg StructAnnounce) err
 
 // handler that will be called by framework when Leader node has received an AnnounceReply from all other nodes (its children)
 // Step 3 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *DAGAChallengeGenerationProtocol) HandleAnnounceReply(msg []StructAnnounceReply) error {
+func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) error {
 	// remember that for correct aggregation of messages the tree must have correct shape
 	log.Lvlf3("%s: Leader received all Announce replies", Name)
 
@@ -299,7 +299,7 @@ func (p *DAGAChallengeGenerationProtocol) HandleAnnounceReply(msg []StructAnnoun
 
 // handler that is called on "slaves" upon reception of Leader's Open message
 // Step 3.5 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *DAGAChallengeGenerationProtocol) HandleOpen(msg StructOpen) error {
+func (p *Protocol) HandleOpen(msg StructOpen) error {
 
 	log.Lvlf3("%s: Received Leader's Open", Name)
 	// TODO nil/empty msg checks
@@ -321,7 +321,7 @@ func (p *DAGAChallengeGenerationProtocol) HandleOpen(msg StructOpen) error {
 
 // handler that will be called by framework when Leader node has received an OpenReply from all other nodes (its children)
 // Step 4 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *DAGAChallengeGenerationProtocol) HandleOpenReply(msg []StructOpenReply) error {
+func (p *Protocol) HandleOpenReply(msg []StructOpenReply) error {
 
 	log.Lvlf3("%s: Leader received all Open replies", Name)
 
@@ -357,7 +357,7 @@ func (p *DAGAChallengeGenerationProtocol) HandleOpenReply(msg []StructOpenReply)
 
 // handler that will be called by framework when node received a Finalize msg from a previous node in ring
 // Step 4.5 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *DAGAChallengeGenerationProtocol) HandleFinalize(msg StructFinalize) error {
+func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 
 	log.Lvlf3("%s: Received Finalize", Name)
 

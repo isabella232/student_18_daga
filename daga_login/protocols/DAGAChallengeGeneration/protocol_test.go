@@ -24,11 +24,11 @@ var tSuite = daga.NewSuiteEC()
 // Used for tests
 var testServiceID onet.ServiceID
 
-const testServiceName = "ServiceOCS"
+const testService = "testService"
 
 func init() {
 	var err error
-	testServiceID, err = onet.RegisterNewService(testServiceName, newDummyService)
+	testServiceID, err = onet.RegisterNewService(testService, newDummyService)
 	log.ErrFatal(err)
 }
 
@@ -56,7 +56,7 @@ func newDummyService(c *onet.Context) (onet.Service, error) {
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
 // "dummy" counterpart of daga_login.service.newDAGAChallengeGenerationProtocol() keep them more or less in sync
-func (s dummyService) newDAGAChallengeGenerationProtocol(t *testing.T, reqContext daga_login.Context) (*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol) {
+func (s dummyService) newDAGAChallengeGenerationProtocol(t *testing.T, reqContext daga_login.Context) (*DAGAChallengeGeneration.Protocol) {
 	// build tree with leader as root
 	roster := reqContext.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
@@ -68,7 +68,7 @@ func (s dummyService) newDAGAChallengeGenerationProtocol(t *testing.T, reqContex
 	require.NoError(t, err, "failed to create " + DAGAChallengeGeneration.Name + " protocol")
 	require.NotNil(t, pi, "nil protocol instance but no error")
 
-	challengeGeneration := pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol)
+	challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
 	challengeGeneration.LeaderSetup(reqContext, s.dagaServer)
 
 	// start
@@ -92,7 +92,7 @@ func (s *dummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 		if err != nil {
 			return nil, err
 		}
-		challengeGeneration := pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol)
+		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
 
 		challengeGeneration.ChildrenSetup(s.dagaServer)
 		return challengeGeneration, nil
@@ -181,10 +181,10 @@ func TestLeaderSetup(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
 	dagaServers, dummyContext := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	require.NotPanics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	}, "should not panic on valid input")
 }
 
@@ -196,10 +196,10 @@ func TestLeaderSetupShouldPanicOnEmptyContext(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
 	dagaServers, _ := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(daga_login.Context{}, dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(daga_login.Context{}, dagaServers[0])
 	}, "should panic on empty context")
 }
 
@@ -211,10 +211,10 @@ func TestLeaderSetupShouldPanicOnNilServer(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
 	_, dummyContext := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, nil)
+		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, nil)
 	}, "should panic on nil server")
 }
 
@@ -227,19 +227,19 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 	dagaServers, dummyContext := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	}, "should panic on already initialized server")
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 
 	pi, _ = local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(dagaServers[0])
+	pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	}, "should panic on already initialized server")
 }
 
@@ -252,10 +252,10 @@ func TestChildrenSetup(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
 	dagaServers, _ := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	require.NotPanics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	}, "should not panic on valid input")
 }
 
@@ -266,10 +266,10 @@ func TestChildrenSetupShouldPanicOnNilServer(t *testing.T) {
 	nbrNodes := 1
 	_, _, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(nil)
+		pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(nil)
 	}, "should panic on nil server")
 }
 
@@ -282,19 +282,19 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 	dagaServers, dummyContext := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(dagaServers[0])
+	pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	}, "should panic on already initialized server")
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 
 	pi, _ = local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(dagaServers[0])
+		pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	}, "should panic on already initialized server")
 }
 
@@ -306,8 +306,8 @@ func TestStartShouldErrorOnInvalidTreeShape(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
 	dagaServers, dummyContext := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
+	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Error(t, pi.Start(), "should return error, tree has invalid shape (protocol expects that all other nodes are direct children of root)")
 }
 //
@@ -326,11 +326,11 @@ func TestWaitForResultShouldPanicIfCalledBeforeStart(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
 	dagaServers, dummyContext := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).LeaderSetup(*dummyContext, dagaServers[0])
+	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).WaitForResult()
+		pi.(*DAGAChallengeGeneration.Protocol).WaitForResult()
 	})
 }
 
@@ -342,13 +342,13 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
 	dagaServers, _ := dummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).Done()
+	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	// TODO test name little misleading but ..
 
-	pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).ChildrenSetup(dagaServers[0])
+	pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol).WaitForResult()
+		pi.(*DAGAChallengeGeneration.Protocol).WaitForResult()
 	})
 }
 

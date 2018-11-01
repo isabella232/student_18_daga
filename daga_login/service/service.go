@@ -176,7 +176,7 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 }
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
-func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Context) (*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol, error) {
+func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Context) (*DAGAChallengeGeneration.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 	// build tree with leader as root
 	roster := reqContext.Roster
@@ -189,7 +189,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 	if err != nil {
 		return nil, errors.New("failed to create " + DAGAChallengeGeneration.Name + " protocol: " + err.Error())
 	}
-	challengeGeneration := pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol)
+	challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
 	dagaServer, err := s.dagaServer()
 	if err != nil {
 		return nil, errors.New("failed to retrieve daga server from service state: " + err.Error())
@@ -218,7 +218,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			return nil, err
 		}
-		challengeGeneration := pi.(*DAGAChallengeGeneration.DAGAChallengeGenerationProtocol)
+		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
 		dagaServer, err := s.dagaServer()
 		if err != nil {
 			log.Panic("failed to retrieve daga server from service state: " + err.Error())

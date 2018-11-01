@@ -5,6 +5,8 @@ import (
 	"github.com/dedis/onet"
 )
 
+// TODO share more code between the protocols, they have lots of structure/archi in common
+
 // TODO maybe make it a method of a dagaprotocol interface etcc. (and use p.tree, p.dagaserver().index etc..) in short don't need other parameters
 func NextNode(ownIndex int, Y []kyber.Point, treeNodes []*onet.TreeNode) *onet.TreeNode {
 	nextServerIndex := (ownIndex + 1) % len(Y)
