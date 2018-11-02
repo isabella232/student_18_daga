@@ -141,7 +141,7 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 		}
 		// TODO FIXME QUESTION check that received context match sent context
 		// extract final linkage tag
-		if Tf, err := daga.GetFinalLinkageTag(suite, context.AuthenticationContext, *serverMsg); err != nil {
+		if Tf, err := daga.GetFinalLinkageTag(suite, context, *serverMsg); err != nil {
 			return nil, errors.New("failed to extract final linkage tag from server reply: " + err.Error())
 		} else {
 			return Tf, nil

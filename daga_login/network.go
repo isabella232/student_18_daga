@@ -10,22 +10,19 @@ import (
 
 // contain net wrappers around the kyber.daga datastructures and
 
-// TODO QUESTION ask, dumb IMO but feel kind of bad exporting things that are intended to be immutable so the in between solution is to have a separate struct
+// TODO QUESTION ask, dumb IMO but feel kind of bad exporting things that are intended to be immutable and private so the in between solution is to have a separate struct
 // TODO ~messy IMO, how to do it in a idiomatic and educated way ?
-
-// NetMembers provides a net compatible representation of the Members struct
-type NetMembers struct {
-	X []kyber.Point
-	Y []kyber.Point
-}
 
 // NetContext provides a net compatible representation of the Context struct
 // (which has interface field (daga.AuthenticationContext))
 type NetContext struct {
 	Roster onet.Roster
-	G      NetMembers
-	R      []kyber.Point
-	H      []kyber.Point
+	G      struct {
+		X []kyber.Point
+		Y []kyber.Point
+	}
+	R []kyber.Point
+	H []kyber.Point
 }
 
 // to represent a daga.Client (which is an interface)
@@ -44,7 +41,7 @@ type NetServer struct {
 }
 
 // NetAuthenticationMessage provides a net compatible representation of the daga.AuthenticationMessage struct
-// (which embeds a context which has interface fields)
+// (which embeds a context which is an interface)
 type NetAuthenticationMessage struct {
 	Context  NetContext
 	SCommits []kyber.Point
@@ -62,35 +59,26 @@ type NetServerMessage struct {
 	Sigs    []daga.ServerSignature
 }
 
-// TODO not sure necessary
-func NetEncodeMembers(x, y []kyber.Point) *NetMembers {
-	return &NetMembers{
-		X: x,
-		Y: y,
-	}
-}
-
-func (netmembers NetMembers) NetDecode() ([]kyber.Point, []kyber.Point) {
-	return netmembers.X, netmembers.Y
-}
-
-func (context Context) NetEncode() *NetContext {
-	G := NetEncodeMembers(context.Members())
+func (c Context) NetEncode() *NetContext {
+	//G := NetEncodeMembers(c.Members())
+	X, Y := c.Members()
 	return &NetContext{
-		G:      *G,
-		H:      context.ClientsGenerators(),
-		R:      context.ServersSecretsCommitments(),
-		Roster: *context.Roster,
+		G: struct {
+			X []kyber.Point
+			Y []kyber.Point
+		}{X: X, Y: Y},
+		H:      c.ClientsGenerators(),
+		R:      c.ServersSecretsCommitments(),
+		Roster: *c.Roster,
 	}
 }
 
-func (netcontext NetContext) NetDecode() (Context, error) {
-	X, Y := netcontext.G.NetDecode()
-	dagaContext, err := daga.NewAuthenticationContext(X, Y, netcontext.R, netcontext.H)
+func (nc NetContext) NetDecode() (Context, error) {
+	dagaContext, err := daga.NewAuthenticationContext(nc.G.X, nc.G.Y, nc.R, nc.H)
 	if err != nil {
 		return Context{}, err
 	}
-	roster := netcontext.Roster
+	roster := nc.Roster
 	return Context{
 		dagaContext,
 		&roster,
