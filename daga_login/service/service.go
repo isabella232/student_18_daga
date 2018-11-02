@@ -24,9 +24,6 @@ import (
 // Used for tests
 var dagaID onet.ServiceID
 
-// DAGA crypto suite
-var suite = daga.NewSuiteEC()
-
 func init() {
 	var err error
 	dagaID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
@@ -41,6 +38,7 @@ type Service struct {
 	// are correctly handled.
 	*onet.ServiceProcessor
 	storage *storage
+	Setup func(s *Service) error // see rationale described under `setupState`
 }
 
 // storageID reflects the data we're storing - we could store more
@@ -70,6 +68,10 @@ func (s Service) validateAuthReq(req *daga_login.Auth) (daga_login.Context, erro
 // starts the server's protocols (daga 4.3.6)
 // QUESTION FIXME decide what is returned to client, tag only or full final servermsg ? => if tag only malicious server can identify client..
 func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
+	// setup if not already done
+	if err := s.Setup(s); err != nil {
+		return nil, errors.New("Auth: " + err.Error())
+	}
 	// verify that submitted request is valid and accepted by our node
 	context, err := s.validateAuthReq(req)
 	if err != nil {
@@ -109,6 +111,7 @@ func (s Service) validateContext(netReqContext daga_login.NetContext) (daga_logi
 // helper to check if we accept the context that was sent part of the Auth/PKClient request
 func (s Service) acceptContext(reqContext daga_login.Context) bool {
 	// TODO enhancement instead of supporting a single context add facilities to be part of multiple daga auth. context
+	// FIXME locked getter for context
 	currentContext, err := s.storage.Context.NetDecode()
 	if err != nil {
 		log.Errorf("failed to decode stored context: %s", err)
@@ -128,6 +131,10 @@ func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga_
 // API endpoint PKClient, upon reception of a valid request,
 // starts the challenge generation protocols, the current server/node will take the role of Leader
 func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKclientChallenge, error) {
+	// setup if not already done
+	if err := s.Setup(s); err != nil {
+		return nil, errors.New("PKClient: " + err.Error())
+	}
 	// verify that submitted request is valid and accepted by our node
 	context, err := s.validatePKClientReq(req)
 	if err != nil {
@@ -212,6 +219,10 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 // FIXME outdated documentation in template
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl3("received protocol msg, instantiating new protocol instance of " + tn.ProtocolName())
+	// setup if not already done
+	if err := s.Setup(s); err != nil {
+		return nil, errors.New("NewProtocol: " + err.Error())
+	}
 	switch tn.ProtocolName() {
 	case DAGAChallengeGeneration.Name:
 		pi, err := DAGAChallengeGeneration.NewProtocol(tn)
@@ -221,7 +232,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
 		dagaServer, err := s.dagaServer()
 		if err != nil {
-			log.Panic("failed to retrieve daga server from service state: " + err.Error())
+			log.Panic("NewProtocol: failed to retrieve daga server from service state: " + err.Error())
 		}
 		challengeGeneration.ChildrenSetup(dagaServer)
 		return challengeGeneration, nil
@@ -233,12 +244,12 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		dagaServerProtocol := pi.(*DAGA.Protocol)
 		dagaServer, err := s.dagaServer()
 		if err != nil {
-			log.Panic("failed to retrieve daga server from service state: " + err.Error())
+			log.Panic("NewProtocol: failed to retrieve daga server from service state: " + err.Error())
 		}
 		dagaServerProtocol.ChildrenSetup(dagaServer, s.acceptContext)
 		return dagaServerProtocol, nil
 	default:
-		log.Panic("protocol not implemented/known")
+		log.Panic("NewProtocol: protocol not implemented/known")
 	}
 	return nil, errors.New("should not be reached")
 }
@@ -255,41 +266,49 @@ func (s *Service) save() {
 
 // Tries to load the configuration and updates the data in the service
 // if it finds a valid config-file
-func (s *Service) tryLoad() error {
-	s.storage = &storage{}
-	msg, err := s.Load(storageID)
-	if err != nil {
-		return err
-	}
-	if msg == nil {
-		// first time or nothing, load from setup files
-		// FIXME temp hack while lacking a proper boot method
-		// FIXME QUESTION how to do it when we are no longer hacking... ? (pass setup info to service)
-
-		context, err := daga_login.ReadContext("./context.bin")
-		// TODO FIXME facilities to check context validity (are we part of the context, are all generators generators, etc..)
+//
+// TODO FIXME see if can redesign this mess later when we have a bootstrap method
+// rationale for not being a method anymore: to do testing more easily need ways to swap the function with a stub
+// + since it was called in newService previously => called from init (even in the test => crash) => "solution" don't call it at setup time
+// but when endpoint called and no-op if already setup
+func setupState(s *Service) error {
+	if s.storage == nil {
+		s.storage = &storage{}
+		msg, err := s.Load(storageID)
 		if err != nil {
-			return errors.New("tryLoad: first run, failed to read context from config file: " + err.Error())
+			return err
 		}
-		netContext := context.NetEncode()
-		s.storage.Context = *netContext
+		if msg == nil {
+			// first time or nothing, load from setup files
+			// FIXME temp hack while lacking a proper boot method
+			// FIXME QUESTION how to do it when we are no longer hacking... ? (pass setup info to service)
 
-		// retrieve daga server
-		indexInContext, _ := context.ServerIndexOf(s.ServerIdentity().Public)
-		dagaServer, err := daga_login.ReadServer(fmt.Sprintf("./server%d.bin", indexInContext))
-		if err != nil {
-			return errors.New("tryLoad: first run, failed to load daga Server from config file: " + err.Error())
+			context, err := daga_login.ReadContext("./context.bin")
+			// TODO FIXME facilities to check context validity (are we part of the context, are all generators generators, etc..)
+			if err != nil {
+				return errors.New("tryLoad: first run, failed to read context from config file: " + err.Error())
+			}
+			netContext := context.NetEncode()
+			s.storage.Context = *netContext
+
+			// retrieve daga server
+			indexInContext, _ := context.ServerIndexOf(s.ServerIdentity().Public)
+			dagaServer, err := daga_login.ReadServer(fmt.Sprintf("./server%d.bin", indexInContext))
+			if err != nil {
+				return errors.New("tryLoad: first run, failed to load daga Server from config file: " + err.Error())
+			}
+			s.storage.DagaServer = *daga_login.NetEncodeServer(dagaServer)
+			return nil
+		} else {
+			var ok bool
+			s.storage, ok = msg.(*storage)
+			if !ok {
+				return errors.New("tryLoad: data of wrong type")
+			}
+			return nil
 		}
-		s.storage.DagaServer = *daga_login.NetEncodeServer(dagaServer)
-		return nil
-	} else {
-		var ok bool
-		s.storage, ok = msg.(*storage)
-		if !ok {
-			return errors.New("tryLoad: data of wrong type")
-		}
-		return nil
 	}
+	return nil
 }
 
 // returns the daga server struct of this daga service instance, (fetched from storage)
@@ -313,9 +332,6 @@ func newService(c *onet.Context) (onet.Service, error) {
 	if err := s.RegisterHandlers(s.Auth, s.PKClient); err != nil {
 		return nil, errors.New("Couldn't register service's API handlers/messages: " + err.Error())
 	}
-	if err := s.tryLoad(); err != nil {
-		log.Error(err)
-		return nil, err
-	}
+	s.Setup = setupState
 	return s, nil
 }

@@ -156,6 +156,14 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaServers []d
 	return
 }
 
+func DagaServerFromKey(dagaServers []daga.Server) map[string]daga.Server {
+	dagaServerFromKey := make(map[string]daga.Server)
+	for _, dagaServer := range dagaServers {
+		dagaServerFromKey[dagaServer.PublicKey().String()] = dagaServer
+	}
+	return dagaServerFromKey
+}
+
 func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *daga.AuthenticationMessage, *daga_login.Context) {
 	// local test environment
 	servers, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
@@ -166,10 +174,7 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	dagaServers, dummyRequest, dummyContext := DummyDagaSetup(local, roster)
 
 	// populate dummy service states (real life we will need a setup protocol/procedure)
-	dagaServerFromKey := make(map[string]daga.Server)
-	for _, dagaServer := range dagaServers {
-		dagaServerFromKey[dagaServer.PublicKey().String()] = dagaServer
-	}
+	dagaServerFromKey := DagaServerFromKey(dagaServers)
 	for _, service := range services {
 		service := service.(*DummyService)
 		service.DagaServer = dagaServerFromKey[service.ServerIdentity().Public.String()]
