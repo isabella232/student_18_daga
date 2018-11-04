@@ -1,6 +1,4 @@
-[![Build Status](https://travis-ci.org/dedis/student_18_daga.svg?branch=onet_cothority)](https://travis-ci.org/dedis/student_18_daga)
-
-[![Coverage Status](https://coveralls.io/repos/github/dedis/student_18_daga/badge.svg?branch=master)](https://coveralls.io/github/dedis/student_18_daga?branch=master)
+[![Build Status](https://travis-ci.org/dedis/student_18_daga.svg?branch=onet_cothority)](https://travis-ci.org/dedis/student_18_daga) [![Coverage Status](https://coveralls.io/repos/github/dedis/student_18_daga/badge.svg?branch=master)](https://coveralls.io/github/dedis/student_18_daga?branch=master)
 
 # Integrating DAGA in the cothority framework and using it for a login service
 
