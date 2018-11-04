@@ -153,8 +153,8 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitments []kyber.Point) daga.Challenge {
 	log.Lvl4("pKClient, sending commitments to: ", dst)
 	request := PKclientCommitments{
-		Data:    commitments,
-		Context: *context.NetEncode(),
+		Commitments: commitments,
+		Context:     *context.NetEncode(),
 	}
 	reply := PKclientChallenge{}
 	err := c.onet.SendProtobuf(dst, &request, &reply)

@@ -42,9 +42,9 @@ func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Cli
 		optServerKeys = make([]kyber.Scalar, s)
 	}
 	for i := 0; i < s; i++ {
-		new, _ := NewServer(suite, i, optServerKeys[i])
-		serverKeys = append(serverKeys, new.PublicKey())
-		servers = append(servers, new)
+		server, _ := NewServer(suite, i, optServerKeys[i])
+		serverKeys = append(serverKeys, server.PublicKey())
+		servers = append(servers, server)
 	}
 
 	//Generates the per-round secrets for the ServerSignature and keep track of the commits
@@ -60,10 +60,10 @@ func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Cli
 	clients := make([]Client, 0, c)
 	clientGenerators := make([]kyber.Point, 0, c)
 	for i := 0; i < c; i++ {
-		new, _ := NewClient(suite, i, nil)
+		client, _ := NewClient(suite, i, nil)
 
-		clientKeys = append(clientKeys, new.PublicKey())
-		clients = append(clients, new)
+		clientKeys = append(clientKeys, client.PublicKey())
+		clients = append(clients, client)
 
 		generator, err := GenerateClientGenerator(suite, i, perRoundSecretCommits)
 		if err != nil {

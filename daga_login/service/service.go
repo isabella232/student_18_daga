@@ -59,14 +59,14 @@ func (s Service) validateAuthReq(req *daga_login.Auth) (daga_login.Context, erro
 	if req == nil || len(req.SCommits) == 0 || req.T0 == nil {
 		return daga_login.Context{}, errors.New("validateAuthReq: nil or empty request")
 	}
-	// TODO validate proof
+	// TODO validate proof to avoid spawning a protocol for nothing
 	// FIXME check commitments and challenge same as at proof construction time..etc..see github issue) => probably better in the corresponding daga function
 	return s.validateContext(req.Context)
 }
 
 // API endpoint Auth,
 // starts the server's protocols (daga 4.3.6)
-// QUESTION FIXME decide what is returned to client, tag only or full final servermsg ? => if tag only malicious server can identify client..
+// QUESTION FIXME decide what is returned to client, tag only or full final servermsg ?
 func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
 	// setup if not already done
 	if err := s.Setup(s); err != nil {
@@ -122,8 +122,11 @@ func (s Service) acceptContext(reqContext daga_login.Context) bool {
 
 // helper to validate PKClient requests before proceeding further
 func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga_login.Context, error) {
-	if req == nil || len(req.Data) == 0 {
-		return daga_login.Context{}, errors.New("validatePKClientReq: nil request or empty commitments")
+	if req == nil {
+		return daga_login.Context{}, errors.New("validatePKClientReq: nil request")
+	}
+	if len(req.Commitments) == 0 || len(req.Commitments) != len(req.Context.H) * 3 {
+		return daga_login.Context{}, errors.New("validatePKClientReq: empty or wrongly sized commitments")
 	}
 	return s.validateContext(req.Context)
 }

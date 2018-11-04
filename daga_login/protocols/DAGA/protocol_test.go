@@ -39,7 +39,7 @@ func runProtocol(t *testing.T, nbrNodes int) {
 	dagaProtocol := services[0].(*protocols_testing.DummyService).NewDAGAServerProtocol(t, *netRequest)
 
 	serverMsg, err := dagaProtocol.WaitForResult()
-	require.NoError(t, err, "failed to get result of protocol run")
+	require.NoError(t, err, "failed to get result of protocol run (valid setup)")
 	require.NotZero(t, serverMsg)
 
 	// verify / extract tag
@@ -48,6 +48,7 @@ func runProtocol(t *testing.T, nbrNodes int) {
 	require.NotZero(t, Tf)
 }
 
+// TODO remove the unnecessary local setup in tests that only check behavior of methods/func in isolation
 
 func TestLeaderSetup(t *testing.T) {
 	local := onet.NewLocalTest(tSuite)
