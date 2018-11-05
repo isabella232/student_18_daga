@@ -129,7 +129,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 }
 
 // TODO add possibility to return bad challenge channel
-func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaServers []daga.Server,
+func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []daga.Client, dagaServers []daga.Server,
 	dummyAuthRequest *daga.AuthenticationMessage, dummyContext *daga_login.Context){
 	var serverKeys []kyber.Scalar
 	servers := local.Servers
@@ -171,7 +171,7 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	log.Lvl3("Tree is:", tree.Dump())
 
 	// setup dummy request
-	dagaServers, dummyRequest, dummyContext := DummyDagaSetup(local, roster)
+	_, dagaServers, dummyRequest, dummyContext := DummyDagaSetup(local, roster)
 
 	// populate dummy service states (real life we will need a setup protocol/procedure)
 	dagaServerFromKey := DagaServerFromKey(dagaServers)
@@ -184,4 +184,12 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	}
 
 	return services, dummyRequest, dummyContext
+}
+
+func RandomPointSlice(len int) []kyber.Point {
+	points := make([]kyber.Point, 0, len)
+	for i:=0; i<len; i++ {
+		points = append(points, tSuite.Point().Pick(tSuite.RandomStream()))
+	}
+	return points
 }

@@ -1,70 +1,118 @@
 package daga_login_test
 
-//
-//import (
-//	"testing"
-//
-//	"github.com/stretchr/testify/require"
-//
-//	"github.com/dedis/kyber/suites"
-//	"github.com/dedis/onet"
-//	"github.com/dedis/onet/log"
-//	// We need to include the service so it is started.
-//	"github.com/dedis/student_18_daga/daga_login"
-//	_ "github.com/dedis/student_18_daga/daga_login/service"
-//)
-//
-//var tSuite = suites.MustFind("Ed25519")
-//
-//func TestMain(m *testing.M) {
-//	log.MainTest(m)
-//}
-//
-//func TestClient_Clock(t *testing.T) {
+import (
+	"github.com/dedis/onet"
+	"github.com/dedis/onet/log"
+	"github.com/dedis/student_18_daga/daga_login"
+	"github.com/dedis/student_18_daga/daga_login/service"
+	testing2 "github.com/dedis/student_18_daga/daga_login/testing"
+	"github.com/dedis/student_18_daga/sign/daga"
+	"github.com/stretchr/testify/require"
+	"testing"
+)
+
+var tSuite = daga.NewSuiteEC()
+
+func TestMain(m *testing.M) {
+	log.MainTest(m)
+}
+
+//// QUESTION pKClient is not exported (doesn't make sense) => to test it need to be in same package => import cycle...
+//// or test it indirectly through Auth calls..
+//func TestClient_pKCLient(t *testing.T) {
 //	nbr := 5
 //	local := onet.NewTCPTest(tSuite)
 //	// generate 5 hosts, they don't connect, they process messages, and they
 //	// don't register the tree or entitylist
-//	_, roster, _ := local.GenTree(nbr, true)
+//	_, roster, _ := local.GenTree(nbr, false)
 //	defer local.CloseAll()
 //
-//	c, _ := daga_login.NewClient(0, nil)
-//	cl1, err := c.Clock(roster)
-//	require.Nil(t, err)
-//	require.Equal(t, nbr, cl1.Children)
-//	cl2, err := c.Clock(roster)
-//	require.Nil(t, err)
-//	require.Equal(t, nbr, cl2.Children)
+//	_, _, dummyContext := testing2.DummyDagaSetup(local, roster)
+//
+//	c, _ := NewClient(0, nil)
+//	challenge := c.pKClient(roster.RandomServerIdentity(), *dummyContext, testing2.RandomPointSlice(3*len(dummyContext.ClientsGenerators())))
+//
+//	// verify that all servers correctly signed the challenge
+//	bytes, _ := challenge.Cs.MarshalBinary()
+//	_, Y := dummyContext.Members()
+//	for _, signature := range challenge.Sigs {
+//		require.NoError(t, daga.SchnorrVerify(tSuite, Y[signature.Index], bytes, signature.Sig))
+//	}
 //}
-//
-//func TestClient_Count(t *testing.T) {
-//	nbr := 5
-//	local := onet.NewTCPTest(tSuite)
-//	// generate 5 hosts, they don't connect, they process messages, and they
-//	// don't register the tree or entitylist
-//	_, roster, _ := local.GenTree(nbr, true)
-//	defer local.CloseAll()
-//
-//	c, _ := daga_login.NewClient(0, nil)
-//	// Verify it's all 0s before
-//	for _, s := range roster.List {
-//		count, err := c.Count(s)
-//		require.Nil(t, err)
-//		require.Equal(t, 0, count)
-//	}
-//
-//	// Make some clock-requests
-//	for range roster.List {
-//		_, err := c.Clock(roster)
-//		require.Nil(t, err)
-//	}
-//
-//	// Verify we have the correct total of requests
-//	total := 0
-//	for _, s := range roster.List {
-//		count, err := c.Count(s)
-//		require.Nil(t, err)
-//		total += count
-//	}
-//	require.Equal(t, nbr, total)
-//}
+
+// override/replace the Setup function of the Service(s) with a function that populate their state/storage with
+// the dagaServer and context provided
+// TODO helper used to test API too => better to move to testing helpers => KO import cycles..
+func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, dummyContext *daga_login.Context) {
+	dagaServerFromKey := testing2.DagaServerFromKey(dagaServers)
+	for _, s := range services {
+		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
+		svc := s.(*service.Service)
+		svc.Setup = func(s *service.Service) error {
+			if s.Storage == nil {
+				dagaServer := dagaServerFromKey[s.ServerIdentity().Public.String()]
+				context := *dummyContext
+				s.Storage = &service.Storage{
+					DagaServer: *daga_login.NetEncodeServer(dagaServer),
+					Context:    *context.NetEncode(),
+				}
+			}
+			return nil
+		}
+	}
+}
+
+func authSetup() (*onet.LocalTest, daga.Client, *daga_login.Context) {
+	nbr := 5
+	local := onet.NewTCPTest(tSuite)
+	// generate 5 hosts, they don't connect, they process messages, and they
+	// don't register the tree or entitylist
+	hosts, roster, _ := local.GenTree(nbr, false)
+	services := local.GetServices(hosts, service.DagaID)
+
+	dagaClients, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
+
+	overrideServicesSetup(services, dagaServers, dummyContext)
+	return local, dagaClients[0], dummyContext
+}
+
+func TestClient_InvalidAuth(t *testing.T) {
+	local, _, dummyContext := authSetup()
+	defer local.CloseAll()
+
+	// client not part of context
+	c, _ := daga_login.NewClient(0, nil)
+	Tf, err := c.Auth(*dummyContext)
+	require.Error(t, err, "should error, client not part of context")
+	require.Zero(t, Tf)
+}
+
+func TestClient_Auth(t *testing.T) {
+	local, dagaClient, dummyContext := authSetup()
+	defer local.CloseAll()
+
+	// client part of context
+	c := daga_login.Client{
+		Client: dagaClient,
+		Onet:   onet.NewClient(tSuite, daga_login.ServiceName),
+	}
+
+	Tf, err := c.Auth(*dummyContext)
+	require.NoError(t, err, "should not error, client part of context")
+	require.NotZero(t, Tf)
+}
+
+func BenchmarkClient_Auth(b *testing.B) {
+	local, dagaClient, dummyContext := authSetup()
+	defer local.CloseAll()
+
+	// client part of context
+	c := daga_login.Client{
+		Client: dagaClient,
+		Onet:   onet.NewClient(tSuite, daga_login.ServiceName),
+	}
+
+	for i := 0; i < b.N; i++ {
+		c.Auth(*dummyContext)
+	}
+}

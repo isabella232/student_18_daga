@@ -15,7 +15,7 @@ type Client struct {
 	// and here override some of them where needed to wrap them in the onet framework
 	// same mechanisms as extend / super in OO languages
 	// + by doing so can pass any struct that implement daga.Client when creating Client => can test/mock/stub etc..
-	onet *onet.Client
+	Onet *onet.Client
 }
 
 // NewClient is used to initialize a new Client with a given index
@@ -26,7 +26,7 @@ func NewClient(i int, s kyber.Scalar) (*Client, error) {
 	} else {
 		return &Client{
 			Client: dagaClient,
-			onet:   onet.NewClient(suite, ServiceName),
+			Onet:   onet.NewClient(suite, ServiceName),
 		}, nil
 	}
 }

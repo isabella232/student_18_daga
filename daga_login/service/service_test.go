@@ -7,7 +7,7 @@ import (
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/daga_login"
-	testing2 "github.com/dedis/student_18_daga/daga_login/protocols/testing" // FIXME reorganize now that I use it in service tests too, for now package organization not fixed..
+	testing2 "github.com/dedis/student_18_daga/daga_login/testing" // FIXME reorganize now that I use it in service tests too, for now package organization not fixed..
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -28,10 +28,10 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, d
 		// TODO create a curry maker outside, I might end up reusing this
 		service := s.(*Service)
 		service.Setup = func(s *Service) error {
-			if s.storage == nil {
+			if s.Storage == nil {
 				dagaServer := dagaServerFromKey[s.ServerIdentity().Public.String()]
 				context := *dummyContext
-				s.storage = &storage{
+				s.Storage = &Storage{
 					DagaServer: *daga_login.NetEncodeServer(dagaServer),
 					Context:    *context.NetEncode(),
 				}
@@ -47,8 +47,8 @@ func TestService_PKClient(t *testing.T) {
 	hosts, roster, _ := local.GenTree(5, true)
 	defer local.CloseAll()
 
-	services := local.GetServices(hosts, dagaID)
-	dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
+	services := local.GetServices(hosts, DagaID)
+	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
 
 	// provide initial state to the service (instead of fetching it from FS)
 	overrideServicesSetup(services, dagaServers, dummyContext)
@@ -59,7 +59,7 @@ func TestService_PKClient(t *testing.T) {
 		reply, err := s.(*Service).PKClient(
 			&daga_login.PKclientCommitments{
 				Context:     *dummyContext.NetEncode(),
-				Commitments: randomPointSlice(len(dummyContext.ClientsGenerators())*3)},
+				Commitments: testing2.RandomPointSlice(len(dummyContext.ClientsGenerators())*3)},
 		)
 		require.NoError(t, err)
 		require.NotZero(t, reply)
@@ -82,8 +82,8 @@ func TestService_Auth(t *testing.T) {
 	hosts, roster, _ := local.GenTree(5, true)
 	defer local.CloseAll()
 
-	services := local.GetServices(hosts, dagaID)
-	dagaServers, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
+	services := local.GetServices(hosts, DagaID)
+	_, dagaServers, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
 
 	// provide initial state to the service (instead of fetching it from FS)
 	overrideServicesSetup(services, dagaServers, dummyContext)
@@ -125,15 +125,6 @@ func TestValidateAuthReqShouldErrorOnEmptyReq(t *testing.T) {
 	require.Zero(t, context)
 }
 
-func randomPointSlice(len int) []kyber.Point {
-	points := make([]kyber.Point, 0, len)
-	for i:=0; i<len; i++ {
-		points = append(points, tSuite.Point().Pick(tSuite.RandomStream()))
-	}
-	return points
-}
-
-// TODO maybe remove... its more like testing the daga code
 func TestValidateContextShouldErrorOnInvalidContext(t *testing.T) {
 	service := &Service{}
 	badNetContext := daga_login.NetContext{
@@ -141,9 +132,9 @@ func TestValidateContextShouldErrorOnInvalidContext(t *testing.T) {
 		G: struct {
 			X []kyber.Point
 			Y []kyber.Point
-		}{X: randomPointSlice(5), Y: randomPointSlice(9)},
-		H:randomPointSlice(3),  // len != 5 => invalid
-		R:randomPointSlice(8), // len != 9 => invalid
+		}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
+		H:testing2.RandomPointSlice(3),  // len != 5 => invalid
+		R:testing2.RandomPointSlice(8), // len != 9 => invalid
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on invalid context")
@@ -157,9 +148,9 @@ func TestValidateContextShouldErrorOnEmptyRoster(t *testing.T) {
 		G: struct {
 			X []kyber.Point
 			Y []kyber.Point
-		}{X: randomPointSlice(5), Y: randomPointSlice(9)},
-		H:randomPointSlice(5),
-		R:randomPointSlice(9),
+		}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
+		H:testing2.RandomPointSlice(5),
+		R:testing2.RandomPointSlice(9),
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on empty roster")
@@ -177,8 +168,8 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 	hosts, roster, _ := local.GenTree(5, true)
 	defer local.CloseAll()
 
-	services := local.GetServices(hosts, dagaID)
-	dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
+	services := local.GetServices(hosts, DagaID)
+	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
 	// provide initial state to the service (instead of fetching it from FS)
 	overrideServicesSetup(services[0:0], dagaServers, dummyContext)
 	service := services[0].(*Service)
@@ -190,9 +181,9 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 		G: struct {
 			X []kyber.Point
 			Y []kyber.Point
-		}{X: randomPointSlice(5), Y: randomPointSlice(9)},
-		H:randomPointSlice(5),
-		R:randomPointSlice(9),
+		}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
+		H:testing2.RandomPointSlice(5),
+		R:testing2.RandomPointSlice(9),
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on not accepted context")
@@ -218,9 +209,9 @@ func TestValidatePKClientReqShouldErrorOnEmptyOrBadlySizedCommitments(t *testing
 
 	context, err = service.validatePKClientReq(&daga_login.PKclientCommitments{
 		Context: daga_login.NetContext{
-			H: randomPointSlice(8),
+			H: testing2.RandomPointSlice(8),
 		},
-		Commitments: randomPointSlice(12),  // != 3*8
+		Commitments: testing2.RandomPointSlice(12),  // != 3*8
 	})
 	require.Error(t, err, "should return error on bad commitments size")
 	require.Zero(t, context)
@@ -233,9 +224,9 @@ func TestPKClientShouldErrorOnFailedSetup(t *testing.T) {
 	}
 	reply, err := service.PKClient(&daga_login.PKclientCommitments{
 		Context: daga_login.NetContext{
-			H: randomPointSlice(8),
+			H: testing2.RandomPointSlice(8),
 		},
-		Commitments: randomPointSlice(3*8),
+		Commitments: testing2.RandomPointSlice(3*8),
 	})
 	require.Error(t, err, "should return error on failed setup")
 	require.Zero(t, reply)
@@ -250,7 +241,7 @@ func TestAuthShouldErrorOnFailedSetup(t *testing.T) {
 	local := onet.NewTCPTest(tSuite)
 	_, roster, _ := local.GenTree(5, true)
 	defer local.CloseAll()
-	_, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
+	_, _, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
 
 	request := daga_login.Auth(*daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyAuthRequest))
 	reply, err := service.Auth(&request)

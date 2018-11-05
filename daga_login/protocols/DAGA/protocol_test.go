@@ -5,7 +5,7 @@ import (
 	"github.com/dedis/onet/log"
 	"github.com/dedis/student_18_daga/daga_login"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGA"
-	protocols_testing "github.com/dedis/student_18_daga/daga_login/protocols/testing"
+	protocols_testing "github.com/dedis/student_18_daga/daga_login/testing"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -57,7 +57,7 @@ func TestLeaderSetup(t *testing.T) {
 	// valid setup, should not panic
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()
 
@@ -74,7 +74,7 @@ func TestLeaderSetupShouldPanicOnNilServer(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, _, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()
 
@@ -92,7 +92,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 
 	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
@@ -123,7 +123,7 @@ func TestChildrenSetup(t *testing.T) {
 	// valid setup, should not panic
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()
 
@@ -156,7 +156,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 
 	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
@@ -188,7 +188,7 @@ func TestWaitForResultShouldPanicIfCalledBeforeStart(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()
 
@@ -206,7 +206,7 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()
 

@@ -109,7 +109,13 @@ func (p *Protocol) setRequest(request daga_login.NetAuthenticationMessage) {
 // Start initialize the daga.ServerMessage, run the "daga.ServerProtocol" on it and forward it to the next node
 //
 // Step 1-4 of of daga server's protocol described in Syta - 4.3.6
-func (p *Protocol) Start() error {
+func (p *Protocol) Start() (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
+
 	// TODO check tree shape
 	log.Lvlf3("leader (%s) started %s", p.ServerIdentity(), Name)
 
@@ -155,7 +161,12 @@ func (p *Protocol) WaitForResult() (daga.ServerMessage, error) {
 // if current node is last node
 //
 // Step 1-4 of of daga server's protocol described in Syta - 4.3.6
-func (p *Protocol) HandleServerMsg(msg StructServerMsg) error {
+func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
 	log.Lvlf3("%s: Received ServerMsg", Name)
 
 	// decode
@@ -196,7 +207,7 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) error {
 }
 
 func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
-
+	defer p.Done()
 	log.Lvlf3("%s: Received FinishedServerMsg", Name)
 
 	weAreLeader := p.acceptContext == nil // TODO FIXME what could be a better way ??.. don't like using things for multiple non obvious purposes => maybe decide that leader is at root of tree (and bye bye the potential "ring-tree")
@@ -218,7 +229,6 @@ func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
 		// make resulting message (and hence final linkage tag available to service => send back to client
 		p.result <- *serverMsg // TODO maybe send netServerMsg instead => save one encoding to the service
 	}
-	p.Done()
 	return nil
 }
 

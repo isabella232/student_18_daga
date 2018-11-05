@@ -110,7 +110,6 @@ func cmdSetup(c *cli.Context) error {
 // authenticate
 func cmdLogin(c *cli.Context) error {
 	log.Info("Auth command")
-	//group := readGroup(c.Args())
 	index := readInt(c.Args(), "Please give the index (in auth. context) of the client you want to run")
 	// TODO same issues and questions as in setup => need to fix the frame/goals of my work, now I'm hacking to continue the developpment
 	// TODO all of this is not needed when there are facilities to create/join an auth. context, cmdLogin needs only a context, an index and a privatekey

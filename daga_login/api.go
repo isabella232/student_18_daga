@@ -128,15 +128,14 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 		request := Auth(*NetEncodeAuthenticationMessage(context, *M0))
 		reply := AuthReply{}
 		dst := context.RandomServerIdentity()
-		err = c.onet.SendProtobuf(dst, &request, &reply)
+		err = c.Onet.SendProtobuf(dst, &request, &reply)
 		if err != nil {
-			log.Panic("error sending auth. request to", dst, ":", err)
-			return nil, err
+			return nil, fmt.Errorf("error sending auth. request to %s : %s", dst, err)
 		}
 		// decode reply
 		serverMsg, context, err := NetServerMessage(reply).NetDecode()
 		if err != nil {
-			log.Panic("error decoding auth. reply from", dst, ":", err)
+			log.Panic("error decoding auth. reply from ", dst, " : ", err)
 			return nil, err
 		}
 		// TODO FIXME QUESTION check that received context match sent context
@@ -157,7 +156,7 @@ func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitmen
 		Context:     *context.NetEncode(),
 	}
 	reply := PKclientChallenge{}
-	err := c.onet.SendProtobuf(dst, &request, &reply)
+	err := c.Onet.SendProtobuf(dst, &request, &reply)
 	if err != nil {
 		log.Panic("pKClient, error sending commitments to ", dst, ":", err)
 		return daga.Challenge{}

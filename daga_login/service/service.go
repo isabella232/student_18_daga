@@ -22,13 +22,13 @@ import (
 )
 
 // Used for tests
-var dagaID onet.ServiceID
+var DagaID onet.ServiceID
 
 func init() {
 	var err error
-	dagaID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
+	DagaID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
 	log.ErrFatal(err)
-	network.RegisterMessages(storage{}, daga_login.NetContext{}, daga_login.NetServer{})
+	network.RegisterMessages(Storage{}, daga_login.NetContext{}, daga_login.NetServer{})
 }
 
 // Service is our DAGA-service
@@ -37,17 +37,17 @@ type Service struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
 	*onet.ServiceProcessor
-	storage *storage
-	Setup func(s *Service) error // see rationale described under `setupState`
+	Storage *Storage               // TODO exported, needed by the tests ... but ... no other mean ? (I only see writing a dummy service that embed service and override everything related to Storage but pffff)
+	Setup   func(s *Service) error // see rationale described under `setupState`
 }
 
 // storageID reflects the data we're storing - we could store more
 // than one structure.
 var storageID = []byte("main")
 
-// storage is used to save our data.
-// always access storage through the helpers/getters !
-type storage struct {
+// Storage is used to save our data.
+// always access Storage through the helpers/getters !
+type Storage struct {  // exported.. needed by the tests..
 	Context    daga_login.NetContext // current DAGA context and respective roster
 	DagaServer daga_login.NetServer  // daga server identity of our node (part of context)
 	// (TODO/enhancement add facilities to handle multiple contexts at once, with possibly multiple DAGA server identities)
@@ -112,7 +112,7 @@ func (s Service) validateContext(netReqContext daga_login.NetContext) (daga_logi
 func (s Service) acceptContext(reqContext daga_login.Context) bool {
 	// TODO enhancement instead of supporting a single context add facilities to be part of multiple daga auth. context
 	// FIXME locked getter for context
-	currentContext, err := s.storage.Context.NetDecode()
+	currentContext, err := s.Storage.Context.NetDecode()
 	if err != nil {
 		log.Errorf("failed to decode stored context: %s", err)
 		return false
@@ -259,9 +259,9 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 
 // saves all data.
 func (s *Service) save() {
-	s.storage.Lock()
-	defer s.storage.Unlock()
-	err := s.Save(storageID, s.storage)
+	s.Storage.Lock()
+	defer s.Storage.Unlock()
+	err := s.Save(storageID, s.Storage)
 	if err != nil {
 		log.Error("Couldn't save data:", err)
 	}
@@ -275,8 +275,8 @@ func (s *Service) save() {
 // + since it was called in newService previously => called from init (even in the test => crash) => "solution" don't call it at setup time
 // but when endpoint called and no-op if already setup
 func setupState(s *Service) error {
-	if s.storage == nil {
-		s.storage = &storage{}
+	if s.Storage == nil {
+		s.Storage = &Storage{}
 		msg, err := s.Load(storageID)
 		if err != nil {
 			return err
@@ -292,7 +292,7 @@ func setupState(s *Service) error {
 				return errors.New("tryLoad: first run, failed to read context from config file: " + err.Error())
 			}
 			netContext := context.NetEncode()
-			s.storage.Context = *netContext
+			s.Storage.Context = *netContext
 
 			// retrieve daga server
 			indexInContext, _ := context.ServerIndexOf(s.ServerIdentity().Public)
@@ -300,11 +300,11 @@ func setupState(s *Service) error {
 			if err != nil {
 				return errors.New("tryLoad: first run, failed to load daga Server from config file: " + err.Error())
 			}
-			s.storage.DagaServer = *daga_login.NetEncodeServer(dagaServer)
+			s.Storage.DagaServer = *daga_login.NetEncodeServer(dagaServer)
 			return nil
 		} else {
 			var ok bool
-			s.storage, ok = msg.(*storage)
+			s.Storage, ok = msg.(*Storage)
 			if !ok {
 				return errors.New("tryLoad: data of wrong type")
 			}
@@ -314,11 +314,11 @@ func setupState(s *Service) error {
 	return nil
 }
 
-// returns the daga server struct of this daga service instance, (fetched from storage)
+// returns the daga server struct of this daga service instance, (fetched from Storage)
 func (s *Service) dagaServer() (daga.Server, error) {
-	s.storage.Lock()
-	defer s.storage.Unlock()
-	if server, err := s.storage.DagaServer.NetDecode(); err != nil {
+	s.Storage.Lock()
+	defer s.Storage.Unlock()
+	if server, err := s.Storage.DagaServer.NetDecode(); err != nil {
 		return nil, err
 	} else {
 		return server, nil

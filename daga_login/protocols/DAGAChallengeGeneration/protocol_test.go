@@ -5,7 +5,7 @@ import (
 	"github.com/dedis/onet/log"
 	"github.com/dedis/student_18_daga/daga_login"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAChallengeGeneration"
-	protocols_testing "github.com/dedis/student_18_daga/daga_login/protocols/testing"
+	protocols_testing "github.com/dedis/student_18_daga/daga_login/testing"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -58,7 +58,7 @@ func TestLeaderSetup(t *testing.T) {
 	// valid setup, should not panic
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
@@ -73,7 +73,7 @@ func TestLeaderSetupShouldPanicOnEmptyContext(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
@@ -88,7 +88,7 @@ func TestLeaderSetupShouldPanicOnNilServer(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, _, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
@@ -103,7 +103,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 
 	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
@@ -129,7 +129,7 @@ func TestChildrenSetup(t *testing.T) {
 	// valid setup, should not panic
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
@@ -158,7 +158,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 
 	pi.(*DAGAChallengeGeneration.Protocol).ChildrenSetup(dagaServers[0])
@@ -183,9 +183,8 @@ func TestStartShouldErrorOnInvalidTreeShape(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(*dummyContext, dagaServers[0])
 	require.Error(t, pi.Start(), "should return error, tree has invalid shape (protocol expects that all other nodes are direct children of root)")
 }
@@ -203,7 +202,7 @@ func TestWaitForResultShouldPanicIfCalledBeforeStart(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
@@ -219,7 +218,7 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
@@ -234,3 +233,5 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 // QUESTION TODO don't know how to test more advanced things, how to simulate bad behavior from some nodes
 // now I'm only assured that it works when setup like intended + some little bad things
 // but no guarantees on what happens otherwise
+
+// TODO test handlers (for done too)

@@ -167,7 +167,12 @@ func (p *Protocol) commitment(index int) daga.ChallengeCommitment {
 
 // Start sends the Announce-message to all children,
 // Step 1 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *Protocol) Start() error {
+func (p *Protocol) Start() (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
 
 	// quick check that give hint that every other node is indeed a direct child of root.
 	// when leader create and start protocol upon reception of PKclient commitments (in the service)
@@ -224,7 +229,12 @@ func (p *Protocol) WaitForResult() (daga.Challenge, error) {
 
 // handler that is called on "slaves" upon reception of Leader's Announce message
 // Step 2 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *Protocol) HandleAnnounce(msg StructAnnounce) error {
+func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
 
 	log.Lvlf3("%s: Received Leader's Announce", Name)
 	leaderTreeNode := msg.TreeNode
@@ -241,7 +251,7 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) error {
 	// FIXME/TODO then validate context before proceeding see discussion in https://github.com/dedis/student_18_daga/issues/25
 	// FIXME ==> need ways for the service to communicate the accepted context to the protocol instance => do as was done in server's protocol, pass validator callback to childrensetup
 
-	err := daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, leaderTreeNode.ServerIdentity.Public)
+	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, leaderTreeNode.ServerIdentity.Public)
 	if err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	}
@@ -270,7 +280,13 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) error {
 
 // handler that will be called by framework when Leader node has received an AnnounceReply from all other nodes (its children)
 // Step 3 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) error {
+func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
+
 	// remember that for correct aggregation of messages the tree must have correct shape
 	log.Lvlf3("%s: Leader received all Announce replies", Name)
 
@@ -300,7 +316,12 @@ func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) error {
 
 // handler that is called on "slaves" upon reception of Leader's Open message
 // Step 3.5 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *Protocol) HandleOpen(msg StructOpen) error {
+func (p *Protocol) HandleOpen(msg StructOpen) (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
 
 	log.Lvlf3("%s: Received Leader's Open", Name)
 	// TODO nil/empty msg checks
@@ -322,7 +343,12 @@ func (p *Protocol) HandleOpen(msg StructOpen) error {
 
 // handler that will be called by framework when Leader node has received an OpenReply from all other nodes (its children)
 // Step 4 of daga challenge generation protocol described in Syta - 4.7.4
-func (p *Protocol) HandleOpenReply(msg []StructOpenReply) error {
+func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
+	defer func() {
+		if err != nil {
+			p.Done()
+		}
+	}()
 
 	log.Lvlf3("%s: Leader received all Open replies", Name)
 
@@ -359,7 +385,7 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) error {
 // handler that will be called by framework when node received a Finalize msg from a previous node in ring
 // Step 4.5 of daga challenge generation protocol described in Syta - 4.7.4
 func (p *Protocol) HandleFinalize(msg StructFinalize) error {
-
+	defer p.Done()
 	log.Lvlf3("%s: Received Finalize", Name)
 
 	// check if we are the leader
@@ -380,7 +406,6 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 		err := p.SendTo(nextServerTreeNode, &Finalize{
 			ChallengeCheck: msg.ChallengeCheck,
 		})
-		p.Done()
 		return err
 	} else {
 		// step 5
@@ -392,7 +417,6 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 		// TODO/FIXME make result available to other nodes and see https://github.com/dedis/student_18_daga/issues/24
 		// make result available to service that will send it back to client
 		p.result <- clientChallenge
-		p.Done()
 		return nil
 	}
 }
