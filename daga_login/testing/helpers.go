@@ -34,8 +34,8 @@ type DummyService struct {
 	*onet.ServiceProcessor
 
 	// Has to be initialised by the tests
-	DagaServer daga.Server
-	AcceptContext func(daga_login.Context)bool
+	DagaServer    daga.Server
+	AcceptContext func(daga_login.Context) bool
 }
 
 // returns a new dummyService
@@ -48,7 +48,7 @@ func NewDummyService(c *onet.Context) (onet.Service, error) {
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
 // "dummy" counterpart of daga_login.service.newDAGAChallengeGenerationProtocol() keep them more or less in sync
-func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req daga_login.PKclientCommitments) (*DAGAChallengeGeneration.Protocol) {
+func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req daga_login.PKclientCommitments) *DAGAChallengeGeneration.Protocol {
 	// build tree with leader as root
 	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
@@ -57,7 +57,7 @@ func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req daga_
 
 	// create and setup protocol instance (additionally ~test p.NewProtocol)
 	pi, err := s.CreateProtocol(DAGAChallengeGeneration.Name, tree)
-	require.NoError(t, err, "failed to create " + DAGAChallengeGeneration.Name + " protocol")
+	require.NoError(t, err, "failed to create "+DAGAChallengeGeneration.Name+" protocol")
 	require.NotNil(t, pi, "nil protocol instance but no error")
 
 	challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
@@ -73,7 +73,7 @@ func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req daga_
 
 // function called to initialize and start a new DAGA server protocol where current node takes a Leader role
 // "dummy" counterpart of daga_login.service.newDAGAServerProtocol() keep them more or less in sync
-func (s DummyService) NewDAGAServerProtocol(t *testing.T, req daga_login.NetAuthenticationMessage) (*DAGA.Protocol) {
+func (s DummyService) NewDAGAServerProtocol(t *testing.T, req daga_login.NetAuthenticationMessage) *DAGA.Protocol {
 	// build tree with leader as root
 	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
@@ -82,7 +82,7 @@ func (s DummyService) NewDAGAServerProtocol(t *testing.T, req daga_login.NetAuth
 
 	// create and setup protocol instance (additionally ~test p.NewProtocol)
 	pi, err := s.CreateProtocol(DAGA.Name, tree)
-	require.NoError(t, err, "failed to create " + DAGA.Name + " protocol")
+	require.NoError(t, err, "failed to create "+DAGA.Name+" protocol")
 	require.NotNil(t, pi, "nil protocol instance but no error")
 
 	dagaProtocol := pi.(*DAGA.Protocol)
@@ -130,7 +130,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 
 // TODO add possibility to return bad challenge channel
 func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []daga.Client, dagaServers []daga.Server,
-	dummyAuthRequest *daga.AuthenticationMessage, dummyContext *daga_login.Context){
+	dummyAuthRequest *daga.AuthenticationMessage, dummyContext *daga_login.Context) {
 	var serverKeys []kyber.Scalar
 	servers := local.Servers
 	for _, server := range servers {
@@ -192,7 +192,7 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 
 func RandomPointSlice(len int) []kyber.Point {
 	points := make([]kyber.Point, 0, len)
-	for i:=0; i<len; i++ {
+	for i := 0; i < len; i++ {
 		points = append(points, tSuite.Point().Pick(tSuite.RandomStream()))
 	}
 	return points

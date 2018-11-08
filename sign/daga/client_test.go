@@ -69,27 +69,10 @@ func newDummyServerChannels(cs kyber.Scalar, servers []Server) func([]kyber.Poin
 	return sendCommitsReceiveChallenge
 }
 
-//// test helper that returns dummy "channel" to act as a dummy server/verifier.
-//// this "channel" always replace the sent commitments by random ones before signing the challenge,
-//// hack used to simulate a malicious prover (instead of actually building one just for the test case)
-//// that doesn't know any secret, and want, after the proof run to replace
-//// commitments in proof transcript by commitments built using verification formula
-//func newBadCommitsServerChannels(cs kyber.Scalar, servers []Server) func([]kyber.Point) Challenge {
-//	sendCommitsReceiveChallenge := func(pKClientCommitments []kyber.Point) Challenge {
-//		// TODO FIXME share helper... or ...? (I have a randomPointSlice helper in daga_login.testing => import cycle...)
-//		randomPointSlice := make([]kyber.Point, 0, len(pKClientCommitments))
-//		for _, _ = range pKClientCommitments {
-//			randomPointSlice = append(randomPointSlice, suite.Point().Pick(suite.RandomStream()))
-//		}
-//		return signDummyChallenge(cs, servers, randomPointSlice)
-//	}
-//	return sendCommitsReceiveChallenge
-//}
-
 // test helper that returns dummy "channel" to act as a dummy server/verifier
 // that performs a stupid MITM on originalChannel to return a tampered challenge
 // TODO refactor in fact not needed => accept 1 challenge instead of 2 parameters
-func newTamperedServerChannels(evilCs kyber.Scalar, evilSigs []ServerSignature, /*replaceSigs bool, originalChannel func([]kyber.Point) Challenge*/) func([]kyber.Point) Challenge {
+func newTamperedServerChannels(evilCs kyber.Scalar, evilSigs []ServerSignature /*replaceSigs bool, originalChannel func([]kyber.Point) Challenge*/) func([]kyber.Point) Challenge {
 	sendCommitsReceiveChallenge := func(pKClientCommitments []kyber.Point) Challenge {
 		//originalChallenge := originalChannel(pKClientCommitments)
 		//sigs :=
@@ -129,7 +112,7 @@ func TestNewClientProof(t *testing.T) {
 			break
 		}
 	}
-	sendCommitsReceiveChallenge = newTamperedServerChannels(fake, validSigs, /*dummyServerChannel*/)
+	sendCommitsReceiveChallenge = newTamperedServerChannels(fake, validSigs /*dummyServerChannel*/)
 	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	commits, responses, subChallenges = proof.T, proof.R, proof.C
 	require.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
@@ -141,7 +124,7 @@ func TestNewClientProof(t *testing.T) {
 	wrongSigs := make([]ServerSignature, len(validSigs))
 	copy(wrongSigs, validSigs)
 	wrongSigs[0].Sig = newsig
-	sendCommitsReceiveChallenge = newTamperedServerChannels(cs, wrongSigs, /*dummyServerChannel*/)
+	sendCommitsReceiveChallenge = newTamperedServerChannels(cs, wrongSigs /*dummyServerChannel*/)
 
 	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
@@ -191,7 +174,7 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 	//	forward random commitments to random remote server/verifier
 	//	and receive master challenge from remote server(s)
 	randomPointSlice := make([]kyber.Point, 0, 3*len(X))
-	for i:=0; i<3*len(X); i++ {
+	for i := 0; i < 3*len(X); i++ {
 		randomPointSlice = append(randomPointSlice, suite.Point().Pick(suite.RandomStream()))
 	}
 	challenge := sendCommitsReceiveChallenge(randomPointSlice)
@@ -220,19 +203,19 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 
 	// build new malicious commitments (using verification formula) to include in transcript
 	T := make([]kyber.Point, 3*len(X))
-	for i:=0; i<len(X); i++ {
+	for i := 0; i < len(X); i++ {
 		// satisfy the kyber.proof framework "contract" see issue/comments/fixme added in kyber.proof
 		r0, r1 := P.R[2*i], P.R[2*i+1]
-		if i != client.Index() {  // swap, they were sent in that non-obvious order because of internal details of kyber.proof framework => would deserve a reordering layer or at least some documentation IMO
+		if i != client.Index() { // swap, they were sent in that non-obvious order because of internal details of kyber.proof framework => would deserve a reordering layer or at least some documentation IMO
 			r0, r1 = P.R[2*i+1], P.R[2*i]
 		}
 		T[3*i] = suite.Point().Add(suite.Point().Mul(P.C[i], X[i]), suite.Point().Mul(r0, nil))
 		//fmt.Printf("c: %v\nr: %v\n", proof.C[i], r0)
 		//fmt.Printf(" => t = cX%d + rG = %v\n\n", i, T[3*i])
-		T[3*i + 1] = suite.Point().Add(suite.Point().Mul(P.C[i], tagAndCommitments.SCommits[len(tagAndCommitments.SCommits)-1]), suite.Point().Mul(r1, nil))
+		T[3*i+1] = suite.Point().Add(suite.Point().Mul(P.C[i], tagAndCommitments.SCommits[len(tagAndCommitments.SCommits)-1]), suite.Point().Mul(r1, nil))
 		//fmt.Printf("c: %v\nr: %v\n", proof.C[i], r1)
 		//fmt.Printf("t = cSm + rG = %v\n\n", T[3*i+1])
-		T[3*i + 2] = suite.Point().Add(suite.Point().Mul(P.C[i], tagAndCommitments.T0), suite.Point().Mul(r1, context.ClientsGenerators()[i]))
+		T[3*i+2] = suite.Point().Add(suite.Point().Mul(P.C[i], tagAndCommitments.T0), suite.Point().Mul(r1, context.ClientsGenerators()[i]))
 		//fmt.Printf("c: %v\nr: %v\n", proof.C[i], r1)
 		//fmt.Printf("t = cT0 + rH%d = %v\n\n\n\n", i, T[3*i+2])
 	}

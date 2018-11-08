@@ -80,7 +80,7 @@ func TestVerifyCommitmentSignature(t *testing.T) {
 	require.Error(t, err, "Cannot verify signature for %d", i)
 }
 
-func TestcheckOpenings(t *testing.T) {
+func TestCheckOpenings(t *testing.T) {
 	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
 
 	//Generate commitments
@@ -196,7 +196,7 @@ func TestCheckUpdateChallenge(t *testing.T) {
 
 	// TODO share randompointhelper with the daga_login testing package
 	var dummyPKClientCommitments []kyber.Point
-	for _,_ = range clients {
+	for _, _ = range clients {
 		dummyPKClientCommitments = append(dummyPKClientCommitments, suite.Point().Pick(suite.RandomStream()))
 	}
 
@@ -266,7 +266,7 @@ func TestFinalizeChallenge(t *testing.T) {
 
 	// TODO share randompointhelper with the daga_login testing package
 	var dummyPKClientCommitments []kyber.Point
-	for _,_ = range clients {
+	for _, _ = range clients {
 		dummyPKClientCommitments = append(dummyPKClientCommitments, suite.Point().Pick(suite.RandomStream()))
 	}
 

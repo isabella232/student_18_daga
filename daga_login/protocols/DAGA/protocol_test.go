@@ -13,8 +13,6 @@ import (
 
 var tSuite = daga.NewSuiteEC()
 
-
-
 func TestMain(m *testing.M) {
 	log.MainTest(m)
 }
@@ -80,7 +78,6 @@ func TestLeaderSetupShouldPanicOnNilServer(t *testing.T) {
 
 	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
 
-
 	require.Panics(t, func() {
 		pi.(*DAGA.Protocol).LeaderSetup(*netRequest, nil)
 	}, "should panic on nil server")
@@ -97,13 +94,11 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	netRequest := daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyRequest)
 
-
 	pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
 	require.Panics(t, func() {
 		pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
 	}, "should panic on already initialized node")
 	pi.(*DAGA.Protocol).Done()
-
 
 	pi, _ = local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()

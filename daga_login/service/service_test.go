@@ -43,7 +43,7 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, d
 
 // verify that PKClient call succeed on valid request
 func TestService_PKClient(t *testing.T) {
-	local := onet.NewTCPTest(tSuite)  // QUESTION: vs localTest ?
+	local := onet.NewTCPTest(tSuite) // QUESTION: vs localTest ?
 	hosts, roster, _ := local.GenTree(5, true)
 	defer local.CloseAll()
 
@@ -53,10 +53,10 @@ func TestService_PKClient(t *testing.T) {
 	// provide initial state to the service (instead of fetching it from FS)
 	overrideServicesSetup(services, dagaServers, dummyContext)
 
-	for _, s := range services {  // QUESTION purpose/point of running test on multiple same service ??
+	for _, s := range services { // QUESTION purpose/point of running test on multiple same service ??
 		log.Lvl2("Sending request to", s)
 
-		commitments := testing2.RandomPointSlice(len(dummyContext.ClientsGenerators())*3)
+		commitments := testing2.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3)
 
 		reply, err := s.(*Service).PKClient(
 			&daga_login.PKclientCommitments{
@@ -75,7 +75,7 @@ func TestService_PKClient(t *testing.T) {
 
 // verify that Auth call succeed on valid request
 func TestService_Auth(t *testing.T) {
-	local := onet.NewTCPTest(tSuite)  // QUESTION: vs localTest ?
+	local := onet.NewTCPTest(tSuite) // QUESTION: vs localTest ?
 	hosts, roster, _ := local.GenTree(5, true)
 	defer local.CloseAll()
 
@@ -85,7 +85,7 @@ func TestService_Auth(t *testing.T) {
 	// provide initial state to the service (instead of fetching it from FS)
 	overrideServicesSetup(services, dagaServers, dummyContext)
 
-	for _, s := range services {  // QUESTION purpose/point of running test on multiple same service ??
+	for _, s := range services { // QUESTION purpose/point of running test on multiple same service ??
 		log.Lvl2("Sending request to", s)
 
 		request := daga_login.Auth(*daga_login.NetEncodeAuthenticationMessage(*dummyContext, *dummyAuthRequest))
@@ -113,10 +113,10 @@ func TestValidateAuthReqShouldErrorOnNilReq(t *testing.T) {
 func TestValidateAuthReqShouldErrorOnEmptyReq(t *testing.T) {
 	service := &Service{}
 	context, err := service.validateAuthReq((*daga_login.Auth)(&daga_login.NetAuthenticationMessage{
-		Context: daga_login.NetContext{},
-		T0: nil,
+		Context:  daga_login.NetContext{},
+		T0:       nil,
 		SCommits: nil,
-		Proof: daga.ClientProof{},
+		Proof:    daga.ClientProof{},
 	}))
 	require.Error(t, err, "should return error on empty req")
 	require.Zero(t, context)
@@ -130,8 +130,8 @@ func TestValidateContextShouldErrorOnInvalidContext(t *testing.T) {
 			X []kyber.Point
 			Y []kyber.Point
 		}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
-		H:testing2.RandomPointSlice(3),  // len != 5 => invalid
-		R:testing2.RandomPointSlice(8), // len != 9 => invalid
+		H: testing2.RandomPointSlice(3), // len != 5 => invalid
+		R: testing2.RandomPointSlice(8), // len != 9 => invalid
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on invalid context")
@@ -146,15 +146,14 @@ func TestValidateContextShouldErrorOnEmptyRoster(t *testing.T) {
 			X []kyber.Point
 			Y []kyber.Point
 		}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
-		H:testing2.RandomPointSlice(5),
-		R:testing2.RandomPointSlice(9),
+		H: testing2.RandomPointSlice(5),
+		R: testing2.RandomPointSlice(9),
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on empty roster")
 	require.Zero(t, context)
 
-	badNetContext.Roster = onet.Roster{List: make([]*network.ServerIdentity, 0, 5),
-	}
+	badNetContext.Roster = onet.Roster{List: make([]*network.ServerIdentity, 0, 5)}
 	context, err = service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on empty roster")
 	require.Zero(t, context)
@@ -179,8 +178,8 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 			X []kyber.Point
 			Y []kyber.Point
 		}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
-		H:testing2.RandomPointSlice(5),
-		R:testing2.RandomPointSlice(9),
+		H: testing2.RandomPointSlice(5),
+		R: testing2.RandomPointSlice(9),
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on not accepted context")
@@ -208,7 +207,7 @@ func TestValidatePKClientReqShouldErrorOnEmptyOrBadlySizedCommitments(t *testing
 		Context: daga_login.NetContext{
 			H: testing2.RandomPointSlice(8),
 		},
-		Commitments: testing2.RandomPointSlice(12),  // != 3*8
+		Commitments: testing2.RandomPointSlice(12), // != 3*8
 	})
 	require.Error(t, err, "should return error on bad commitments size")
 	require.Zero(t, context)
@@ -223,7 +222,7 @@ func TestPKClientShouldErrorOnFailedSetup(t *testing.T) {
 		Context: daga_login.NetContext{
 			H: testing2.RandomPointSlice(8),
 		},
-		Commitments: testing2.RandomPointSlice(3*8),
+		Commitments: testing2.RandomPointSlice(3 * 8),
 	})
 	require.Error(t, err, "should return error on failed setup")
 	require.Zero(t, reply)

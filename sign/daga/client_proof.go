@@ -124,7 +124,6 @@ func (cvCtx clientVerifierCtx) PubRand(message ...interface{}) error {
 	default:
 		return errors.New("clientVerifierCtx.PubRand called with type " + fmt.Sprintf("%T", message[0]) + " instead of kyber.Scalar")
 	}
-	return nil
 }
 
 // Sigma-protocol proof.ProverContext used to conduct interactive proofs PKclient with a verifier (daga server)

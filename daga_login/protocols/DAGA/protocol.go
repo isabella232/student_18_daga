@@ -198,7 +198,7 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 		if len(errs) != 0 {
 			return fmt.Errorf(Name+": failed to terminate: broadcast of FinishedServerMsg failed with error(s): %v", errs)
 		}
-		return p.SendTo(p.TreeNode(), &msg)  // send to self
+		return p.SendTo(p.TreeNode(), &msg) // send to self
 	} else {
 		return p.sendToNextServer(context, &ServerMsg{
 			NetServerMessage: netServerMsg,

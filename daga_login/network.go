@@ -24,6 +24,7 @@ type NetContext struct {
 	R []kyber.Point
 	H []kyber.Point
 }
+
 // TODO maybe implement the daga auth interface manually here to avoid encode decode operations
 // TODO but keep in mind that when we will have context building facilities these things will, most likely, be useless and ready to be removed..
 // because we will then build a context that implement the authcontext interface but that doesnt use any daga.AuthenticationContext field like it is the case now (minimal daga context)

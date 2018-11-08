@@ -47,7 +47,7 @@ var storageID = []byte("main")
 
 // Storage is used to save our data.
 // always access Storage through the helpers/getters !
-type Storage struct {  // exported.. needed by the tests..
+type Storage struct { // exported.. needed by the tests..
 	Context    daga_login.NetContext // current DAGA context and respective roster
 	DagaServer daga_login.NetServer  // daga server identity of our node (part of context)
 	// (TODO/enhancement add facilities to handle multiple contexts at once, with possibly multiple DAGA server identities)
@@ -125,7 +125,7 @@ func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga_
 	if req == nil {
 		return daga_login.Context{}, errors.New("validatePKClientReq: nil request")
 	}
-	if len(req.Commitments) == 0 || len(req.Commitments) != len(req.Context.H) * 3 {
+	if len(req.Commitments) == 0 || len(req.Commitments) != len(req.Context.H)*3 {
 		return daga_login.Context{}, errors.New("validatePKClientReq: empty or wrongly sized commitments")
 	}
 	return s.validateContext(req.Context)

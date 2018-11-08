@@ -47,7 +47,7 @@ func ReadClientPrivateKey(path string) (kyber.Scalar, error) {
 	}
 }
 
-func read(path string) (interface{}, error)  {
+func read(path string) (interface{}, error) {
 	if bytes, err := ioutil.ReadFile(path); err != nil {
 		return nil, err
 	} else {

@@ -50,9 +50,9 @@ type Protocol struct {
 	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments (to random challenge) at correct index (in auth. context), on the children to store leaderCommitment at 0
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
-	dagaServer daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
-	context    daga_login.Context // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
-	pKClientCommitments []kyber.Point  // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
+	dagaServer          daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
+	context             daga_login.Context // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
+	pKClientCommitments []kyber.Point      // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -214,8 +214,8 @@ func (p *Protocol) Start() (err error) {
 	// broadcast Announce requesting that all other nodes do the same and send back their signed commitments.
 	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization) and send in parallel (that's another thing..) as was done in skipchain ?
 	errs := p.Broadcast(&Announce{
-		LeaderCommit: *leaderChallengeCommit,
-		Context:      *p.context.NetEncode(),
+		LeaderCommit:        *leaderChallengeCommit,
+		Context:             *p.context.NetEncode(),
 		PKClientCommitments: p.pKClientCommitments,
 	})
 	if len(errs) != 0 {

@@ -20,9 +20,9 @@ const Name = "DAGAChallengeGeneration"
 // Announce is sent from Leader upon reception of a client request.
 // it request that all other nodes generate a new challenge and send back a signed commitment to their challenge.
 type Announce struct {
-	LeaderCommit daga.ChallengeCommitment    // contains the signed commitment of the Leader
-	PKClientCommitments []kyber.Point        // the PKClient commitments (to tie them to the signatures issued at Finalize-time and avoid malicious agents being tempted to cheat/alter proof transcript)
-	Context daga_login.NetContext			 // the context (of the original client request) (and hence the server keys used to verify signatures and eventually for the other nodes to check if they accept the request too)
+	LeaderCommit        daga.ChallengeCommitment // contains the signed commitment of the Leader
+	PKClientCommitments []kyber.Point            // the PKClient commitments (to tie them to the signatures issued at Finalize-time and avoid malicious agents being tempted to cheat/alter proof transcript)
+	Context             daga_login.NetContext    // the context (of the original client request) (and hence the server keys used to verify signatures and eventually for the other nodes to check if they accept the request too)
 }
 
 // StructAnnounce just contains Announce and the data necessary to identify and

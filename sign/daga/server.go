@@ -84,7 +84,7 @@ type ServerSignature struct {
 // This is the structure sent to the client as part of client proof PKclient
 type Challenge struct {
 	Cs   kyber.Scalar
-	Sigs []ServerSignature  //Signatures for cs||PKClientCommitments
+	Sigs []ServerSignature //Signatures for cs||PKClientCommitments
 }
 
 // verify all the signatures in the Challenge + verify that there are no duplicates
@@ -230,7 +230,7 @@ func InitializeChallenge(suite Suite, context AuthenticationContext, commits []C
 		return nil, err
 	}
 
-	return &ChallengeCheck{Challenge: Challenge{Cs:cs, Sigs:nil}, Commits: commits, Openings: openings}, nil
+	return &ChallengeCheck{Challenge: Challenge{Cs: cs, Sigs: nil}, Commits: commits, Openings: openings}, nil
 }
 
 /*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid

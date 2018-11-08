@@ -26,7 +26,7 @@ import (
 	// as well, uncomment this:
 	//_ "github.com/dedis/cothority/cosi/service"
 	// Import your service:
-	_ "github.com/dedis/cothority/status/service"				// "side-effect" import => will run the init function of package => will register the service
+	_ "github.com/dedis/cothority/status/service" // "side-effect" import => will run the init function of package => will register the service
 	_ "github.com/dedis/student_18_daga/daga_login/service"
 	//_ "github.com/dedis/pulsar/randhound/service"
 )
