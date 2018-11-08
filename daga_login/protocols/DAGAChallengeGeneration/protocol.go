@@ -47,11 +47,12 @@ func init() {
 type Protocol struct {
 	*onet.TreeNodeInstance
 	result      chan daga.Challenge        // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
-	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments at correct index (in auth. context), on the children to store leaderCommitment at 0
+	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments (to random challenge) at correct index (in auth. context), on the children to store leaderCommitment at 0
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
-	dagaServer daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildrenSetup)
+	dagaServer daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
 	context    daga_login.Context // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
+	pKClientCommitments []kyber.Point  // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -60,7 +61,7 @@ type Protocol struct {
 // if service.NewProtocol returns nil, nil this one will be called on children too.
 //
 // Relevant for this protocol implementation: it is expected that the service DO implement the service.NewProtocol (don't returns nil, nil),
-// to manually call this method before calling the ChildrenSetup method to provide children-node specific state.
+// to manually call this method before calling the ChildSetup method to provide children-node specific state.
 // (similarly for the leader-node, it is expected that the service call LeaderSetup)
 func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	t := &Protocol{
@@ -77,21 +78,28 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 }
 
 // setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
-func (p *Protocol) LeaderSetup(reqContext daga_login.Context, dagaServer daga.Server) {
+func (p *Protocol) LeaderSetup(req daga_login.PKclientCommitments, dagaServer daga.Server) {
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
-	p.setContext(reqContext)
+	if context, err := req.Context.NetDecode(); err != nil {
+		log.Panic("protocol setup: cannot decode context:" + err.Error())
+	} else {
+		p.setContext(context)
+	}
+	if len(req.Commitments) != len(p.context.ClientsGenerators())*3 {
+		log.Panic("protocol setup: wrong commitments length")
+	}
+	p.setPKClientCommitments(req.Commitments)
 	p.setDagaServer(dagaServer)
 	p.commitments = make([]daga.ChallengeCommitment, len(p.Tree().List()))
 	p.openings = make([]kyber.Scalar, len(p.Tree().List()))
 }
 
-// setup function that needs to be called after protocol creation on other tree nodes
-// FIXME rename ChildSetup
-func (p *Protocol) ChildrenSetup(dagaServer daga.Server) {
+// setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
+func (p *Protocol) ChildSetup(dagaServer daga.Server) {
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
-		log.Panic("protocol setup: ChildrenSetup called on an already initialized node.")
+		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
 	p.setDagaServer(dagaServer)
 	p.commitments = make([]daga.ChallengeCommitment, 1)
@@ -112,6 +120,15 @@ func (p *Protocol) setContext(reqContext daga_login.Context) {
 		log.Panic("protocol setup: empty Context")
 	}
 	p.context = reqContext
+}
+
+// setter used to provide PKClient commitments to the protocol instance
+func (p *Protocol) setPKClientCommitments(commitments []kyber.Point) {
+	if len(commitments) == 0 {
+		// TODO FIXME would be nice to share with service the validator helpers..and to pack setContext and setPKclien.. in a single method setRequest
+		log.Panic("protocol setup: empty PKClient commitments")
+	}
+	p.pKClientCommitments = commitments
 }
 
 // method called to update state of the protocol (add opening) (sanity checks)
@@ -142,7 +159,7 @@ func (p *Protocol) opening(index int) kyber.Scalar {
 // method called to update state of the protocol (add commitment) (doesn't check commitment signature, add only commitment whose signature is verified !)
 func (p *Protocol) saveCommitment(index int, commitment daga.ChallengeCommitment) {
 	if index >= len(p.commitments) {
-		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d, you probably forgot to call ChildrenSetup", index, len(p.commitments))
+		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d, you probably forgot to call ChildSetup", index, len(p.commitments))
 	}
 	// FIXME QUESTION what is the correct way to panic ? in such cases
 	if p.commitments[index].Commit != nil {
@@ -182,7 +199,7 @@ func (p *Protocol) Start() (err error) {
 	}
 	log.Lvlf3("leader (%s) started %s protocol", p.ServerIdentity(), Name)
 
-	// initialize the channel used to grab results / synchronize with WaitForResult
+	// initialize the channel used to : grab results / synchronize with WaitForResult
 	p.result = make(chan daga.Challenge)
 
 	// create leader challenge, signed commitment and opening
@@ -198,7 +215,8 @@ func (p *Protocol) Start() (err error) {
 	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization) and send in parallel (that's another thing..) as was done in skipchain ?
 	errs := p.Broadcast(&Announce{
 		LeaderCommit: *leaderChallengeCommit,
-		Context:      *p.context.NetEncode(), // TODO maybe use setconfig for that purpose instead but... pff..
+		Context:      *p.context.NetEncode(),
+		PKClientCommitments: p.pKClientCommitments,
 	})
 	if len(errs) != 0 {
 		return fmt.Errorf(Name+": failed to start: broadcast of Announce failed with error(s): %v", errs)
@@ -215,12 +233,6 @@ func (p *Protocol) WaitForResult() (daga.Challenge, error) {
 	select {
 	case masterChallenge := <-p.result:
 		log.Lvlf3("finished %s protocol, resulting challenge: %v", Name, masterChallenge)
-		// FIXME store somewhere (or avoid to by another trick) the commitments and challenge to check later the proof transcript validity !!
-		// FIXME => need way to link PKCLient call with corresponding Auth call...
-		// FIXME see https://github.com/dedis/student_18_daga/issues/24 for discussion and solutions
-		// FIXME TL:DR "store state in clients", have the commitments be signed by the servers during challenge generation protocol (like we do for the challenge)
-		// FIXME and request that client send them back later as part of transcript
-		// FIXME for now don't store anything and continue to blindly trust client....
 		return masterChallenge, nil
 	case <-time.After(Timeout):
 		return daga.Challenge{}, fmt.Errorf("%s didn't finish in time", Name)
@@ -245,6 +257,12 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 	} else {
 		p.setContext(context)
 	}
+
+	if len(msg.PKClientCommitments) != len(p.context.ClientsGenerators())*3 {
+		log.Panic(Name + ": failed to handle Leader's Announce: wrong commitments length")
+	}
+	// store PKClient commitments in state (TODO FIXME see remark above on merging those actions in one method + share req validator helper with Service and LeaderSetup)
+	p.setPKClientCommitments(msg.PKClientCommitments)
 
 	// verify signature of Leader's commitment
 	// FIXME fetch the key from the auth. context instead of from treeNode !
@@ -294,7 +312,8 @@ func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) (err error) {
 	for _, announceReply := range msg {
 		challengeCommit := announceReply.Commit
 		// verify signature of node's commitment
-		// FIXME fetch the key from the auth. context instead of from treeNode !
+		// FIXME fetch the key from the auth. context instead of from treeNode ! and see fixme below
+		// FIXME in fact move this into kyber.daga and add a verify method/function that use only context and that check for duplicates signatures too
 		err := daga.VerifyChallengeCommitmentSignature(suite, challengeCommit, announceReply.ServerIdentity.Public)
 		if err != nil {
 			return fmt.Errorf("%s: failed to handle AnnounceReply, : %s", Name, err.Error())
@@ -365,14 +384,14 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 			nextServerTreeNode = openReply.TreeNode
 		}
 	}
-	// TODO nicify daga API if possible
+	// TODO nicify kyber.daga "API" / previous code if possible
 	challengeCheck, err := daga.InitializeChallenge(suite, p.context, p.commitments, p.openings)
 	if err != nil {
 		return fmt.Errorf("%s: failed to handle OpenReply, : %s", Name, err.Error())
 	}
 
-	//Then it executes CheckUpdateChallenge, to verify again(TODO...pff^^  clean previous student code) and add its signature
-	if err := daga.CheckUpdateChallenge(suite, p.context, challengeCheck, p.dagaServer); err != nil {
+	//Then it executes CheckUpdateChallenge, to verify again... and add its signature (TODO...pff^^  clean previous code)
+	if err := daga.CheckUpdateChallenge(suite, p.context, challengeCheck, p.pKClientCommitments, p.dagaServer); err != nil {
 		return fmt.Errorf("%s: failed to handle OpenReply, : %s", Name, err.Error())
 	}
 
@@ -393,7 +412,7 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 	weAreNotLeader := len(msg.ChallengeCheck.Sigs) != len(Y)
 
 	// Executes CheckUpdateChallenge (to verify and add signature, or verify only if we are last node/leader)
-	if err := daga.CheckUpdateChallenge(suite, p.context, &msg.ChallengeCheck, p.dagaServer); err != nil {
+	if err := daga.CheckUpdateChallenge(suite, p.context, &msg.ChallengeCheck, p.pKClientCommitments, p.dagaServer); err != nil {
 		return fmt.Errorf("%s: failed to handle Finalize, : %s", Name, err.Error())
 	}
 
@@ -414,7 +433,6 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 		if err != nil {
 			return fmt.Errorf("%s: failed to handle Finalize, leader failed to finalize the challenge: %s", Name, err.Error())
 		}
-		// TODO/FIXME make result available to other nodes and see https://github.com/dedis/student_18_daga/issues/24
 		// make result available to service that will send it back to client
 		p.result <- clientChallenge
 		return nil

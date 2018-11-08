@@ -74,15 +74,56 @@ type ChallengeCommitment struct {
 // FIXME see why index needed and if we cannot get rid of it, when receiveing a challengecommit the receiver knows who the sender is
 // > can probably know its public key => can probably verify signature without looking it up in context using index
 // mhh seems that it is only used to check/assert same index when traversing the slice of commitments in verify... maybe remove it..
+// + TODO use different types for different signatures...pffff rhaa
 type ServerSignature struct {
 	Index int
 	Sig   []byte
 }
 
+// Challenge stores the collectively generated challenge and the signatures of the servers
+// This is the structure sent to the client as part of client proof PKclient
+type Challenge struct {
+	Cs   kyber.Scalar
+	Sigs []ServerSignature  //Signatures for cs||PKClientCommitments
+}
+
+// verify all the signatures in the Challenge + verify that there are no duplicates
+func (c Challenge) VerifySignatures(suite Suite, serverKeys []kyber.Point, pkClientCommitments []kyber.Point) error {
+	if signData, err := c.ToBytes(pkClientCommitments); err != nil {
+		return err
+	} else {
+		encountered := map[int]bool{}
+		for _, sig := range c.Sigs {
+			if encountered[sig.Index] == true {
+				return fmt.Errorf("duplicate signature")
+			}
+			encountered[sig.Index] = true
+
+			if err := SchnorrVerify(suite, serverKeys[sig.Index], signData, sig.Sig); err != nil {
+				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.Index) + ": " + err.Error())
+			}
+		}
+		return nil
+	}
+}
+
+// used for Challenge signatures, marshall the master challenge and concat with the PKclient's commitments
+func (c Challenge) ToBytes(pkClientCommitments []kyber.Point) ([]byte, error) {
+	csBytes, err := c.Cs.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling master challenge: %s", err)
+	}
+	pkcCommitsBytes, err := PointArrayToBytes(pkClientCommitments)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling PKClient commitments: %s", err)
+	}
+	signData := append(csBytes, pkcCommitsBytes...)
+	return signData, nil
+}
+
 /*ChallengeCheck stores all the information passed along the servers to check and sign the challenge*/
 type ChallengeCheck struct {
-	Cs       kyber.Scalar
-	Sigs     []ServerSignature //Signatures for cs only
+	Challenge
 	Commits  []ChallengeCommitment
 	Openings []kyber.Scalar
 }
@@ -183,63 +224,54 @@ func InitializeChallenge(suite Suite, context AuthenticationContext, commits []C
 		return nil, fmt.Errorf("invalid inputs")
 	}
 
-	// FIXME maybe remove, will already be done by CheckUpdateChallenge
+	// FIXME maybe remove completely the function, checkOpening will already be done by CheckUpdateChallenge (RHAAAAA)
 	cs, err := checkOpenings(suite, context, commits, openings)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ChallengeCheck{Cs: cs, Commits: commits, Openings: openings, Sigs: nil}, nil
+	return &ChallengeCheck{Challenge: Challenge{Cs:cs, Sigs:nil}, Commits: commits, Openings: openings}, nil
 }
 
 /*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
 It also adds the server's signature to the list if the round-robin is not completed (the challenge has not yet made it back to the leader)
 It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
-func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challenge *ChallengeCheck, server Server) error {
+func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challengeCheck *ChallengeCheck, pkClientCommitments []kyber.Point, server Server) error {
 	//Check the signatures and check for duplicates
-	msg, err := challenge.Cs.MarshalBinary()
-	if err != nil {
-		return fmt.Errorf("CheckUpdateChallenge: error marshalling master challenge: %s", err)
-	}
-	encountered := map[int]bool{}
-	for _, sig := range challenge.Sigs {
-		if encountered[sig.Index] == true {
-			return fmt.Errorf("CheckUpdateChallenge: duplicate signature") // FIXME WTF ? duplicate index I'd say... (ok since we use index to infer key..cannot replay)
-		}
-		encountered[sig.Index] = true
-
-		_, Y := context.Members()
-		if err := SchnorrVerify(suite, Y[sig.Index], msg, sig.Sig); err != nil {
-			return fmt.Errorf("CheckUpdateChallenge: failed to verify signature %s", err)
-		}
+	_, Y := context.Members()
+	if err := challengeCheck.Challenge.VerifySignatures(suite, Y, pkClientCommitments); err != nil {
+		return fmt.Errorf("CheckUpdateChallenge: %s", err)
 	}
 
 	//Checks the signatures of the commitments
-	if err := VerifyChallengeCommitmentsSignatures(suite, context, challenge.Commits); err != nil {
+	if err := VerifyChallengeCommitmentsSignatures(suite, context, challengeCheck.Commits); err != nil {
 		return fmt.Errorf("CheckUpdateChallenge: failed to verify commitment signature %s", err)
 	}
 	//Checks the openings
-	cs, err := checkOpenings(suite, context, challenge.Commits, challenge.Openings)
+	cs, err := checkOpenings(suite, context, challengeCheck.Commits, challengeCheck.Openings)
 	if err != nil {
 		return fmt.Errorf("CheckUpdateChallenge: failed to verify commitment openings %s", err)
 	}
 	//Checks that the challenge values match
-	if !cs.Equal(challenge.Cs) {
+	if !cs.Equal(challengeCheck.Cs) {
 		return fmt.Errorf("CheckUpdateChallenge: master challenge values does not match")
 	}
 
 	//Add the server's signature to the list if it is not the last challengeCheck call (by leader/root once every server added its grain of salt)
-	_, Y := context.Members()
-	if len(challenge.Sigs) == len(Y) {
+	if len(challengeCheck.Sigs) == len(Y) {
 		return nil
 	}
-	sig, err := SchnorrSign(suite, server.PrivateKey(), msg)
+	signData, err := challengeCheck.Challenge.ToBytes(pkClientCommitments)
+	if err != nil {
+		return fmt.Errorf("CheckUpdateChallenge: %s", err)
+	}
+	sig, err := SchnorrSign(suite, server.PrivateKey(), signData)
 	if err != nil {
 		return fmt.Errorf("CheckUpdateChallenge: failed to sign master challenge")
 	}
 
 	// FIXME why not store it at index ?
-	challenge.Sigs = append(challenge.Sigs, ServerSignature{Index: server.Index(), Sig: sig})
+	challengeCheck.Sigs = append(challengeCheck.Sigs, ServerSignature{Index: server.Index(), Sig: sig})
 
 	return nil
 }

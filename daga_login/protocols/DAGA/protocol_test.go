@@ -108,7 +108,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 	pi, _ = local.CreateProtocol(DAGA.Name, tree)
 	defer pi.(*DAGA.Protocol).Done()
 
-	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+	pi.(*DAGA.Protocol).ChildSetup(dagaServers[0], func(ctx daga_login.Context) bool {
 		return true
 	})
 	require.Panics(t, func() {
@@ -128,7 +128,7 @@ func TestChildrenSetup(t *testing.T) {
 	defer pi.(*DAGA.Protocol).Done()
 
 	require.NotPanics(t, func() {
-		pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+		pi.(*DAGA.Protocol).ChildSetup(dagaServers[0], func(ctx daga_login.Context) bool {
 			return true
 		})
 	}, "should not panic on valid input")
@@ -144,7 +144,7 @@ func TestChildrenSetupShouldPanicOnNilServer(t *testing.T) {
 	defer pi.(*DAGA.Protocol).Done()
 
 	require.Panics(t, func() {
-		pi.(*DAGA.Protocol).ChildrenSetup(nil, func(ctx daga_login.Context) bool {
+		pi.(*DAGA.Protocol).ChildSetup(nil, func(ctx daga_login.Context) bool {
 			return true
 		})
 	}, "should panic on nil server")
@@ -159,11 +159,11 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 	_, dagaServers, dummyRequest, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
 	pi, _ := local.CreateProtocol(DAGA.Name, tree)
 
-	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+	pi.(*DAGA.Protocol).ChildSetup(dagaServers[0], func(ctx daga_login.Context) bool {
 		return true
 	})
 	require.Panics(t, func() {
-		pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+		pi.(*DAGA.Protocol).ChildSetup(dagaServers[0], func(ctx daga_login.Context) bool {
 			return true
 		})
 	}, "should panic on already initialized node")
@@ -176,7 +176,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	pi.(*DAGA.Protocol).LeaderSetup(*netRequest, dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+		pi.(*DAGA.Protocol).ChildSetup(dagaServers[0], func(ctx daga_login.Context) bool {
 			return true
 		})
 	}, "should panic on already initialized node")
@@ -212,7 +212,7 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 
 	// TODO test name little misleading but ..
 
-	pi.(*DAGA.Protocol).ChildrenSetup(dagaServers[0], func(ctx daga_login.Context) bool {
+	pi.(*DAGA.Protocol).ChildSetup(dagaServers[0], func(ctx daga_login.Context) bool {
 		return true
 	})
 	require.Panics(t, func() {

@@ -1,0 +1,10 @@
+# This file contains your private key.
+# Do not give it away lightly!
+Suite = "Ed25519"
+Public = "ab5edfd5bd79f5cc77e9299c4977e5dd0594ed8b3939a8b16febb3f02731b597"
+Private = "6fb55512a7904ca50e7e0051106eabf0a801d07d5ff8bfb8f16e672160af7e08"
+Address = "tls://localhost:7008"
+ListenAddress = ""
+Description = "Conode_4"
+WebSocketTLSCertificate = ""
+WebSocketTLSCertificateKey = ""

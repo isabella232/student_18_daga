@@ -97,7 +97,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		}
 
 		//Then it executes CheckUpdateChallenge
-		daga.CheckUpdateChallenge(suite, context, challenge, servers[j])
+		daga.CheckUpdateChallenge(suite, context, challenge, proverCommitments, servers[j])
 
 		//Next it sends this message to the next server
 
@@ -111,7 +111,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			//Receive the previous message
 
 			//Executes CheckUpdateChallenge
-			daga.CheckUpdateChallenge(suite, context, challenge, servers[index])
+			daga.CheckUpdateChallenge(suite, context, challenge, proverCommitments, servers[index])
 
 			//Encode and transfer the challenge to the next server
 
@@ -121,7 +121,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		//Finally the challenge is back at the leader
 
 		//It executes CheckUpdateChallenge to verify the correctness of the challenge
-		daga.CheckUpdateChallenge(suite, context, challenge, servers[j])
+		daga.CheckUpdateChallenge(suite, context, challenge, proverCommitments, servers[j])
 
 		//Finalize the challenge before sending it to the client
 		clientChallenge, err := daga.FinalizeChallenge(context, challenge)

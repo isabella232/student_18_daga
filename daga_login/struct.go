@@ -26,7 +26,7 @@ const (
 
 // PKclientCommitments will initiate the challenge generation protocol that will result in a PKclientChallenge
 type PKclientCommitments struct {
-	Context     NetContext // to early reject auth requests for context that the server doesn't care about
+	Context     NetContext // to early reject auth requests part of context that the server doesn't care about
 	Commitments []kyber.Point
 }
 type PKclientChallenge daga.Challenge

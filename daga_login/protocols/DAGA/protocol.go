@@ -42,7 +42,7 @@ func init() {
 type Protocol struct {
 	*onet.TreeNodeInstance
 	result        chan daga.ServerMessage             // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
-	dagaServer    daga.Server                         // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildrenSetup)
+	dagaServer    daga.Server                         // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
 	request       daga_login.NetAuthenticationMessage // the client's request (set by service using LeaderSetup), used only by leader/first node
 	acceptContext func(daga_login.Context) bool       // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
@@ -53,7 +53,7 @@ type Protocol struct {
 // if service.NewProtocol returns nil, nil this one will be called on children too.
 //
 // Relevant for this protocol implementation: it is expected that the service DO implement the service.NewProtocol (don't returns nil, nil),
-// to manually call this method before calling the ChildrenSetup method to provide children-node specific state.
+// to manually call this method before calling the ChildSetup method to provide children-node specific state.
 // (similarly for the leader-node, it is expected that the service call LeaderSetup)
 func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	t := &Protocol{
@@ -76,10 +76,10 @@ func (p *Protocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServ
 	p.setDagaServer(dagaServer)
 }
 
-// setup function that needs to be called after protocol creation on other tree nodes
-func (p *Protocol) ChildrenSetup(dagaServer daga.Server, acceptContext func(ctx daga_login.Context) bool) {
+// setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
+func (p *Protocol) ChildSetup(dagaServer daga.Server, acceptContext func(ctx daga_login.Context) bool) {
 	if p.dagaServer != nil || p.result != nil {
-		log.Panic("protocol setup: ChildrenSetup called on an already initialized node.")
+		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
 	p.setDagaServer(dagaServer)
 	p.setAcceptContext(acceptContext)

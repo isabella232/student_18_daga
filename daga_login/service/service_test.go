@@ -56,23 +56,20 @@ func TestService_PKClient(t *testing.T) {
 	for _, s := range services {  // QUESTION purpose/point of running test on multiple same service ??
 		log.Lvl2("Sending request to", s)
 
+		commitments := testing2.RandomPointSlice(len(dummyContext.ClientsGenerators())*3)
+
 		reply, err := s.(*Service).PKClient(
 			&daga_login.PKclientCommitments{
 				Context:     *dummyContext.NetEncode(),
-				Commitments: testing2.RandomPointSlice(len(dummyContext.ClientsGenerators())*3)},
+				Commitments: commitments},
 		)
 		require.NoError(t, err)
 		require.NotZero(t, reply)
 
 		// verify that all servers correctly signed the challenge
 		// QUESTION: not sure if I should test theses here.. IMO the sut is the protocol, not the daga code it uses
-		// QUESTION: and I have a daga function that is currently private that do that..
-		// TODO DRY put testing helper somewhere since used in protocol test too
-		bytes, _ := reply.Cs.MarshalBinary()
 		_, Y := dummyContext.Members()
-		for _, signature := range reply.Sigs {
-			require.NoError(t, daga.SchnorrVerify(tSuite, Y[signature.Index], bytes, signature.Sig))
-		}
+		daga.Challenge(*reply).VerifySignatures(tSuite, Y, commitments)
 	}
 }
 

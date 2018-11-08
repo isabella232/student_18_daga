@@ -134,20 +134,18 @@ func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga_
 // API endpoint PKClient, upon reception of a valid request,
 // starts the challenge generation protocols, the current server/node will take the role of Leader
 func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKclientChallenge, error) {
-	// setup if not already done
+	// setup service state if not already done
 	if err := s.Setup(s); err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 	// verify that submitted request is valid and accepted by our node
-	context, err := s.validatePKClientReq(req)
+	_, err := s.validatePKClientReq(req)
 	if err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 
-	// TODO do something with the commitments, see issue in github
-
 	// start challenge generation protocol
-	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(context); err != nil {
+	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(*req); err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
 	} else {
 		challenge, err := challengeGeneration.WaitForResult()
@@ -186,10 +184,10 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 }
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
-func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Context) (*DAGAChallengeGeneration.Protocol, error) {
+func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientCommitments) (*DAGAChallengeGeneration.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 	// build tree with leader as root
-	roster := reqContext.Roster
+	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
 	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
@@ -204,7 +202,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(reqContext daga_login.Conte
 	if err != nil {
 		return nil, errors.New("failed to retrieve daga server from service state: " + err.Error())
 	}
-	challengeGeneration.LeaderSetup(reqContext, dagaServer)
+	challengeGeneration.LeaderSetup(req, dagaServer)
 
 	// start
 	if err = challengeGeneration.Start(); err != nil {
@@ -237,7 +235,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			log.Panic("NewProtocol: failed to retrieve daga server from service state: " + err.Error())
 		}
-		challengeGeneration.ChildrenSetup(dagaServer)
+		challengeGeneration.ChildSetup(dagaServer)
 		return challengeGeneration, nil
 	case DAGA.Name:
 		pi, err := DAGA.NewProtocol(tn)
@@ -249,7 +247,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			log.Panic("NewProtocol: failed to retrieve daga server from service state: " + err.Error())
 		}
-		dagaServerProtocol.ChildrenSetup(dagaServer, s.acceptContext)
+		dagaServerProtocol.ChildSetup(dagaServer, s.acceptContext)
 		return dagaServerProtocol, nil
 	default:
 		log.Panic("NewProtocol: protocol not implemented/known")

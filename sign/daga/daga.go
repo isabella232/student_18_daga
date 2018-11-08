@@ -118,7 +118,7 @@ func (ac minimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point
 }
 
 // Signs using schnorr signature scheme over the group of the Suite
-// QUESTION to me this is a bad idea ?! better to have Sign be a required function listed in the Suite,
+// QUESTION to me this is a bad idea ! better to have Sign be a required function listed in the Suite,
 // QUESTION where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..
 func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
@@ -154,8 +154,7 @@ func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error)
 	return err
 }
 
-/*ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures*/
-// QUESTION WTF no other way ? => FIXME used only to sign/verify etc => instead use hash ? ask Ewa Syta if ok (IMO it is ok..)(part of serverproof)
+//ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures
 func authenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
 	X, Y := ac.Members()
 	temp, e := PointArrayToBytes(X)
@@ -185,8 +184,7 @@ func authenticationContextToBytes(ac AuthenticationContext) (data []byte, err er
 	return data, nil
 }
 
-/*PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures*/
-// QUESTION same as above
+//PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures
 func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	for _, p := range array {
 		temp, e := p.MarshalBinary()
@@ -198,8 +196,7 @@ func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	return data, nil
 }
 
-/*ScalarArrayToBytes is a utility function to convert a kyber.Scalar array into []byte, used in signatures*/
-// QUESTION same as above
+//ScalarArrayToBytes is a utility function to convert a kyber.Scalar array into []byte, used in signatures
 func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 	for _, s := range array {
 		temp, e := s.MarshalBinary()
@@ -211,8 +208,7 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 	return data, nil
 }
 
-// TODO WTF, no other way ?
-/*ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures*/
+//ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures
 func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
 	data, e := authenticationContextToBytes(msg.C)
 	if e != nil {

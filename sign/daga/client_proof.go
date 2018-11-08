@@ -10,28 +10,6 @@ import (
 	"strconv"
 )
 
-// Challenge stores the collectively generated challenge and the signatures of the servers
-// This is the structure sent to the client as part of client proof PKclient
-type Challenge struct {
-	Cs   kyber.Scalar
-	Sigs []ServerSignature
-}
-
-// verify all the signatures of the Challenge
-func (c Challenge) verifySignatures(suite Suite, serverKeys []kyber.Point) error {
-	//	verify challenge signatures
-	if msg, e := c.Cs.MarshalBinary(); e == nil {
-		for _, sig := range c.Sigs {
-			if e = SchnorrVerify(suite, serverKeys[sig.Index], msg, sig.Sig); e != nil {
-				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.Index) + ": " + e.Error())
-			}
-		}
-		return nil
-	} else {
-		return errors.New("failed to marshal challenge: " + e.Error())
-	}
-}
-
 // Sigma-protocol proof.VerifierContext used to conduct interactive proofs PKclient with a prover (daga client)
 // meant to be used to interface between user-code (see verifyClientProof() function) and a proof.Verifier built for the
 // ClientProofPredicate (see newClientProofPred()).
@@ -294,7 +272,7 @@ func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
 // ClientProof stores the client's proof P0 as of "Syta - Identity Management Through Privacy Preserving Aut 4.3.7"
 // and obtained after completion of the sigma-protocol with a server.
 //
-// Cs the master challenge that was sent by the server and used to generate the sub-challenges and the responses
+// Cs the challenge that was sent by the server (containing signatures and the master challenge used to generate the sub-challenges and the responses)
 //
 // T the commitments (first (prover) message of the sigma-protocol)
 //
@@ -302,7 +280,7 @@ func (cpCtx clientProverCtx) PriRand(message ...interface{}) error {
 //
 // R the responses (final (prover) message of the sigma-protocol)
 type ClientProof struct {
-	Cs kyber.Scalar
+	Cs Challenge
 	T  []kyber.Point
 	C  []kyber.Scalar
 	R  []kyber.Scalar
@@ -348,20 +326,17 @@ func newClientProof(suite Suite, context AuthenticationContext,
 		P.T = commits
 	}
 
-	// TODO pack those in a single step and maybe remove these channels and instead call userprovided function "sendCommitsReceiveChallenge"
-	// TODO but keep in mind that cannot accept challenge as parameter if asked by someone.. first the commitments should be sent to the servers
 	//	forward them to random remote server/verifier (over *anon.* circuit etc.. concern of the caller code / client setup!!)
-	//	and receive master challenge from remote server (over *anon.* circuit etc.. concern of the caller code / client setup!!)
+	//	and receive master challenge from remote server(s) (over *anon.* circuit etc.. concern of the caller code / client setup!!)
 	challenge := sendCommitsReceiveChallenge(P.T)
 
-	if err := challenge.verifySignatures(suite, Y); err != nil {
-		// TODO log
+	if err := challenge.VerifySignatures(suite, Y, P.T); err != nil {
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	}
-	P.Cs = challenge.Cs
+	P.Cs = challenge
 
 	//	forward master challenge to running Prover in order to continue the proof process, and receive the sub-challenges from Prover
-	P.C = proverCtx.receiveChallenges(P.Cs)
+	P.C = proverCtx.receiveChallenges(P.Cs.Cs)
 
 	//	get final responses from Prover
 	if responses, err := proverCtx.responses(); err != nil {
@@ -385,9 +360,9 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 	tagAndCommitments initialTagAndCommitments) error {
 
 	if context == nil {
-		return errors.New("nil context")
+		return errors.New("verifyClientProof: nil context")
 	}
-	X, _ := context.Members()
+	X, Y := context.Members()
 
 	if len(X) <= 1 {
 		return errors.New("verifyClientProof: there is only one client in the context, this means DAGA is pointless")
@@ -395,6 +370,14 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 		// in the context/OR-predicate, if this condition is not met there won't be any "subChallenges" to request by the
 		// verifier => he won't call Get to receive them
 		// in case this assumption needs to be relaxed, a test should be added to the verifierContext.receiveChallenges() method
+	}
+
+	// verify that commitments and challenge sent in proof transcript are "genuine"
+	// i.e. don't blindly trust the challenge and commitments sent with proof,
+	// need to ensure that they are the same commitments/challenge that were
+	// sent during the sigma-protocol run / when client-prover requested the "collective honest random challenge"
+	if err := proof.Cs.VerifySignatures(suite, Y, proof.T); err != nil {
+		return errors.New("verifyClientProof: proof transcript not accepted, commitments or challenge mismatch")
 	}
 
 	//construct the proof.Verifier for client's PK and its proof.VerifierContext
@@ -411,9 +394,6 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 
 	//	forward commitments to running Verifier
 	commitments := proof.T
-	// FIXME here don't blindly trust the commitments sent with proof, before server must check that it is the same commitments that were
-	// FIXME sent when prover requested the collective challenge
-	// see https://github.com/dedis/student_18_daga/issues/24 => new signed commitments struct
 
 	if err := verifierCtx.receiveCommitments(commitments); err != nil {
 		// TODO log
@@ -421,7 +401,7 @@ func verifyClientProof(suite Suite, context AuthenticationContext,
 	}
 
 	//	forward challenges to running Verifier
-	challenge := proof.Cs
+	challenge := proof.Cs.Cs
 	subChallenges := proof.C
 	verifierCtx.receiveChallenges(challenge, subChallenges)
 
@@ -470,7 +450,7 @@ func newClientProofPred(suite Suite, context AuthenticationContext, tagAndCommit
 		// 		iii) client i's private key xi corresponds to one of the public keys included in the group definition G
 		knowOnePrivateKeyPred := proof.Rep("X"+kStr, "x"+kStr, "G")
 
-		clientAndPred := proof.And(linkageTagValidPred, commitmentValidPred, knowOnePrivateKeyPred)
+		clientAndPred := proof.And(knowOnePrivateKeyPred, commitmentValidPred, linkageTagValidPred)
 
 		// update map of public values
 		pval["X"+kStr] = pubKey
@@ -524,8 +504,7 @@ func newClientProver(suite Suite, context AuthenticationContext, tagAndCommitmen
 
 //ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures
 func (proof ClientProof) ToBytes() (data []byte, err error) {
-	// TODO WTF no other way ? + rename marshalbinary for consistency
-	data, e := proof.Cs.MarshalBinary()
+	data, e := proof.Cs.Cs.MarshalBinary()
 	if e != nil {
 		return nil, fmt.Errorf("error in cs: %s", e)
 	}

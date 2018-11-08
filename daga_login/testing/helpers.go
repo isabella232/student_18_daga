@@ -48,9 +48,9 @@ func NewDummyService(c *onet.Context) (onet.Service, error) {
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
 // "dummy" counterpart of daga_login.service.newDAGAChallengeGenerationProtocol() keep them more or less in sync
-func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, reqContext daga_login.Context) (*DAGAChallengeGeneration.Protocol) {
+func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req daga_login.PKclientCommitments) (*DAGAChallengeGeneration.Protocol) {
 	// build tree with leader as root
-	roster := reqContext.Roster
+	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
 	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
@@ -61,7 +61,7 @@ func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, reqContex
 	require.NotNil(t, pi, "nil protocol instance but no error")
 
 	challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
-	challengeGeneration.LeaderSetup(reqContext, s.DagaServer)
+	challengeGeneration.LeaderSetup(req, s.DagaServer)
 
 	// start
 	err = challengeGeneration.Start()
@@ -111,7 +111,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 		}
 		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
 
-		challengeGeneration.ChildrenSetup(s.DagaServer)
+		challengeGeneration.ChildSetup(s.DagaServer)
 		return challengeGeneration, nil
 	case DAGA.Name:
 		pi, err := DAGA.NewProtocol(tn)
@@ -120,7 +120,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 		}
 		dagaProtocol := pi.(*DAGA.Protocol)
 
-		dagaProtocol.ChildrenSetup(s.DagaServer, s.AcceptContext)
+		dagaProtocol.ChildSetup(s.DagaServer, s.AcceptContext)
 		return dagaProtocol, nil
 	default:
 		log.Panic("protocol not implemented/known")
@@ -141,15 +141,19 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []d
 
 	// TODO QUESTION what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package with all helper ?
 	dummyChallengeChannel := func(commitments []kyber.Point) daga.Challenge {
-		cs := tSuite.Scalar().Pick(tSuite.RandomStream())
-		msg, _ := cs.MarshalBinary()
+		// TODO share helper with kyber daga tests ?? (~same helper used)
+		challenge := daga.Challenge{
+			Cs: tSuite.Scalar().Pick(tSuite.RandomStream()),
+		}
+		signData, _ := challenge.ToBytes(commitments)
 		var sigs []daga.ServerSignature
 		//Make each test server sign the challenge
 		for _, server := range dagaServers {
-			sig, _ := daga.SchnorrSign(tSuite, server.PrivateKey(), msg)
+			sig, _ := daga.SchnorrSign(tSuite, server.PrivateKey(), signData)
 			sigs = append(sigs, daga.ServerSignature{Index: server.Index(), Sig: sig})
 		}
-		return daga.Challenge{Cs: cs, Sigs: sigs}
+		challenge.Sigs = sigs
+		return challenge
 	}
 
 	dummyAuthRequest, _ = daga.NewAuthenticationMessage(tSuite, dummyContext, dagaClients[0], dummyChallengeChannel)

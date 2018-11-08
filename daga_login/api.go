@@ -150,6 +150,7 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 
 // send PKclient commitments and receive master challenge
 func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitments []kyber.Point) daga.Challenge {
+	// FIXME maybe error instead of panic => need to modify signature of the "sendCommitsReceiveChallenge" in client_proof
 	log.Lvl4("pKClient, sending commitments to: ", dst)
 	request := PKclientCommitments{
 		Commitments: commitments,

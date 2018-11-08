@@ -1,0 +1,5 @@
+[[servers]]
+  Address = "tls://localhost:7022"
+  Suite = "Ed25519"
+  Public = "651e811559e8a3787f58a758dab3784327c57d7229c23890dd52c4194c2b523a"
+  Description = "Conode_11"

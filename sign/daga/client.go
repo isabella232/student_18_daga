@@ -127,7 +127,6 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
 	if P, err := newClientProof(suite, context, client, *TAndS, s, sendCommitsReceiveChallenge); err != nil {
-		// TODO log QUESTION intro on the logging practises/conventions at DEDIS
 		return nil, err
 	} else {
 		// DAGA client Step 5
@@ -162,7 +161,7 @@ func validateAuthenticationMessage(suite Suite, msg AuthenticationMessage) error
 		return errors.New("validateAuthenticationMessage: initial tag T0 is nil")
 	}
 	//Proof fields have the correct size
-	if len(msg.P0.C) != i || len(msg.P0.R) != 2*i || len(msg.P0.T) != 3*i || msg.P0.Cs == nil {
+	if len(msg.P0.C) != i || len(msg.P0.R) != 2*i || len(msg.P0.T) != 3*i || msg.P0.Cs.Cs == nil {
 		return fmt.Errorf("validateAuthenticationMessage: malformed ClientProof, %v", msg.P0)
 	}
 	return nil
@@ -175,11 +174,6 @@ func verifyAuthenticationMessage(suite Suite, msg AuthenticationMessage) error {
 	if err := validateAuthenticationMessage(suite, msg); err != nil {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())
 	}
-	// TODO FIXME decide from where to pick the args when choice ! (from client msg or from server state ?)
-	// FIXME here challenge ~~should~~ MUST be picked from server state IMO but QUESTION ask Ewa Syta
-	// TODO resolve all these when building the actual service
-	// related thread : https://github.com/dedis/student_18_daga/issues/24
-	// => a solution maybe change ClientProof struct to embed Challenge struct (contains signatures) and new signed commitment struct
 	if err := verifyClientProof(suite, msg.C, msg.P0, msg.initialTagAndCommitments); err != nil {
 		return errors.New("verifyAuthenticationMessage:" + err.Error())
 	}

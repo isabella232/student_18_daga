@@ -180,7 +180,7 @@ func TestInitializeChallenge(t *testing.T) {
 
 func TestCheckUpdateChallenge(t *testing.T) {
 	//The following tests need at least 2 servers
-	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+2)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+2)
 
 	//Generate commitments
 	var commits []ChallengeCommitment
@@ -194,14 +194,20 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	challenge, _ := InitializeChallenge(suite, context, commits, openings)
 	cs := challenge.Cs
 
+	// TODO share randompointhelper with the daga_login testing package
+	var dummyPKClientCommitments []kyber.Point
+	for _,_ = range clients {
+		dummyPKClientCommitments = append(dummyPKClientCommitments, suite.Point().Pick(suite.RandomStream()))
+	}
+
 	//Normal execution
-	err := CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err := CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.NoError(t, err, "Cannot update the challenge")
 	require.Equal(t, len(challenge.Sigs), 1, "Did not correctly add the signature")
 
 	//Duplicate signature
 	challenge.Sigs = append(challenge.Sigs, challenge.Sigs[0])
-	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.Error(t, err, "Does not check for duplicates signatures")
 
 	challenge.Sigs = []ServerSignature{challenge.Sigs[0]}
@@ -209,45 +215,45 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	//Altered signature
 	fake := append([]byte("A"), challenge.Sigs[0].Sig...)
 	challenge.Sigs[0].Sig = fake[:len(challenge.Sigs[0].Sig)]
-	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.Error(t, err, "Wrond check of signature")
 
 	//Restore correct signature for the next tests
 	challenge.Sigs = nil
-	CheckUpdateChallenge(suite, context, challenge, servers[0])
+	CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 
 	//Modify the challenge
 	challenge.Cs = suite.Scalar().Zero()
-	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.Error(t, err, "Does not check the challenge")
 
 	challenge.Cs = cs
 
 	//Only appends if the challenge has not already done a round-robin
 	for _, server := range servers[1:] {
-		err = CheckUpdateChallenge(suite, context, challenge, server)
+		err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, server)
 		require.NoError(t, err, "Error during the round-robin at server %d", server.Index())
 	}
-	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.NoError(t, err, "Error when closing the loop of the round-robin")
 	require.Equal(t, len(challenge.Sigs), len(servers), "Invalid number of signatures: %d instead of %d", len(challenge.Sigs), len(servers))
 
 	//Change a commitment
 	challenge.Commits[0].Commit = suite.Point().Mul(suite.Scalar().One(), nil)
-	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.Error(t, err, "Invalid commitment signature check")
 
 	challenge.Commits[0].Commit = suite.Point().Mul(challenge.Openings[0], nil)
 
 	//Change an opening
 	challenge.Openings[0] = suite.Scalar().Zero()
-	err = CheckUpdateChallenge(suite, context, challenge, servers[0])
+	err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	require.Error(t, err, "Invalid opening check")
 }
 
 func TestFinalizeChallenge(t *testing.T) {
 	//The following tests need at least 2 servers
-	_, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+2)
+	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+2)
 
 	//Generate commitments
 	var commits []ChallengeCommitment
@@ -258,18 +264,24 @@ func TestFinalizeChallenge(t *testing.T) {
 		openings = append(openings, open)
 	}
 
+	// TODO share randompointhelper with the daga_login testing package
+	var dummyPKClientCommitments []kyber.Point
+	for _,_ = range clients {
+		dummyPKClientCommitments = append(dummyPKClientCommitments, suite.Point().Pick(suite.RandomStream()))
+	}
+
 	challenge, _ := InitializeChallenge(suite, context, commits, openings)
 
 	//Makes every server update the challenge
 	var err error
 	for _, server := range servers[1:] {
-		err = CheckUpdateChallenge(suite, context, challenge, server)
+		err = CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, server)
 		require.NoError(t, err, "Error during the round-robin at server %d", server.Index())
 	}
 
 	//Normal execution
 	//Let's say that server 0 is the leader and received the message back
-	CheckUpdateChallenge(suite, context, challenge, servers[0])
+	CheckUpdateChallenge(suite, context, challenge, dummyPKClientCommitments, servers[0])
 	clientChallenge, err := FinalizeChallenge(context, challenge)
 	require.NoError(t, err, "Error during finalization of the challenge")
 
@@ -301,7 +313,7 @@ func TestFinalizeChallenge(t *testing.T) {
 	require.Zero(t, clientChallenge, "Wrong check: Lower signature count")
 }
 
-// TODO port to new implementation
+// TODO port to new implementation rhaaa
 func TestInitializeServerMessage(t *testing.T) {
 	// TODO test for one server as we saw that it previously triggered an hidden bug
 	clients, servers, context, _ := generateTestContext(suite, 2, 2)
@@ -313,22 +325,8 @@ func TestInitializeServerMessage(t *testing.T) {
 	_, Y := context.Members()
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-	//Sign the challenge
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
@@ -359,23 +357,8 @@ func TestServerProtocol(t *testing.T) {
 	_, Y := context.Members()
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-	//Sign the challenge
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
@@ -469,22 +452,8 @@ func TestGenerateServerProof(t *testing.T) {
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 	T0, _ := tagAndCommitments.T0, tagAndCommitments.SCommits
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-	//Sign the challenge
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
@@ -549,22 +518,8 @@ func TestVerifyServerProof(t *testing.T) {
 	_, Y := context.Members()
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-	//Normal execution
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	clientProof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
@@ -681,26 +636,8 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 	_, Y := context.Members()
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-
-	//Generate the challenge
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
@@ -735,26 +672,8 @@ func TestVerifyMisbehavingProof(t *testing.T) {
 	_, Y := context.Members()
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-
-	//Normal execution
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	clientProof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
@@ -843,26 +762,8 @@ func TestToBytes_ServerProof(t *testing.T) {
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 	_, S := tagAndCommitments.T0, tagAndCommitments.SCommits
 
-	//Generate a valid challenge
-	var commits []ChallengeCommitment
-	var openings []kyber.Scalar
-	for i := 0; i < len(servers); i++ {
-		commit, open, _ := NewChallengeCommitment(suite, servers[i])
-		commits = append(commits, *commit)
-		openings = append(openings, open)
-	}
-
-	challenge, _ := InitializeChallenge(suite, context, commits, openings)
-
-	//Create challenge
-	for _, server := range servers {
-		CheckUpdateChallenge(suite, context, challenge, server)
-	}
-
-	clientChallenge, _ := FinalizeChallenge(context, challenge)
-
-	// setup test server "channels"
-	sendCommitsReceiveChallenge := newDummyServerChannels(clientChallenge)
+	// setup test server "channels" with valid dummy challenge
+	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
 
 	//Assemble the client message
 	clientProof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
