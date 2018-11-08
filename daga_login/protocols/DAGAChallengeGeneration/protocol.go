@@ -37,10 +37,10 @@ const Timeout = 5 * time.Second
 
 func init() {
 	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
-	// QUESTION protocol is tied to service => according to documentation I need to call Server.ProtocolRegisterName
+	// QUESTION my protocol is tied to service => according to documentation I need to call Server.ProtocolRegisterName
 	// QUESTION Where ?
 	// QUESTION need more info on all of this works and what are the possible scenarios, documentation not clear enough nor up to date
-	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove
+	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove ?
 }
 
 // Protocol holds the state of the challenge generation protocol instance.

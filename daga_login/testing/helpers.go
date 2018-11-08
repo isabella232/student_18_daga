@@ -140,20 +140,26 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []d
 	dummyContext, _ = daga_login.NewContext(minDagaContext, *roster)
 
 	// TODO QUESTION what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package with all helper ?
-	dummyChallengeChannel := func(commitments []kyber.Point) daga.Challenge {
+	dummyChallengeChannel := func(commitments []kyber.Point) (daga.Challenge, error) {
 		// TODO share helper with kyber daga tests ?? (~same helper used)
 		challenge := daga.Challenge{
 			Cs: tSuite.Scalar().Pick(tSuite.RandomStream()),
 		}
-		signData, _ := challenge.ToBytes(commitments)
+		signData, err := challenge.ToBytes(commitments)
+		if err != nil {
+			return daga.Challenge{}, err
+		}
 		var sigs []daga.ServerSignature
 		//Make each test server sign the challenge
 		for _, server := range dagaServers {
-			sig, _ := daga.SchnorrSign(tSuite, server.PrivateKey(), signData)
-			sigs = append(sigs, daga.ServerSignature{Index: server.Index(), Sig: sig})
+			if sig, err := daga.SchnorrSign(tSuite, server.PrivateKey(), signData); err != nil {
+				return daga.Challenge{}, err
+			} else {
+				sigs = append(sigs, daga.ServerSignature{Index: server.Index(), Sig: sig})
+			}
 		}
 		challenge.Sigs = sigs
-		return challenge
+		return challenge, nil
 	}
 
 	dummyAuthRequest, _ = daga.NewAuthenticationMessage(tSuite, dummyContext, dagaClients[0], dummyChallengeChannel)

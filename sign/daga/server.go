@@ -109,6 +109,9 @@ func (c Challenge) VerifySignatures(suite Suite, serverKeys []kyber.Point, pkCli
 
 // used for Challenge signatures, marshall the master challenge and concat with the PKclient's commitments
 func (c Challenge) ToBytes(pkClientCommitments []kyber.Point) ([]byte, error) {
+	if c.Cs == nil {
+		return nil, errors.New("empty challenge, nothing to marshall")
+	}
 	csBytes, err := c.Cs.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling master challenge: %s", err)

@@ -290,7 +290,7 @@ func newClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
-	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (ClientProof, error) {
+	sendCommitsReceiveChallenge func([]kyber.Point) (Challenge, error)) (ClientProof, error) {
 
 	if context == nil {
 		return ClientProof{}, errors.New("nil context")
@@ -327,9 +327,14 @@ func newClientProof(suite Suite, context AuthenticationContext,
 
 	//	forward them to random remote server/verifier (over *anon.* circuit etc.. concern of the caller code / client setup!!)
 	//	and receive master challenge from remote server(s) (over *anon.* circuit etc.. concern of the caller code / client setup!!)
-	challenge := sendCommitsReceiveChallenge(P.T)
+	challenge, err := sendCommitsReceiveChallenge(P.T)
+	if err != nil {
+		// TODO kill prover gorountine... but I'll argue that this is useless since this code is running clientside and the process will terminate on error
+		return ClientProof{}, errors.New("newClientProof: failed to receive challenge: " + err.Error())
+	}
 
 	if err := challenge.VerifySignatures(suite, Y, P.T); err != nil {
+		// TODO kill prover gorountine... but I'll argue that this is useless since this code is running clientside and the process will terminate on error
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	}
 	P.Cs = challenge
@@ -339,7 +344,6 @@ func newClientProof(suite Suite, context AuthenticationContext,
 
 	//	get final responses from Prover
 	if responses, err := proverCtx.responses(); err != nil {
-		// TODO onet.log something
 		return ClientProof{}, errors.New("newClientProof:" + err.Error())
 	} else {
 		P.R = responses
@@ -347,7 +351,6 @@ func newClientProof(suite Suite, context AuthenticationContext,
 
 	//check return value of the now done proof.Prover
 	if proverErr != nil { // here no race, we are sure that Prover is done since responses() returns only after response chan is closed
-		// TODO onet.log something
 		return ClientProof{}, errors.New("newClientProof:" + proverErr.Error())
 	}
 	return P, nil

@@ -100,13 +100,14 @@ func (c Context) ServerIndexOf(publicKey kyber.Point) (int, error) {
 	return IndexOf(Y, publicKey)
 }
 
-type PKclientVerifier func([]kyber.Point) daga.Challenge
+// TODO maybe belongs to daga or maybe doesn't deserve its type..
+type PKclientVerifier func([]kyber.Point) (daga.Challenge, error)
 
 // return a function that wraps a PKClient API call to `dst` under `context`. the returned function accept PKClient commitments as parameter
 // and returns the master challenge.
 func (c Client) newPKclientVerifier(context Context, dst *network.ServerIdentity) PKclientVerifier {
 	// poor man's curry
-	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) daga.Challenge {
+	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) (daga.Challenge, error) {
 		return c.pKClient(dst, context, proverCommitments)
 	}
 	return sendCommitsReceiveChallenge
@@ -128,15 +129,13 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 		request := Auth(*NetEncodeAuthenticationMessage(context, *M0))
 		reply := AuthReply{}
 		dst := context.RandomServerIdentity()
-		err = c.Onet.SendProtobuf(dst, &request, &reply)
-		if err != nil {
+		if err := c.Onet.SendProtobuf(dst, &request, &reply); err != nil {
 			return nil, fmt.Errorf("error sending auth. request to %s : %s", dst, err)
 		}
 		// decode reply
 		serverMsg, context, err := NetServerMessage(reply).NetDecode()
 		if err != nil {
-			log.Panic("error decoding auth. reply from ", dst, " : ", err)
-			return nil, err
+			return nil, fmt.Errorf("error decoding auth. reply from %s : %s", dst, err)
 		}
 		// TODO FIXME QUESTION check that received context match sent context
 		// extract final linkage tag
@@ -149,9 +148,8 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 }
 
 // send PKclient commitments and receive master challenge
-func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitments []kyber.Point) daga.Challenge {
-	// FIXME maybe error instead of panic => need to modify signature of the "sendCommitsReceiveChallenge" in client_proof
-	log.Lvl4("pKClient, sending commitments to: ", dst)
+func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitments []kyber.Point) (daga.Challenge, error) {
+	log.Lvl3("pKClient, sending commitments to: ", dst)
 	request := PKclientCommitments{
 		Commitments: commitments,
 		Context:     *context.NetEncode(),
@@ -159,9 +157,8 @@ func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitmen
 	reply := PKclientChallenge{}
 	err := c.Onet.SendProtobuf(dst, &request, &reply)
 	if err != nil {
-		log.Panic("pKClient, error sending commitments to ", dst, ":", err)
-		return daga.Challenge{}
+		return daga.Challenge{}, fmt.Errorf("pKClient, error sending commitments to %s : %s", dst, err)
 	}
-	log.Lvl4("pKClient, received master challenge from: ", dst)
-	return daga.Challenge(reply)
+	log.Lvl3("pKClient, received master challenge from: ", dst)
+	return daga.Challenge(reply), nil
 }

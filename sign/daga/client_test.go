@@ -47,37 +47,40 @@ func TestNewInitialTagAndCommitments(t *testing.T) {
 }
 
 // test helper that returns a properly signed Challenge by signing cs||pkClientCommitments using the keys of the servers
-func signDummyChallenge(cs kyber.Scalar, servers []Server, pkClientCommitments []kyber.Point) Challenge {
+func signDummyChallenge(cs kyber.Scalar, servers []Server, pkClientCommitments []kyber.Point) (Challenge, error) {
 	challenge := Challenge{Cs: cs}
-	signData, _ := challenge.ToBytes(pkClientCommitments)
+	signData, err := challenge.ToBytes(pkClientCommitments)
+	if err != nil {
+		return Challenge{}, err
+	}
 	var sigs []ServerSignature
 	//Make each test server sign the challenge
 	for _, server := range servers {
-		sig, _ := SchnorrSign(suite, server.PrivateKey(), signData)
-		sigs = append(sigs, ServerSignature{Index: server.Index(), Sig: sig})
+		if sig, err := SchnorrSign(suite, server.PrivateKey(), signData); err != nil {
+			return Challenge{}, err
+		} else {
+			sigs = append(sigs, ServerSignature{Index: server.Index(), Sig: sig})
+		}
 	}
 	challenge.Sigs = sigs
-	return challenge
+	return challenge, nil
 }
 
 // test helper that returns dummy "channel" to act as a dummy server/verifier
 // that return challenge upon reception of the prover's commitments
-func newDummyServerChannels(cs kyber.Scalar, servers []Server) func([]kyber.Point) Challenge {
-	sendCommitsReceiveChallenge := func(pKClientCommitments []kyber.Point) Challenge {
+func newDummyServerChannels(cs kyber.Scalar, servers []Server) func([]kyber.Point) (Challenge, error) {
+	sendCommitsReceiveChallenge := func(pKClientCommitments []kyber.Point) (Challenge, error) {
 		return signDummyChallenge(cs, servers, pKClientCommitments)
 	}
 	return sendCommitsReceiveChallenge
 }
 
-// test helper that returns dummy "channel" to act as a dummy server/verifier
-// that performs a stupid MITM on originalChannel to return a tampered challenge
-// TODO refactor in fact not needed => accept 1 challenge instead of 2 parameters
-func newTamperedServerChannels(evilCs kyber.Scalar, evilSigs []ServerSignature /*replaceSigs bool, originalChannel func([]kyber.Point) Challenge*/) func([]kyber.Point) Challenge {
-	sendCommitsReceiveChallenge := func(pKClientCommitments []kyber.Point) Challenge {
-		//originalChallenge := originalChannel(pKClientCommitments)
-		//sigs :=
+// test helper that returns bad dummy "channel" to act as a dummy server/verifier
+// that performs send a challenge containing evilCs and evilSigs no matter the commitments received
+func newBadServerChannels(evilCs kyber.Scalar, evilSigs []ServerSignature) func([]kyber.Point) (Challenge, error) {
+	sendCommitsReceiveChallenge := func([]kyber.Point) (Challenge, error) {
 		evilChallenge := Challenge{Cs: evilCs, Sigs: evilSigs}
-		return evilChallenge
+		return evilChallenge, nil
 	}
 	return sendCommitsReceiveChallenge
 }
@@ -112,7 +115,7 @@ func TestNewClientProof(t *testing.T) {
 			break
 		}
 	}
-	sendCommitsReceiveChallenge = newTamperedServerChannels(fake, validSigs /*dummyServerChannel*/)
+	sendCommitsReceiveChallenge = newBadServerChannels(fake, validSigs /*dummyServerChannel*/)
 	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	commits, responses, subChallenges = proof.T, proof.R, proof.C
 	require.Error(t, err, "newClientProof returned no error on invalid server inputs (altered challenge)")
@@ -124,7 +127,7 @@ func TestNewClientProof(t *testing.T) {
 	wrongSigs := make([]ServerSignature, len(validSigs))
 	copy(wrongSigs, validSigs)
 	wrongSigs[0].Sig = newsig
-	sendCommitsReceiveChallenge = newTamperedServerChannels(cs, wrongSigs /*dummyServerChannel*/)
+	sendCommitsReceiveChallenge = newBadServerChannels(cs, wrongSigs /*dummyServerChannel*/)
 
 	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.Error(t, err, "newClientProof returned no error on invalid server inputs (altered signature)")
@@ -138,7 +141,7 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
-	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (ClientProof, error) {
+	sendCommitsReceiveChallenge func([]kyber.Point) (Challenge, error)) (ClientProof, error) {
 
 	if context == nil {
 		return ClientProof{}, errors.New("nil context")
@@ -177,9 +180,14 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 	for i := 0; i < 3*len(X); i++ {
 		randomPointSlice = append(randomPointSlice, suite.Point().Pick(suite.RandomStream()))
 	}
-	challenge := sendCommitsReceiveChallenge(randomPointSlice)
+	challenge, err := sendCommitsReceiveChallenge(randomPointSlice)
+	if err != nil {
+		// FIXME kill prover goroutine
+		return ClientProof{}, errors.New("newMaliciousClientProof:" + err.Error())
+	}
 
 	if err := challenge.VerifySignatures(suite, Y, randomPointSlice); err != nil {
+		// FIXME kill prover goroutine
 		return ClientProof{}, errors.New("newMaliciousClientProof:" + err.Error())
 	}
 	P.Cs = challenge
@@ -189,7 +197,6 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 
 	//	get final responses from Prover
 	if responses, err := proverCtx.responses(); err != nil {
-		// TODO onet.log something
 		return ClientProof{}, errors.New("newMaliciousClientProof:" + err.Error())
 	} else {
 		P.R = responses
@@ -197,14 +204,13 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 
 	//check return value of the now done proof.Prover
 	if proverErr != nil { // here no race, we are sure that Prover is done since responses() returns only after response chan is closed
-		// TODO onet.log something
 		return ClientProof{}, errors.New("newMaliciousClientProof:" + proverErr.Error())
 	}
 
 	// build new malicious commitments (using verification formula) to include in transcript
 	T := make([]kyber.Point, 3*len(X))
 	for i := 0; i < len(X); i++ {
-		// satisfy the kyber.proof framework "contract" see issue/comments/fixme added in kyber.proof
+		// satisfy the kyber.proof framework "contract" see issue/comments/fixmes added in kyber.proof
 		r0, r1 := P.R[2*i], P.R[2*i+1]
 		if i != client.Index() { // swap, they were sent in that non-obvious order because of internal details of kyber.proof framework => would deserve a reordering layer or at least some documentation IMO
 			r0, r1 = P.R[2*i+1], P.R[2*i]
@@ -288,19 +294,12 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	sendCommitsReceiveChallenge := newDummyServerChannels(cs, servers)
 
-	//Create test authMsg M0 // TODO instead of these (above and below tests too) use NewAuthMessage (=> make new Auth message easily testable by adding server channels parameters)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
-
-	proof, _ := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	clientMessage := AuthenticationMessage{
-		C:                        context,
-		initialTagAndCommitments: *tagAndCommitments,
-		P0:                       proof,
-	}
+	//Create test authMsg M0
+	authMsg, err := NewAuthenticationMessage(suite, context, clients[0], sendCommitsReceiveChallenge)
+	require.NoError(t, err)
 
 	//Create the initial server message
-	servMsg := ServerMessage{Request: clientMessage, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
+	servMsg := ServerMessage{Request: *authMsg, Proofs: nil, Tags: nil, Sigs: nil, Indexes: nil}
 
 	//Run ServerProtocol on each server
 	for i := range servers {
@@ -336,15 +335,15 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
 	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, 1)
-	_, Y = context.Members()
-	tagAndCommitments, s = newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	_, Y := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
 	S := tagAndCommitments.SCommits
 
 	S[2] = suite.Point().Null()
 	sendCommitsReceiveChallenge = newDummyServerChannels(cs, servers)
-	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	clientMessage = AuthenticationMessage{
+	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
+	badAuthMsg := AuthenticationMessage{
 		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
@@ -352,7 +351,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Create the initial server message
 	servMsg = ServerMessage{
-		Request: clientMessage,
+		Request: badAuthMsg,
 		Proofs:  nil,
 		Tags:    nil,
 		Sigs:    nil,
@@ -375,7 +374,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	tagAndCommitments.T0.Set(suite.Point().Null())
 	sendCommitsReceiveChallenge = newDummyServerChannels(cs, servers)
 	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, suite.Scalar().Zero(), sendCommitsReceiveChallenge)
-	clientMessage = AuthenticationMessage{
+	badAuthMsg = AuthenticationMessage{
 		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
@@ -383,7 +382,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Create the initial server message
 	servMsg = ServerMessage{
-		Request: clientMessage,
+		Request: badAuthMsg,
 		Proofs:  nil,
 		Tags:    nil,
 		Sigs:    nil,
@@ -409,7 +408,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	S[2] = suite.Point().Null()
 	sendCommitsReceiveChallenge = newDummyServerChannels(cs, servers)
 	proof, err = newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	clientMessage = AuthenticationMessage{
+	badAuthMsg = AuthenticationMessage{
 		C:                        context,
 		initialTagAndCommitments: *tagAndCommitments,
 		P0:                       proof,
@@ -417,7 +416,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Create the initial server message
 	servMsg = ServerMessage{
-		Request: clientMessage,
+		Request: badAuthMsg,
 		Proofs:  nil,
 		Tags:    nil,
 		Sigs:    nil,
@@ -448,42 +447,36 @@ func TestValidateClientMessage(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(cs, servers)
 
 	//Create test authMsg M0
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
-	proof, _ := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	clientMessage := AuthenticationMessage{
-		C:                        context,
-		initialTagAndCommitments: *tagAndCommitments,
-		P0:                       proof,
-	}
+	clientMessage, err := NewAuthenticationMessage(suite, context, clients[0], sendCommitsReceiveChallenge)
+	require.NoError(t, err)
 
 	//Normal execution
 	// TODO already tested somewhere above...
-	require.NoError(t, verifyAuthenticationMessage(suite, clientMessage), "Cannot verify valid client proof")
+	require.NoError(t, verifyAuthenticationMessage(suite, *clientMessage), "Cannot verify valid client proof")
 
 	//Modifying the length of various elements
-	ScratchMsg := clientMessage
+	ScratchMsg := *clientMessage
 	ScratchMsg.P0.C = append(ScratchMsg.P0.C, suite.Scalar().Pick(suite.RandomStream()))
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg.P0.C = ScratchMsg.P0.C[:len(clients)-1]
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for c: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
-	ScratchMsg = clientMessage
+	ScratchMsg = *clientMessage
 	ScratchMsg.P0.R = append(ScratchMsg.P0.R, suite.Scalar().Pick(suite.RandomStream()))
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg.P0.R = ScratchMsg.P0.R[:2*len(clients)-1]
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for r: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
-	ScratchMsg = clientMessage
+	ScratchMsg = *clientMessage
 	ScratchMsg.P0.T = append(ScratchMsg.P0.T, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
 	ScratchMsg.P0.T = ScratchMsg.P0.T[:3*len(clients)-1]
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for t: %d instead of %d", len(ScratchMsg.P0.C), len(clients))
 
-	ScratchMsg = clientMessage
+	ScratchMsg = *clientMessage
 	ScratchMsg.SCommits = append(ScratchMsg.SCommits, suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil))
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
 
@@ -491,7 +484,7 @@ func TestValidateClientMessage(t *testing.T) {
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect length check for S: %d instead of %d", len(ScratchMsg.SCommits), len(servers)+2)
 
 	//Modify the value of the generator in S[1]
-	ScratchMsg = clientMessage
+	ScratchMsg = *clientMessage
 	ScratchMsg.SCommits[1] = suite.Point().Mul(suite.Scalar().Pick(suite.RandomStream()), nil)
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Incorrect check for the generator in S[1]")
 
@@ -502,7 +495,7 @@ func TestValidateClientMessage(t *testing.T) {
 	require.Error(t, verifyAuthenticationMessage(suite, ScratchMsg), "Accepts a empty T0")
 }
 
-func TestToBytes_ClientMessage(t *testing.T) {
+func TestToBytes_AuthenticationMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
 	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
@@ -510,20 +503,14 @@ func TestToBytes_ClientMessage(t *testing.T) {
 	cs := suite.Scalar().Pick(suite.RandomStream())
 	sendCommitsReceiveChallenge := newDummyServerChannels(cs, servers)
 
-	//Create test authMsg M0  // TODO instead of these (above and below tests too) use NewAuthMessage (=> make new Auth message easily testable by adding server channels parameters)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
-	proof, _ := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
-	clientMessage := AuthenticationMessage{
-		C:                        context,
-		initialTagAndCommitments: *tagAndCommitments,
-		P0:                       proof,
-	}
+	//Create test authMsg M0
+	authMsg, err := NewAuthenticationMessage(suite, context, clients[0], sendCommitsReceiveChallenge)
+	require.NoError(t, err)
 
 	//Normal execution
-	data, err := clientMessage.ToBytes()
-	require.NoError(t, err, "Cannot convert valid Client Message to bytes")
-	require.NotNil(t, data, "Data is empty for a correct Client Message")
+	data, err := authMsg.ToBytes()
+	require.NoError(t, err, "Cannot convert valid AuthenticationMessage to bytes")
+	require.NotNil(t, data, "Data is empty for a correct AuthenticationMessage")
 }
 
 func TestToBytes_ClientProof(t *testing.T) {

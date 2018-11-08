@@ -46,24 +46,6 @@ func (c minimumClient) Index() int {
 //
 //}
 
-//func ClientToBytes(c Client) (data []byte, err error) {
-//	b, err := c.PublicKey().MarshalBinary()
-//	if err != nil {
-//		return nil, err
-//	}
-//	data = append(data, b...)
-//	b, err = c.PrivateKey().MarshalBinary()
-//	if err != nil {
-//		return nil, err
-//	}
-//	data = append(data, b...)
-//	b, err = c.Index().
-//	if err != nil {
-//		return nil, err
-//	}
-//	data = append(data, b...)
-//}
-
 // returns a Client that holds a newly allocated minimumClient initialized with index i and secret key s (if provided)
 // if not provided a new key is picked at random
 func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
@@ -113,7 +95,7 @@ type AuthenticationMessage struct {
 
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	client Client,
-	sendCommitsReceiveChallenge func([]kyber.Point) Challenge) (*AuthenticationMessage, error) {
+	sendCommitsReceiveChallenge func([]kyber.Point) (Challenge, error)) (*AuthenticationMessage, error) {
 	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 	// FIXME create a validate context helper and see where it belongs (I started to write context validation related code in the cothority implementation)
 

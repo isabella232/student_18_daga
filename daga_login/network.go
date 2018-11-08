@@ -27,7 +27,7 @@ type NetContext struct {
 
 // TODO maybe implement the daga auth interface manually here to avoid encode decode operations
 // TODO but keep in mind that when we will have context building facilities these things will, most likely, be useless and ready to be removed..
-// because we will then build a context that implement the authcontext interface but that doesnt use any daga.AuthenticationContext field like it is the case now (minimal daga context)
+// TODO because we will then build a context that implement the authcontext interface but that doesnt use any daga.AuthenticationContext field like it is the case now (minimal daga context)
 
 // to represent a daga.Client (which is an interface)
 // used only to dump client to disk while developing for now
@@ -159,7 +159,7 @@ func (s NetServer) NetDecode() (daga.Server, error) {
 func NetEncodeAuthenticationMessage(context Context, msg daga.AuthenticationMessage) *NetAuthenticationMessage {
 	netContext := context.NetEncode()
 	return &NetAuthenticationMessage{
-		Context:  *netContext, // i.e. discard context part of message and use the one provided (FIXME seems I was tired)
+		Context:  *netContext, // i.e. discard context part of message and use the one provided
 		T0:       msg.T0,
 		SCommits: msg.SCommits,
 		Proof:    msg.P0,

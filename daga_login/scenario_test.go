@@ -9,16 +9,15 @@ import (
 	"testing"
 )
 
-// TODO when done, update test to use same marshalling methods than in the api/service instead of JSON
-// for now I'm convinced that the thing is "working" don't lose time make this run again until useful..
-
+// TODO when done, maybe update test to use same marshalling methods than in the api/service instead of removing those ops
+// for now I'm convinced that the thing is "working" don't lose time make this run again until useful..I'm not testing the codecs nor the network
 var suite = daga.NewSuiteEC()
 
-func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, servers []daga.Server) func(commits []kyber.Point) daga.Challenge {
+func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, servers []daga.Server) func(commits []kyber.Point) (daga.Challenge, error) {
 	//Simulate the transfer of the commitments t
 	//Encoding
 
-	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) daga.Challenge {
+	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) (daga.Challenge, error) {
 		_, Y := context.Members()
 
 		//Network transfer
@@ -41,8 +40,7 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		//The leader asks other servers to generates commitments by publishing its own signed commitment
 		comlead, openlead, err := daga.NewChallengeCommitment(suite, servers[j])
 		if err != nil {
-			fmt.Printf("Error when generating the leader commitment at server %d\n%s\n", j, err)
-			return daga.Challenge{}
+			return daga.Challenge{}, fmt.Errorf("error when generating the leader commitment at server %d\n%s\n", j, err)
 		}
 
 		commits[j] = *comlead
@@ -57,22 +55,17 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			}
 			com, open, e := daga.NewChallengeCommitment(suite, server)
 			if e != nil {
-				fmt.Printf("Error when generating the commitment at server %d\n%s\n", num, e)
-				return daga.Challenge{}
+				return daga.Challenge{}, fmt.Errorf("error when generating the commitment at server %d\n%s\n", num, e)
 			}
-
 			commits[num] = *com
 			openings[num] = open
-
 			//Simulate the transfer of the commitment over the network
-
 		}
 
 		//Once the leader has received all the commitments, it checks that they are of correct form and their signatures are valid
 		err = daga.VerifyChallengeCommitmentsSignatures(suite, context, commits)
 		if err != nil {
-			fmt.Printf("Error when verifying the commitments\n%s\n", err)
-			return daga.Challenge{}
+			return daga.Challenge{}, fmt.Errorf("error when verifying the commitments\n%s\n", err)
 		}
 
 		//When the verification is done, the leader asks the servers to reveal their openings by sending its own opening
@@ -89,11 +82,10 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 			//Network transfer
 		}
 
-		//After receiving all the openings, server j veerifies them and initializes the challenge structure
+		//After receiving all the openings, server j verifies them and initializes the challenge structure
 		challenge, err := daga.InitializeChallenge(suite, context, commits, openings)
 		if err != nil {
-			fmt.Printf("Error when initializing the challenge\n%s\n", err)
-			return daga.Challenge{}
+			return daga.Challenge{}, fmt.Errorf("error when initializing the challenge\n%s\n", err)
 		}
 
 		//Then it executes CheckUpdateChallenge
@@ -126,14 +118,12 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		//Finalize the challenge before sending it to the client
 		clientChallenge, err := daga.FinalizeChallenge(context, challenge)
 		if err != nil {
-			fmt.Printf("Cannot finalize the challenge\n%s\n", err)
+			return clientChallenge, fmt.Errorf("Cannot finalize the challenge\n%s\n", err)
 		}
 
 		//The challenge is then sent back to the client
-
-		return clientChallenge
+		return clientChallenge, nil
 	}
-
 	return sendCommitsReceiveChallenge
 }
 
@@ -141,7 +131,6 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 // TODO use assert..
 // FIXME move again in kyber/sign/daga nothing to do here
 func TestScenario(t *testing.T) {
-	// FIXME remember to "implement" the context generation,
 	//Number of clients
 	c := 20
 	//Number of servers
@@ -155,7 +144,6 @@ func TestScenario(t *testing.T) {
 
 	//Simulate the transfer of the context from the service to the client
 	//Encoding
-	// TODO if necessary... i'm not testing the network marshall lib..
 	//Network transfer
 	//Decoding
 
