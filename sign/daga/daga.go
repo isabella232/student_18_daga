@@ -60,24 +60,24 @@ type AuthenticationContext interface {
 }
 
 // minimum DAGA context, containing nothing but what DAGA needs to work internally
-// used only for the test suite and/or to build other more complete contexts !
+// used for the test suite and/or to build other more complete contexts !
 //
-// g contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (g.x) and the servers (g.y)
+// G contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (g.x) and the servers (g.y)
 //
-// r contains the commitments of the servers to their unique per-round secrets
+// R contains the commitments of the servers to their unique per-round secrets
 //
-// h contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
+// H contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
 // TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
-type minimumAuthenticationContext struct {
-	g struct {
-		x []kyber.Point
-		y []kyber.Point
+type MinimumAuthenticationContext struct {
+	G struct {
+		X []kyber.Point
+		Y []kyber.Point
 	}
-	r []kyber.Point
-	h []kyber.Point
+	R []kyber.Point
+	H []kyber.Point
 }
 
-// returns an AuthenticationContext that holds a newly allocated minimumAuthenticationContext initialized with :
+// returns a pointer to a newly allocated MinimumAuthenticationContext initialized with :
 //
 // x the public keys of the clients
 //
@@ -86,35 +86,46 @@ type minimumAuthenticationContext struct {
 // r the commitments of the servers to their unique per-round secrets
 //
 // h the unique per-round generators of the group associated to each clients
-func NewAuthenticationContext(x, y, r, h []kyber.Point) (AuthenticationContext, error) {
-	if len(x) != len(h) || len(y) != len(r) || len(x) == 0 || len(y) == 0 {
-		return nil, errors.New("NewAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
-	}
-	return minimumAuthenticationContext{
-		g: struct {
-			x []kyber.Point
-			y []kyber.Point
+func NewMinimumAuthenticationContext(x, y, r, h []kyber.Point) (*MinimumAuthenticationContext, error) {
+	context := MinimumAuthenticationContext{
+		G: struct {
+			X []kyber.Point
+			Y []kyber.Point
 		}{
-			x: x,
-			y: y,
+			X: x,
+			Y: y,
 		},
-		r: r,
-		h: h,
-	}, nil
+		R: r,
+		H: h,
+	}
+	if err := ValidateContext(context); err != nil {
+		return nil, err
+	} else {
+		return &context, nil
+	}
 }
 
 // returns the public keys of the members of an AuthenticationContext, client keys in X and server keys in Y
-func (ac minimumAuthenticationContext) Members() (X, Y []kyber.Point) {
-	return ac.g.x, ac.g.y
+func (ac MinimumAuthenticationContext) Members() (X, Y []kyber.Point) {
+	return ac.G.X, ac.G.Y
 }
 
 // returns the per-round generator of the clients for this AuthenticationContext
-func (ac minimumAuthenticationContext) ClientsGenerators() []kyber.Point {
-	return ac.h
+func (ac MinimumAuthenticationContext) ClientsGenerators() []kyber.Point {
+	return ac.H
 }
 
-func (ac minimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point {
-	return ac.r
+func (ac MinimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point {
+	return ac.R
+}
+
+func ValidateContext(context AuthenticationContext) error {
+	X, Y := context.Members()
+	// TODO other thing, notably on generators
+	if len(X) != len(context.ClientsGenerators()) || len(Y) != len(context.ServersSecretsCommitments()) || len(X) == 0 || len(Y) == 0 {
+		return errors.New("NewMinimumAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
+	}
+	return nil
 }
 
 // Signs using schnorr signature scheme over the group of the Suite

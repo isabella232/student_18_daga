@@ -1,6 +1,9 @@
 package daga
 
 // FIXME audit/verify + rename "everything" + maybe see how to nicify external api (make some functions methods etc..)
+// FIXME rewrite everything..
+// FIXME => don't know if I'll have time (need to update tests etc.. that's why I should have started from scratch instead
+// of using it...lost HUGE amount of time refactoring in all directions with not that much benefits in the end)
 
 import (
 	"crypto/sha512"
@@ -273,7 +276,7 @@ func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challengeC
 		return fmt.Errorf("CheckUpdateChallenge: failed to sign master challenge")
 	}
 
-	// FIXME why not store it at index ?
+	// FIXME why not store it at index (and redesign workflow ...smelly early return ) ?
 	challengeCheck.Sigs = append(challengeCheck.Sigs, ServerSignature{Index: server.Index(), Sig: sig})
 
 	return nil
@@ -309,7 +312,7 @@ func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage
 }
 
 /*ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client*/
-// TODO DRY see what can be shared with GetFinalLinkageTag ...
+// TODO DRY see what can be shared with GetFinalLinkageTag ...+ probably rewrite ..
 func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 
 	// input checks
@@ -328,11 +331,11 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	_, Y := context.Members()
 	//Checks that not all servers already did the protocols
 	if len(msg.Indexes) >= len(Y) {
-		return fmt.Errorf("ServerProtocol: too many calls of the protocols") //... ok... smells like fish..
+		return fmt.Errorf("ServerProtocol: too many calls of the protocols") // FIXME... ok... smells like fish..
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
-	// FIXME dafuck is this ? nowhere to be found in DAGA or ?? is it out of scope ?? (to me it should be the network/session layer that perform those checks...)
+	// FIXME dafuck is this ? nowhere to be found in DAGA or ?? is it out of scope ?? (to me it should be handled by Onet/TLS...)
 	data, e := msg.Request.ToBytes()
 	if e != nil {
 		return errors.New("ServerProtocol: failed to marshall client's msg, " + e.Error())
@@ -361,6 +364,7 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	}
 
 	//Check all the proofs
+	// FIXME / QUESTION: so all we need to do to bypass is remove the proofs ?? => rewrite DAGA API and rewrite everything here
 	if len(msg.Proofs) != 0 {
 		for i, p := range msg.Proofs {
 			var valid bool
@@ -666,8 +670,7 @@ func verifyMisbehavingProof(suite Suite, serverPublicKey kyber.Point, proof *Ser
 	return true
 }
 
-/*ToBytes is a helper function used to convert a ServerProof into []byte to be used in signatures*/
-// QUESTION WTF ? + DRY there should be another way or no ?
+// ToBytes is a helper function used to convert a ServerProof into []byte to be used in signatures
 func (proof ServerProof) ToBytes() (data []byte, err error) {
 	temp, e := proof.T1.MarshalBinary()
 	if e != nil {

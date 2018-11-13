@@ -258,6 +258,7 @@ func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMe
 	}
 	_, Y := context.Members()
 	for i, p := range msg.Proofs {
+		// FIXME : someone can just remove the proofs from message and no checks....... garbage..
 		//verify signatures
 		temp, err := msg.Tags[i].MarshalBinary()
 		if err != nil {

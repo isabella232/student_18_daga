@@ -72,7 +72,7 @@ func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Cli
 		clientGenerators = append(clientGenerators, generator)
 	}
 
-	if context, err := NewAuthenticationContext(clientKeys, serverKeys, perRoundSecretCommits, clientGenerators); err != nil {
+	if context, err := NewMinimumAuthenticationContext(clientKeys, serverKeys, perRoundSecretCommits, clientGenerators); err != nil {
 		return nil, nil, nil, errors.New("failed to create AuthenticationContext: " + err.Error())
 	} else {
 		return clients, servers, context, nil
