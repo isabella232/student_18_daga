@@ -9,6 +9,7 @@ import (
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGA"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAChallengeGeneration"
 	"github.com/dedis/student_18_daga/sign/daga"
+	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
@@ -35,7 +36,7 @@ type DummyService struct {
 
 	// Has to be initialised by the tests
 	DagaServer    daga.Server
-	AcceptContext func(daga_login.Context) bool
+	AcceptContext func(daga_login.Context) (daga.Server, error)
 }
 
 // returns a new dummyService
@@ -110,8 +111,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 			return nil, err
 		}
 		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
-
-		challengeGeneration.ChildSetup(s.DagaServer)
+		challengeGeneration.ChildSetup(s.AcceptContext)
 		return challengeGeneration, nil
 	case DAGA.Name:
 		pi, err := DAGA.NewProtocol(tn)
@@ -119,8 +119,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 			return nil, err
 		}
 		dagaProtocol := pi.(*DAGA.Protocol)
-
-		dagaProtocol.ChildSetup(s.DagaServer, s.AcceptContext)
+		dagaProtocol.ChildSetup(s.AcceptContext)
 		return dagaProtocol, nil
 	default:
 		log.Panic("protocol not implemented/known")
@@ -137,7 +136,7 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []d
 		serverKeys = append(serverKeys, local.GetPrivate(server))
 	}
 	dagaClients, dagaServers, minDagaContext, _ := daga.GenerateContext(tSuite, rand.Intn(10)+2, serverKeys)
-	dummyContext, _ = daga_login.NewContext(minDagaContext, *roster)
+	dummyContext, _ = daga_login.NewContext(minDagaContext, *roster, daga_login.ServiceID(uuid.Must(uuid.NewV4())))
 
 	// TODO QUESTION what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package with all helper ?
 	dummyChallengeChannel := func(commitments []kyber.Point) (daga.Challenge, error) {
@@ -188,8 +187,12 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	for _, service := range services {
 		service := service.(*DummyService)
 		service.DagaServer = dagaServerFromKey[service.ServerIdentity().Public.String()]
-		service.AcceptContext = func(context daga_login.Context) bool {
-			return context.Equals(*dummyContext)
+		service.AcceptContext = func(context daga_login.Context) (daga.Server, error) {
+			if context.Equals(*dummyContext) {
+				return service.DagaServer, nil
+			} else {
+				return nil, errors.New("not accepted")
+			}
 		}
 	}
 

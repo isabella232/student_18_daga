@@ -1,10 +1,7 @@
 package DAGAChallengeGeneration
 
-// FIXME better namings + remember to address https://github.com/dedis/student_18_daga/issues/24
-// FIXME impersonations and replay attacks ? (what if someone answer faster than intented node with previous data)
-
+// FIXME better namings
 // QUESTION not sure if each protocol deserve its own package but if I put them all in same package (say protocol) will need to change a little the template conventions
-// QUESTION : purpose of shutdown, cleanup when protocol done ?, automatically called or manually called ?
 // FIXME share code with server's protocol (waitresult setDagaServer etc..leadersetup )=> maybe create interface etc..
 
 /*
@@ -50,9 +47,10 @@ type Protocol struct {
 	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments (to random challenge) at correct index (in auth. context), on the children to store leaderCommitment at 0
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
-	dagaServer          daga.Server        // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
-	context             daga_login.Context // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
-	pKClientCommitments []kyber.Point      // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
+	dagaServer          daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
+	context             daga_login.Context                            // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
+	pKClientCommitments []kyber.Point                                 // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
+	acceptContext       func(daga_login.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -79,14 +77,12 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 // setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
 func (p *Protocol) LeaderSetup(req daga_login.PKclientCommitments, dagaServer daga.Server) {
-	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
+	// TODO consider removing the dagaServer parameter and accept a context validator that returns dagaserver (like in ChildSetup)
+	// TODO +: less differences between leader and child -: redundant checks
+	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
-	if context, err := req.Context.NetDecode(); err != nil {
-		log.Panic("protocol setup: cannot decode context:" + err.Error())
-	} else {
-		p.setContext(context)
-	}
+	p.setContext(req.Context)
 	if len(req.Commitments) != len(p.context.ClientsGenerators())*3 {
 		log.Panic("protocol setup: wrong commitments length")
 	}
@@ -97,13 +93,21 @@ func (p *Protocol) LeaderSetup(req daga_login.PKclientCommitments, dagaServer da
 }
 
 // setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
-func (p *Protocol) ChildSetup(dagaServer daga.Server) {
-	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil {
+func (p *Protocol) ChildSetup(acceptContext func(ctx daga_login.Context) (daga.Server, error)) {
+	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
-	p.setDagaServer(dagaServer)
+	p.setAcceptContext(acceptContext)
 	p.commitments = make([]daga.ChallengeCommitment, 1)
 	p.openings = make([]kyber.Scalar, 1)
+}
+
+// setter to let know the protocol instance "what is the daga Context validation strategy"
+func (p *Protocol) setAcceptContext(acceptContext func(ctx daga_login.Context) (daga.Server, error)) {
+	if acceptContext == nil {
+		log.Panic("protocol setup: nil context validator (acceptContext())")
+	}
+	p.acceptContext = acceptContext
 }
 
 // setter to let know the protocol instance "which daga.Server it is"
@@ -116,9 +120,6 @@ func (p *Protocol) setDagaServer(dagaServer daga.Server) {
 
 // setter used to provide the context of the original PKClient request to the protocol instance
 func (p *Protocol) setContext(reqContext daga_login.Context) {
-	if reqContext == (daga_login.Context{}) {
-		log.Panic("protocol setup: empty Context")
-	}
 	p.context = reqContext
 }
 
@@ -213,9 +214,10 @@ func (p *Protocol) Start() (err error) {
 
 	// broadcast Announce requesting that all other nodes do the same and send back their signed commitments.
 	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization) and send in parallel (that's another thing..) as was done in skipchain ?
+	// TODO or add a "BroadcastInParallel" method
 	errs := p.Broadcast(&Announce{
 		LeaderCommit:        *leaderChallengeCommit,
-		Context:             *p.context.NetEncode(),
+		Context:             p.context,
 		PKClientCommitments: p.pKClientCommitments,
 	})
 	if len(errs) != 0 {
@@ -252,10 +254,11 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 	leaderTreeNode := msg.TreeNode
 
 	// store context in state
-	if context, err := msg.Context.NetDecode(); err != nil {
-		return errors.New(Name + ": failed to handle Leader's Announce: cannot decode context:" + err.Error())
+	if dagaServer, err := p.acceptContext(msg.Context); err != nil {
+		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	} else {
-		p.setContext(context)
+		p.setContext(msg.Context)
+		p.setDagaServer(dagaServer)
 	}
 
 	if len(msg.PKClientCommitments) != len(p.context.ClientsGenerators())*3 {
@@ -384,7 +387,7 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 			nextServerTreeNode = openReply.TreeNode
 		}
 	}
-	// TODO nicify kyber.daga "API" / previous code if possible
+	// TODO nicify kyber.daga "API" / previous code if possible => then clean/hide details of protocols here
 	challengeCheck, err := daga.InitializeChallenge(suite, p.context, p.commitments, p.openings)
 	if err != nil {
 		return fmt.Errorf("%s: failed to handle OpenReply, : %s", Name, err.Error())
@@ -409,7 +412,7 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 
 	// check if we are the leader
 	_, Y := p.context.Members()
-	weAreNotLeader := len(msg.ChallengeCheck.Sigs) != len(Y)
+	weAreNotLeader := len(msg.ChallengeCheck.Sigs) != len(Y) // TODO once daga API cleaned remove that...
 
 	// Executes CheckUpdateChallenge (to verify and add signature, or verify only if we are last node/leader)
 	if err := daga.CheckUpdateChallenge(suite, p.context, &msg.ChallengeCheck, p.pKClientCommitments, p.dagaServer); err != nil {

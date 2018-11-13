@@ -2,7 +2,7 @@ package service
 
 /*
 
-// TODO: implements DAGA, Deniable Anonymous Group Authentication Protocol
+// TODO doc: implements DAGA, Deniable Anonymous Group Authentication Protocol
 
 The service.go defines what to do for each API-call. This part of the service
 runs on the cothority node.
@@ -18,7 +18,7 @@ import (
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGA"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAChallengeGeneration"
 	"github.com/dedis/student_18_daga/sign/daga"
-	"sync"
+	"github.com/satori/go.uuid"
 )
 
 // Used for tests
@@ -28,7 +28,7 @@ func init() {
 	var err error
 	DagaID, err = onet.RegisterNewService(daga_login.ServiceName, newService)
 	log.ErrFatal(err)
-	network.RegisterMessages(Storage{}, daga_login.NetContext{}, daga_login.NetServer{})
+	network.RegisterMessages(Storage{}, daga_login.Context{}, daga_login.NetServer{})
 }
 
 // Service is our DAGA-service
@@ -37,96 +37,93 @@ type Service struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
 	*onet.ServiceProcessor
-	Storage *Storage               // TODO exported, needed by the tests ... but ... no other mean ? (I only see writing a dummy service that embed service and override everything related to Storage but pffff)
+	Storage *Storage               // TODO exported, needed by the tests ... but ... no other mean ? (I only see writing a dummy service that "embed"(cannot embed) service and override everything related to Storage but pffff)
 	Setup   func(s *Service) error // see rationale described under `setupState`
 }
 
 // storageID reflects the data we're storing - we could store more
 // than one structure.
-var storageID = []byte("main")
+var storageID = []byte("dagaStorage")
 
-// Storage is used to save our data.
+// Storage is used to save our data/state.
 // always access Storage through the helpers/getters !
+// QUESTION : separate storage from state or set "storage = state" ? (in my mind storage store backup of state but...)
 type Storage struct { // exported.. needed by the tests..
-	Context    daga_login.NetContext // current DAGA context and respective roster
-	DagaServer daga_login.NetServer  // daga server identity of our node (part of context)
-	// (TODO/enhancement add facilities to handle multiple contexts at once, with possibly multiple DAGA server identities)
-	sync.Mutex
+	State
 }
 
 // helper to quickly validate Auth requests before proceeding further
-func (s Service) validateAuthReq(req *daga_login.Auth) (daga_login.Context, error) {
+func (s Service) validateAuthReq(req *daga_login.Auth) (daga.Server, error) {
 	if req == nil || len(req.SCommits) == 0 || req.T0 == nil {
-		return daga_login.Context{}, errors.New("validateAuthReq: nil or empty request")
+		return nil, errors.New("validateAuthReq: nil or empty request")
 	}
-	// TODO validate proof to avoid spawning a protocol for nothing
-	// FIXME check commitments and challenge same as at proof construction time..etc..see github issue) => probably better in the corresponding daga function
+	// TODO idea (for when I'll rewrite DAGA API...) validate proof to avoid spawning a protocol for nothing
 	return s.validateContext(req.Context)
 }
 
 // API endpoint Auth,
 // starts the server's protocols (daga 4.3.6)
-// QUESTION FIXME decide what is returned to client, tag only or full final servermsg ?
+// FIXME : return Tag + sigs instead of final servermsg (another legacy of previous code...rhaaa => need to refactor things again => min 2 days..probably more)
 func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
 	// setup if not already done
 	if err := s.Setup(s); err != nil {
 		return nil, errors.New("Auth: " + err.Error())
 	}
 	// verify that submitted request is valid and accepted by our node
-	context, err := s.validateAuthReq(req)
+	dagaServer, err := s.validateAuthReq(req)
 	if err != nil {
 		return nil, errors.New("Auth: " + err.Error())
 	}
 
 	// start daga server's protocol
-	if dagaProtocol, err := s.newDAGAServerProtocol(daga_login.NetAuthenticationMessage(*req)); err != nil {
+	if dagaProtocol, err := s.newDAGAServerProtocol(daga_login.NetAuthenticationMessage(*req), dagaServer); err != nil {
 		return nil, errors.New("Auth: " + err.Error())
 	} else {
 		serverMsg, err := dagaProtocol.WaitForResult()
-		netServerMsg := daga_login.NetEncodeServerMessage(context, &serverMsg)
+		netServerMsg := daga_login.NetEncodeServerMessage(req.Context, &serverMsg)
 		return (*daga_login.AuthReply)(netServerMsg), err
 	}
 }
 
 // helper that check if received context is valid, (fully populated, accepted, etc..)
-// returns context, nil if ok to proceed with context, or empty, err otherwise
-func (s Service) validateContext(netReqContext daga_login.NetContext) (daga_login.Context, error) {
-	// TODO complete if other ideas...
-	reqContext, err := netReqContext.NetDecode()
-	if err != nil {
-		return daga_login.Context{}, fmt.Errorf("validateContext: failed to decode the context that was sent with the request: %s", err)
+// returns the daga.Server used to work with this context, nil if ok to proceed, or nil, err otherwise
+func (s Service) validateContext(reqContext daga_login.Context) (daga.Server, error) {
+	if len(reqContext.Roster.List) == 0 || reqContext.ID == daga_login.ContextID(uuid.Nil) || reqContext.ServiceID == daga_login.ServiceID(uuid.Nil) {
+		return nil, errors.New("validateContext: empty Context")
 	}
 
-	if len(reqContext.Roster.List) == 0 {
-		return daga_login.Context{}, errors.New("validateContext: sent context contains empty roster")
+	if err := daga.ValidateContext(reqContext); err != nil {
+		return nil, err
 	}
 
-	if s.acceptContext(reqContext) {
-		return reqContext, nil
+	if dagaServer, err := s.acceptContext(reqContext); err != nil {
+		return nil, errors.New("validateContext: auth. context part of the request is not accepted by this server: " + err.Error())
 	} else {
-		return daga_login.Context{}, errors.New("validateContext: auth. context part of the request is not accepted by this server")
+		return dagaServer, nil
 	}
 }
 
-// helper to check if we accept the context that was sent part of the Auth/PKClient request
-func (s Service) acceptContext(reqContext daga_login.Context) bool {
-	// TODO enhancement instead of supporting a single context add facilities to be part of multiple daga auth. context
-	// FIXME locked getter for context
-	currentContext, err := s.Storage.Context.NetDecode()
-	if err != nil {
-		log.Errorf("failed to decode stored context: %s", err)
-		return false
+// helper to check if we accept the context that was sent part of the Auth/PKClient request,
+// if the context is accepted, returns the corresponding daga.Server (needed to process requests under the context)
+func (s Service) acceptContext(reqContext daga_login.Context) (daga.Server, error) {
+	if contextState, err := s.contextState(reqContext.ServiceID, reqContext.ID); err != nil {
+		return nil, errors.New("acceptContext: failed to retrieve context related state: " + err.Error())
+	} else {
+		if contextState.Context.Equals(reqContext) { // TODO/FIXME see equals comments, use another function or implement logic here
+			return contextState.DagaServer.NetDecode()
+		} else {
+			return nil, errors.New("acceptContext: context not accepted")
+		}
 	}
-	return currentContext.Equals(reqContext)
 }
 
 // helper to validate PKClient requests before proceeding further
-func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga_login.Context, error) {
+func (s Service) validatePKClientReq(req *daga_login.PKclientCommitments) (daga.Server, error) {
 	if req == nil {
-		return daga_login.Context{}, errors.New("validatePKClientReq: nil request")
+		return nil, errors.New("validatePKClientReq: nil request")
 	}
 	if len(req.Commitments) == 0 || len(req.Commitments) != len(req.Context.H)*3 {
-		return daga_login.Context{}, errors.New("validatePKClientReq: empty or wrongly sized commitments")
+		return nil, errors.New("validatePKClientReq: empty or wrongly sized commitments")
 	}
 	return s.validateContext(req.Context)
 }
@@ -139,13 +136,13 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 	// verify that submitted request is valid and accepted by our node
-	_, err := s.validatePKClientReq(req)
+	dagaServer, err := s.validatePKClientReq(req)
 	if err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 
 	// start challenge generation protocol
-	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(*req); err != nil {
+	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(*req, dagaServer); err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
 	} else {
 		challenge, err := challengeGeneration.WaitForResult()
@@ -154,7 +151,7 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 }
 
 // function called to initialize and start a new DAGA (Server's) protocol where current node takes a "Leader" role
-func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage) (*DAGA.Protocol, error) {
+func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage, dagaServer daga.Server) (*DAGA.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 
 	// build tree with leader as root
@@ -169,10 +166,6 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 		return nil, errors.New("failed to create " + DAGA.Name + " protocol: " + err.Error())
 	}
 	dagaProtocol := pi.(*DAGA.Protocol)
-	dagaServer, err := s.dagaServer()
-	if err != nil {
-		return nil, errors.New("failed to retrieve daga server from service state: " + err.Error())
-	}
 	dagaProtocol.LeaderSetup(req, dagaServer)
 
 	// start
@@ -184,7 +177,7 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage)
 }
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
-func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientCommitments) (*DAGAChallengeGeneration.Protocol, error) {
+func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientCommitments, dagaServer daga.Server) (*DAGAChallengeGeneration.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 	// build tree with leader as root
 	roster := req.Context.Roster
@@ -198,10 +191,6 @@ func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientComm
 		return nil, errors.New("failed to create " + DAGAChallengeGeneration.Name + " protocol: " + err.Error())
 	}
 	challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
-	dagaServer, err := s.dagaServer()
-	if err != nil {
-		return nil, errors.New("failed to retrieve daga server from service state: " + err.Error())
-	}
 	challengeGeneration.LeaderSetup(req, dagaServer)
 
 	// start
@@ -218,6 +207,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientComm
 // the one starting the protocols) to generate the PI on those other nodes.
 // if it returns nil, nil then the default NewProtocol is called (the one defined in protocol)
 // FIXME outdated documentation in template
+// TODO share code between protocols (same structure, cast to new interface and call ChildSetup on it ?)
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl3("received protocol msg, instantiating new protocol instance of " + tn.ProtocolName())
 	// setup if not already done
@@ -231,11 +221,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 			return nil, err
 		}
 		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
-		dagaServer, err := s.dagaServer()
-		if err != nil {
-			log.Panic("NewProtocol: failed to retrieve daga server from service state: " + err.Error())
-		}
-		challengeGeneration.ChildSetup(dagaServer)
+		challengeGeneration.ChildSetup(s.validateContext)
 		return challengeGeneration, nil
 	case DAGA.Name:
 		pi, err := DAGA.NewProtocol(tn)
@@ -243,11 +229,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 			return nil, err
 		}
 		dagaServerProtocol := pi.(*DAGA.Protocol)
-		dagaServer, err := s.dagaServer()
-		if err != nil {
-			log.Panic("NewProtocol: failed to retrieve daga server from service state: " + err.Error())
-		}
-		dagaServerProtocol.ChildSetup(dagaServer, s.acceptContext)
+		dagaServerProtocol.ChildSetup(s.validateContext)
 		return dagaServerProtocol, nil
 	default:
 		log.Panic("NewProtocol: protocol not implemented/known")
@@ -255,13 +237,11 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 	return nil, errors.New("should not be reached")
 }
 
-// saves all data.
+// saves all data/state.
 func (s *Service) save() {
-	s.Storage.Lock()
-	defer s.Storage.Unlock()
 	err := s.Save(storageID, s.Storage)
 	if err != nil {
-		log.Error("Couldn't save data:", err)
+		log.Error("Couldn't save service data: ", err)
 	}
 }
 
@@ -280,25 +260,8 @@ func setupState(s *Service) error {
 			return err
 		}
 		if msg == nil {
-			// first time or nothing, load from setup files
-			// FIXME temp hack while lacking a proper boot method
-			// FIXME QUESTION how to do it when we are no longer hacking... ? (pass setup info to service)
-
-			context, err := daga_login.ReadContext("./context.bin")
-			// TODO FIXME facilities to check context validity (are we part of the context, are all generators generators, etc..)
-			if err != nil {
-				return errors.New("tryLoad: first run, failed to read context from config file: " + err.Error())
-			}
-			netContext := context.NetEncode()
-			s.Storage.Context = *netContext
-
-			// retrieve daga server
-			indexInContext, _ := context.ServerIndexOf(s.ServerIdentity().Public)
-			dagaServer, err := daga_login.ReadServer(fmt.Sprintf("./server%d.bin", indexInContext))
-			if err != nil {
-				return errors.New("tryLoad: first run, failed to load daga Server from config file: " + err.Error())
-			}
-			s.Storage.DagaServer = *daga_login.NetEncodeServer(dagaServer)
+			// first time or nothing, load from permanent storage files
+			// TODO/FIXME/QUESTION if makes sense
 			return nil
 		} else {
 			var ok bool
@@ -312,14 +275,16 @@ func setupState(s *Service) error {
 	return nil
 }
 
-// returns the daga server struct of this daga service instance, (fetched from Storage)
-func (s *Service) dagaServer() (daga.Server, error) {
-	s.Storage.Lock()
-	defer s.Storage.Unlock()
-	if server, err := s.Storage.DagaServer.NetDecode(); err != nil {
-		return nil, err
+func (s *Service) contextState(sid daga_login.ServiceID, cid daga_login.ContextID) (*ContextState, error) {
+	if sid == daga_login.ServiceID(uuid.Nil) || cid == daga_login.ContextID(uuid.Nil) {
+		return nil, errors.New("contextState: Nil/Zero IDs")
+	}
+	if serviceState, ok := s.Storage.State[sid]; !ok {
+		return nil, fmt.Errorf("contextState: unknown service ID: %v", sid)
+	} else if contextState, ok := serviceState.ContextStates[cid]; !ok {
+		return nil, fmt.Errorf("contextState: unknown context ID: %v", cid)
 	} else {
-		return server, nil
+		return &contextState, nil
 	}
 }
 

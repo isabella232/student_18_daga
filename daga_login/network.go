@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
-	"github.com/dedis/onet"
 	"github.com/dedis/student_18_daga/sign/daga"
 )
 
@@ -12,22 +11,6 @@ import (
 
 // TODO QUESTION ask, dumb IMO but feel kind of bad exporting things that are intended to be immutable and private so the in between solution is to have a separate struct
 // TODO ~messy IMO, how to do it in a idiomatic and educated way ?
-
-// NetContext provides a net compatible representation of the Context struct
-// (which has interface field (daga.AuthenticationContext))
-type NetContext struct {
-	Roster onet.Roster
-	G      struct {
-		X []kyber.Point
-		Y []kyber.Point
-	}
-	R []kyber.Point
-	H []kyber.Point
-}
-
-// TODO maybe implement the daga auth interface manually here to avoid encode decode operations
-// TODO but keep in mind that when we will have context building facilities these things will, most likely, be useless and ready to be removed..
-// TODO because we will then build a context that implement the authcontext interface but that doesnt use any daga.AuthenticationContext field like it is the case now (minimal daga context)
 
 // to represent a daga.Client (which is an interface)
 // used only to dump client to disk while developing for now
@@ -47,7 +30,7 @@ type NetServer struct {
 // NetAuthenticationMessage provides a net compatible representation of the daga.AuthenticationMessage struct
 // (which embeds a context which is an interface)
 type NetAuthenticationMessage struct {
-	Context  NetContext
+	Context  Context
 	SCommits []kyber.Point
 	T0       kyber.Point
 	Proof    daga.ClientProof
@@ -61,32 +44,6 @@ type NetServerMessage struct {
 	Proofs  []daga.ServerProof
 	Indexes []int
 	Sigs    []daga.ServerSignature
-}
-
-func (c Context) NetEncode() *NetContext {
-	//G := NetEncodeMembers(c.Members())
-	X, Y := c.Members()
-	return &NetContext{
-		G: struct {
-			X []kyber.Point
-			Y []kyber.Point
-		}{X: X, Y: Y},
-		H:      c.ClientsGenerators(),
-		R:      c.ServersSecretsCommitments(),
-		Roster: *c.Roster,
-	}
-}
-
-func (nc NetContext) NetDecode() (Context, error) {
-	dagaContext, err := daga.NewAuthenticationContext(nc.G.X, nc.G.Y, nc.R, nc.H)
-	if err != nil {
-		return Context{}, err
-	}
-	roster := nc.Roster
-	return Context{
-		dagaContext,
-		&roster,
-	}, nil
 }
 
 func NetEncodeClient(c daga.Client) *NetClient {
@@ -157,9 +114,8 @@ func (s NetServer) NetDecode() (daga.Server, error) {
 }
 
 func NetEncodeAuthenticationMessage(context Context, msg daga.AuthenticationMessage) *NetAuthenticationMessage {
-	netContext := context.NetEncode()
 	return &NetAuthenticationMessage{
-		Context:  *netContext, // i.e. discard context part of message and use the one provided
+		Context:  context, // i.e. discard context part of message and use the one provided
 		T0:       msg.T0,
 		SCommits: msg.SCommits,
 		Proof:    msg.P0,
@@ -167,17 +123,13 @@ func NetEncodeAuthenticationMessage(context Context, msg daga.AuthenticationMess
 }
 
 func (netmsg NetAuthenticationMessage) NetDecode() (*daga.AuthenticationMessage, Context, error) {
-	context, err := netmsg.Context.NetDecode()
-	if err != nil {
-		return nil, Context{}, fmt.Errorf("failed to decode context: %s", err)
-	}
 	msg := daga.AuthenticationMessage{
-		C:  context.AuthenticationContext,
+		C:  netmsg.Context.MinimumAuthenticationContext,
 		P0: netmsg.Proof,
 	}
 	msg.SCommits = netmsg.SCommits
 	msg.T0 = netmsg.T0
-	return &msg, context, nil
+	return &msg, netmsg.Context, nil
 }
 
 func NetEncodeServerMessage(context Context, msg *daga.ServerMessage) *NetServerMessage {

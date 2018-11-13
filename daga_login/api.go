@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
-	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/sign/daga"
@@ -18,87 +17,6 @@ import (
 const ServiceName = "daga"
 
 var suite = daga.NewSuiteEC()
-
-// Context implements the daga.AuthenticationContext interface
-// and embed a corresponding Onet roster (how to reach the DAGA servers)
-type Context struct {
-	daga.AuthenticationContext
-	*onet.Roster
-}
-
-// returns a pointer to newly allocated Context struct initialized with the provided daga.AuthenticationContext
-// and a subset of fullRoster containing only the servers that are part of the daga.AuthenticationContext.
-// additionally, checks that the provided fullRoster contains at least one ServerIdentity for each DAGA server in dagaContext
-func NewContext(dagaContext daga.AuthenticationContext, fullRoster onet.Roster) (*Context, error) {
-
-	// TODO/FIXME validate dagaContext (can use daga function that build context for that purpose)
-
-	// maps public keys to the full identity
-	serverId := make(map[string]*network.ServerIdentity, len(fullRoster.List))
-	for _, sid := range fullRoster.List {
-		serverId[sid.Public.String()] = sid
-	}
-
-	// builds new (sub)-roster
-	_, Y := dagaContext.Members()
-	dagaList := make([]*network.ServerIdentity, 0, len(Y))
-	for _, pubKey := range Y {
-		if sid, ok := serverId[pubKey.String()]; ok {
-			dagaList = append(dagaList, sid)
-		} else {
-			return nil, fmt.Errorf("NewContext: provided roster doesn't contain an Identity for daga server with publicKey: %s", pubKey.String())
-		}
-	}
-	dagaRoster := onet.NewRoster(dagaList)
-	return &Context{
-		AuthenticationContext: dagaContext,
-		Roster:                dagaRoster,
-	}, nil
-}
-
-// to be used by actors upon reception of request/reply to verify that it is part of same auth.context that was requested/is accepted.
-// in general for DAGA to work we need to check/enforce same order but this function is only to check that the context is the "same"
-// that one of our accepted context (TODO FIXME maybe not useful but maybe useful .. ).
-// after the check done, to proceed remember to keep context that is in message/request/reply for all computations.
-func (c Context) Equals(other Context) bool {
-	// TODO consider moving this in kyber daga
-	containsSameElems := func(a, b []kyber.Point) bool {
-		// use maps to mimic set, first traverse first slice and populate map
-		// then traverse second slice checking if value present in map and indeed equal (stringEq ==> eq)
-		if len(a) != len(b) {
-			return false
-		}
-		set := make(map[string]struct{}, len(a))
-		exist := struct{}{}
-		for _, p := range a {
-			set[p.String()] = exist
-		}
-		for _, p := range b {
-			if _, present := set[p.String()]; !present {
-				return false
-			}
-		}
-		return true
-	}
-
-	//if reflect.DeepEqual(c, other) {  // TODO check if it is useful... maybe can never work..
-	//	return true
-	//} else {
-	X1, Y1 := c.Members()
-	X2, Y2 := other.Members()
-	return containsSameElems(X1, X2) &&
-		containsSameElems(Y1, Y2) &&
-		containsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
-		containsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
-	// TODO QUESTION FIXME should I compare rosters (and then how ? actual content or IDs..) ? what can go wrong if same daga context and different rosters
-	// IMO nothing since if another server has knowledge of key then ... either this is bad but out of our reach or maybe legitimate use to balance workload etc.. ??
-	//}
-}
-
-func (c Context) ServerIndexOf(publicKey kyber.Point) (int, error) {
-	_, Y := c.Members()
-	return IndexOf(Y, publicKey)
-}
 
 // TODO maybe belongs to daga or maybe doesn't deserve its type..
 type PKclientVerifier func([]kyber.Point) (daga.Challenge, error)
@@ -152,7 +70,7 @@ func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitmen
 	log.Lvl3("pKClient, sending commitments to: ", dst)
 	request := PKclientCommitments{
 		Commitments: commitments,
-		Context:     *context.NetEncode(),
+		Context:     context,
 	}
 	reply := PKclientChallenge{}
 	err := c.Onet.SendProtobuf(dst, &request, &reply)

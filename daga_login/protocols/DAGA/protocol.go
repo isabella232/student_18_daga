@@ -41,10 +41,11 @@ func init() {
 // Protocol holds the state of the protocol instance.
 type Protocol struct {
 	*onet.TreeNodeInstance
-	result        chan daga.ServerMessage             // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
-	dagaServer    daga.Server                         // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
-	request       daga_login.NetAuthenticationMessage // the client's request (set by service using LeaderSetup), used only by leader/first node
-	acceptContext func(daga_login.Context) bool       // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
+	result chan daga.ServerMessage // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
+
+	dagaServer    daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
+	request       daga_login.NetAuthenticationMessage           // the client's request (set by service using LeaderSetup), used only by leader/first node
+	acceptContext func(daga_login.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -69,7 +70,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 // setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
 func (p *Protocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServer daga.Server) {
-	if p.dagaServer != nil || p.result != nil {
+	if p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
 	p.setRequest(req)
@@ -77,16 +78,15 @@ func (p *Protocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServ
 }
 
 // setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
-func (p *Protocol) ChildSetup(dagaServer daga.Server, acceptContext func(ctx daga_login.Context) bool) {
-	if p.dagaServer != nil || p.result != nil {
+func (p *Protocol) ChildSetup(acceptContext func(ctx daga_login.Context) (daga.Server, error)) {
+	if p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
-	p.setDagaServer(dagaServer)
 	p.setAcceptContext(acceptContext)
 }
 
 // setter to let know the protocol instance "what is the daga Context validation strategy"
-func (p *Protocol) setAcceptContext(acceptContext func(ctx daga_login.Context) bool) {
+func (p *Protocol) setAcceptContext(acceptContext func(ctx daga_login.Context) (daga.Server, error)) {
 	if acceptContext == nil {
 		log.Panic("protocol setup: nil context validator (acceptContext())")
 	}
@@ -95,7 +95,7 @@ func (p *Protocol) setAcceptContext(acceptContext func(ctx daga_login.Context) b
 
 // setter to let know the protocol instance "which daga.Server it is"
 func (p *Protocol) setDagaServer(dagaServer daga.Server) {
-	if dagaServer == nil { //|| reflect.ValueOf(dagaServer).IsNil() {
+	if dagaServer == nil {
 		log.Panic("protocol setup: nil daga server")
 	}
 	p.dagaServer = dagaServer
@@ -176,8 +176,10 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 	}
 
 	// check if context accepted by our node
-	if !p.acceptContext(context) {
-		return fmt.Errorf("%s: context not accepted by node", Name)
+	if dagaServer, err := p.acceptContext(context); err != nil {
+		return fmt.Errorf("%s: context not accepted by node: %s", Name, err)
+	} else {
+		p.setDagaServer(dagaServer)
 	}
 
 	// run "protocol"

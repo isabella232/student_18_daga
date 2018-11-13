@@ -8,18 +8,18 @@ import (
 	"io/ioutil"
 )
 
-//helper I use in stead of having a proper bootstrap method for now
-func ReadContext(path string) (Context, error) {
-	if msg, err := read(path); err != nil {
-		return Context{}, errors.New("readContext:" + err.Error())
-	} else {
-		if netContext, ok := msg.(*NetContext); !ok {
-			return Context{}, errors.New("readContext: type assertion error, expected NetContext")
-		} else {
-			return netContext.NetDecode()
-		}
-	}
-}
+////helper I use in stead of having a proper bootstrap method for now
+//func ReadContext(path string) (Context, error) {
+//	if msg, err := read(path); err != nil {
+//		return Context{}, errors.New("readContext:" + err.Error())
+//	} else {
+//		if netContext, ok := msg.(*NetContext); !ok {
+//			return Context{}, errors.New("readContext: type assertion error, expected NetContext")
+//		} else {
+//			return netContext.NetDecode()
+//		}
+//	}
+//}
 
 //helper I use in stead of having a proper bootstrap method for now
 func ReadServer(path string) (daga.Server, error) {

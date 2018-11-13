@@ -51,10 +51,18 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, d
 		svc.Setup = func(s *service.Service) error {
 			if s.Storage == nil {
 				dagaServer := dagaServerFromKey[s.ServerIdentity().Public.String()]
-				context := *dummyContext
 				s.Storage = &service.Storage{
-					DagaServer: *daga_login.NetEncodeServer(dagaServer),
-					Context:    *context.NetEncode(),
+					State: service.State(map[daga_login.ServiceID]service.ServiceState{
+						dummyContext.ServiceID: {
+							ID: dummyContext.ServiceID,
+							ContextStates: map[daga_login.ContextID]service.ContextState{
+								dummyContext.ID: {
+									DagaServer: *daga_login.NetEncodeServer(dagaServer),
+									Context:    *dummyContext,
+								},
+							},
+						},
+					}),
 				}
 			}
 			return nil
