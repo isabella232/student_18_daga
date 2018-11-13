@@ -27,6 +27,18 @@ const (
 	ErrorParse = iota + 4000
 )
 
+// CreateContext will initiate the context generation protocol that will result in a CreateContextReply
+type CreateContext struct {
+	ServiceID ServiceID  // used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
+	Signature []byte     // used to authenticate 3rd-party service admin  (chicken-egg problem, we need to authenticate these requests, cannot accept every request..)
+	SubscribersKeys []kyber.Point
+	// TODO replace with ID of PoP instance later (IMHO DAGA should only be concerned with keys, no how to gather them but Linus prefer other way around => maybe offer both ways)
+	// (it is the service's business to get the keys of its subscriber => can use a PoP party, can just ask for keys etc..)
+}
+type CreateContextReply struct {
+
+}
+
 // PKclientCommitments will initiate the challenge generation protocol that will result in a PKclientChallenge
 type PKclientCommitments struct {
 	Context     Context // to early reject auth requests part of context that the server doesn't care about
@@ -36,7 +48,7 @@ type PKclientChallenge daga.Challenge
 
 // Auth will start the authentication of client that will result (on success) in an AuthReply
 type Auth NetAuthenticationMessage
-type AuthReply NetServerMessage
+type AuthReply NetServerMessage // FIXME don't reply with server message and fix the dumbness in daga.server..
 
 // FIXME investigate if satori is still the package to use, saw claims that it should be deprecated in favor of newer forks
 type ServiceID uuid.UUID // ID of 3rd party service (that use DAGA as its auth. mechanism, don't confuse with Onet.ServiceID)

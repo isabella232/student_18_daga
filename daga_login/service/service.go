@@ -52,6 +52,53 @@ type Storage struct { // exported.. needed by the tests..
 	State
 }
 
+func (s *Service) validateCreateContextReq(req *daga_login.CreateContext) error {
+	// check that request is well formed
+	if req.ServiceID == daga_login.ServiceID(uuid.Nil) || len(req.Signature) == 0 || len(req.SubscribersKeys) == 0 {
+		return errors.New("validateCreateContextReq: malformed request")
+	}
+
+	// and that the request is indeed from the 3rd-party service admin
+	if err := authenticateRequest(req); err != nil {
+		return errors.New("validateCreateContextReq: failed to authenticate 3rd-party service admin")
+	}
+
+	// check that we have a partnership with the 3rd-party service (or don't if we don't care / are an open server)
+	if !s.accept3rdPartyService(req) {
+		return errors.New("validateCreateContextReq: request not accepted by this server")
+	}
+
+	return nil
+}
+
+func (s *Service) accept3rdPartyService(context *daga_login.CreateContext) bool {
+	// TODO/FIXME for later, for now open access DAGA node.. accept everything
+	return true
+}
+
+func authenticateRequest(req *daga_login.CreateContext) error {
+	// FIXME use OpenPGP (or whatever.. or don't ...) + move elsewhere (maybe utils)
+	// fetch key from keyserver or trusted 3rd party
+	// verify signature
+	return nil
+}
+
+func (s *Service) CreateContext(req *daga_login.CreateContext) (*daga_login.CreateContextReply, error) {
+	// setup if not already done
+	if err := s.Setup(s); err != nil {
+		return nil, errors.New("CreateContext: " + err.Error())
+	}
+
+	// verify that submitted request is valid and accepted by our node
+	if err := s.validateCreateContextReq(req); err != nil {
+		return nil, errors.New("CreateContext: " + err.Error())
+	}
+
+	// start context generation protocol
+	// TODO
+	return nil, errors.New("not implemented")
+}
+
 // helper to quickly validate Auth requests before proceeding further
 func (s Service) validateAuthReq(req *daga_login.Auth) (daga.Server, error) {
 	if req == nil || len(req.SCommits) == 0 || req.T0 == nil {
@@ -69,6 +116,7 @@ func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
 	if err := s.Setup(s); err != nil {
 		return nil, errors.New("Auth: " + err.Error())
 	}
+
 	// verify that submitted request is valid and accepted by our node
 	dagaServer, err := s.validateAuthReq(req)
 	if err != nil {
@@ -141,6 +189,8 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 
+	// FIXME always use context picked by our own mean and check that context in req is the exact same !!
+
 	// start challenge generation protocol
 	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(*req, dagaServer); err != nil {
 		return nil, errors.New("PKClient: " + err.Error())
@@ -178,7 +228,6 @@ func (s *Service) newDAGAServerProtocol(req daga_login.NetAuthenticationMessage,
 
 // function called to initialize and start a new DAGAChallengeGeneration protocol where current node takes a Leader role
 func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientCommitments, dagaServer daga.Server) (*DAGAChallengeGeneration.Protocol, error) {
-	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 	// build tree with leader as root
 	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
@@ -208,6 +257,7 @@ func (s *Service) newDAGAChallengeGenerationProtocol(req daga_login.PKclientComm
 // if it returns nil, nil then the default NewProtocol is called (the one defined in protocol)
 // FIXME outdated documentation in template
 // TODO share code between protocols (same structure, cast to new interface and call ChildSetup on it ?)
+// TODO and if like now the setup becomes more and more similar to the one for Leader, consider making small modifications to get rid of this NewProtocol, return nil, nil and have everything in protocol if possible
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl3("received protocol msg, instantiating new protocol instance of " + tn.ProtocolName())
 	// setup if not already done
@@ -295,7 +345,7 @@ func newService(c *onet.Context) (onet.Service, error) {
 	s := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
 	}
-	if err := s.RegisterHandlers(s.Auth, s.PKClient); err != nil {
+	if err := s.RegisterHandlers(s.Auth, s.PKClient, s.CreateContext); err != nil {
 		return nil, errors.New("Couldn't register service's API handlers/messages: " + err.Error())
 	}
 	s.Setup = setupState

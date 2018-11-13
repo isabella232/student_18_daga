@@ -12,9 +12,13 @@ type State map[daga_login.ServiceID]ServiceState // per 3rd party service state 
 type LinkageTag kyber.Point
 
 type SubscriberState struct {
-	Key kyber.Point // current public key of the anon subscriber (!= key in auth. context) used to log-in (challenge response) QUESTION can very well use another "challenge response tool" instead like password hash techniques
+	Key kyber.Point // current public key of the anon subscriber (!= key in auth. context) used to log-in (challenge response, can very well use another "challenge response tool" instead like password hash techniques
+	// => Linus doesn't like the idea (indeed service needs to ask daga for mappings etc..but on the other hand more flexible and support different kind of "authentication/challenge-response" while not tying the thing to DAGA protocol)
 	// TODO track # of auth, add TTL etc..
 }
+
+// TODO/FIXME for now keep current structure while keeping in mind that we decided to retrieve group from byzcoin pop instance and to put contexts/service state in a daga instance on the chain
+// sketch both architectures and compare advantages/drawbacks
 
 // hold the state related to a 3rd-party service
 type ServiceState struct { // TODO better name to not confuse with daga service or don't care and use godoc for that
