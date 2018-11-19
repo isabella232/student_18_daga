@@ -20,9 +20,12 @@ const Name = "DAGAChallengeGeneration"
 // Announce is sent from Leader upon reception of a client request.
 // it request that all other nodes generate a new challenge and send back a signed commitment to their challenge.
 type Announce struct {
-	LeaderCommit        daga.ChallengeCommitment // contains the signed commitment of the Leader
-	PKClientCommitments []kyber.Point            // the PKClient commitments (to tie them to the signatures issued at Finalize-time and avoid malicious agents being tempted to cheat/alter proof transcript)
-	Context             daga_login.Context       // the context (of the original client request) (and hence the server keys used to verify signatures and eventually for the other nodes to check if they accept the request too)
+	LeaderCommit        daga.ChallengeCommitment    // contains the signed commitment of the Leader
+
+	// original request:
+	// the PKClient commitments (to tie them to the signatures issued at Finalize-time and avoid malicious agents being tempted to cheat/alter proof transcript)
+	// the context (of the original client request) (and hence the server keys used to verify signatures and eventually for the other nodes to check if they accept the request too)
+	OriginalRequest daga_login.PKclientCommitments
 }
 
 // StructAnnounce just contains Announce and the data necessary to identify and
@@ -36,8 +39,6 @@ type StructAnnounce struct {
 // AnnounceReply is sent from all nodes back to the Leader, it contains what the leader asked, their signed commitment to a Challenge
 type AnnounceReply struct {
 	Commit daga.ChallengeCommitment
-	// TODO see if need to embed context too (don't think so but
-	// QUESTION if it is the case what happens ?? same "struct signature thn announce " how is it handled by onet ?)
 }
 
 // StructAnnounceReply just contains AnnounceReply and the data necessary to identify and
@@ -46,9 +47,6 @@ type StructAnnounceReply struct {
 	*onet.TreeNode
 	AnnounceReply
 }
-
-// QUESTION can I define []StructAnnounceReply type alias to be able to define methods such as allCommitments()
-// will it be recognized by framework as []StructAnnounceReply
 
 // Open is sent from Leader upon reception and verification of all AnnounceReply.
 // it request that all other nodes send back their openings

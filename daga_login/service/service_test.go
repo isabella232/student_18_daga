@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"github.com/dedis/kyber"
+	"github.com/dedis/kyber/util/key"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
@@ -21,20 +22,19 @@ func TestMain(m *testing.M) {
 }
 
 // override/replace the Setup function of the Service(s) with a function that populate their state/storage with
-// the dagaServer and context provided
+// the dagaServers and context provided
 func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, context daga_login.Context) {
-	dagaServerFromKey := testing2.DagaServerFromKey(dagaServers)
-	for _, s := range services {
+	for i, s := range services {
 		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
 		service := s.(*Service)
 		service.Setup = func(s *Service) error {
 			if s.Storage == nil {
-				dagaServer := dagaServerFromKey[s.ServerIdentity().Public.String()]
+				dagaServer := dagaServers[i]
 				s.Storage = &Storage{
-					State: State(map[daga_login.ServiceID]ServiceState{
+					State: State(map[daga_login.ServiceID]*ServiceState{
 						context.ServiceID: {
 							ID: context.ServiceID,
-							ContextStates: map[daga_login.ContextID]ContextState{
+							ContextStates: map[daga_login.ContextID]*ContextState{
 								context.ID: {
 									DagaServer: *daga_login.NetEncodeServer(dagaServer),
 									Context:    context,
@@ -45,6 +45,59 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, c
 				}
 			}
 			return nil
+		}
+	}
+}
+
+// verify that CreateContext call succeed on valid request
+func TestService_CreateContext(t *testing.T) {
+	local := onet.NewTCPTest(tSuite)
+	hosts, roster, _ := local.GenTree(5, true)
+	defer local.CloseAll()
+
+	services := local.GetServices(hosts, DagaID)
+
+	// override Setup
+	unusedServers := make([]daga.Server, 0, len(services))
+	for _, _ = range services {
+		dagaServer, _ := daga.NewServer(tSuite, 0, nil)
+		unusedServers = append(unusedServers, dagaServer)
+	}
+	unusedContext := daga_login.Context{}
+	overrideServicesSetup(services, unusedServers, unusedContext)
+
+	for _, s := range services {
+		log.Lvl2("Sending request to", s)
+
+		// create valid request
+		request := daga_login.CreateContext{
+			ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
+			DagaNodes: roster,
+			SubscribersKeys: testing2.RandomPointSlice(32),
+		}
+
+		// TODO use openPGP (now there is no verification at all)
+		keyPair := key.NewKeyPair(tSuite)
+		hasher := tSuite.Hash()
+		hasher.Write(uuid.UUID(request.ServiceID).Bytes())
+		pointBytes, err := daga.PointArrayToBytes(request.SubscribersKeys)
+		require.NoError(t, err)
+		hasher.Write(pointBytes)
+		// TODO auth roster too..
+		signature, err := daga.SchnorrSign(tSuite, keyPair.Private, hasher.Sum(nil))
+		request.Signature = signature
+
+		reply, err := s.(*Service).CreateContext(&request)
+		require.NoError(t, err)
+		require.NotZero(t, reply)
+
+		// verify correctness ...
+		context := reply.Context
+		_, Y := context.Members()
+		contextBytes, err := daga.AuthenticationContextToBytes(context)  // TODO see to include other things (roster Ids etc..)
+		require.NoError(t, err)
+		for i, pubKey := range Y {
+			require.NoError(t, daga.SchnorrVerify(tSuite, pubKey, contextBytes, context.Signatures[i]))
 		}
 	}
 }
@@ -75,7 +128,7 @@ func TestService_PKClient(t *testing.T) {
 		require.NotZero(t, reply)
 
 		// verify that all servers correctly signed the challenge
-		// QUESTION: not sure if I should test theses here.. IMO the sut is the protocol, not the daga code it uses
+		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
 		_, Y := dummyContext.Members()
 		daga.Challenge(*reply).VerifySignatures(tSuite, Y, commitments)
 	}
@@ -215,7 +268,7 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 func TestValidatePKClientReqShouldErrorOnNilRequest(t *testing.T) {
 	service := &Service{}
 
-	context, err := service.validatePKClientReq(nil)
+	context, err := service.ValidatePKClientReq(nil)
 	require.Error(t, err, "should return error on nil request")
 	require.Zero(t, context)
 }
@@ -223,13 +276,13 @@ func TestValidatePKClientReqShouldErrorOnNilRequest(t *testing.T) {
 func TestValidatePKClientReqShouldErrorOnEmptyOrBadlySizedCommitments(t *testing.T) {
 	service := &Service{}
 
-	context, err := service.validatePKClientReq(&daga_login.PKclientCommitments{
+	context, err := service.ValidatePKClientReq(&daga_login.PKclientCommitments{
 		Context: daga_login.Context{},
 	})
 	require.Error(t, err, "should return error on empty request")
 	require.Zero(t, context)
 
-	context, err = service.validatePKClientReq(&daga_login.PKclientCommitments{
+	context, err = service.ValidatePKClientReq(&daga_login.PKclientCommitments{
 		Context: daga_login.Context{
 			MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
 				H: testing2.RandomPointSlice(8),

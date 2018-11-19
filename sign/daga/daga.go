@@ -7,15 +7,13 @@ package daga
 // TODO QUESTION FIXME how to securely erase secrets ?
 // TODO see what to export and what not, for now mostly everything private
 import (
-	"crypto/sha512"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/sign/schnorr"
 	"github.com/dedis/kyber/util/key"
 	"hash"
-	"io"
+	"strconv"
 )
 
 // Suite represents the set of functionalities needed for the DAGA package to operate
@@ -166,7 +164,7 @@ func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error)
 }
 
 //ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures
-func authenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
+func AuthenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
 	X, Y := ac.Members()
 	temp, e := PointArrayToBytes(X)
 	if e != nil {
@@ -198,9 +196,9 @@ func authenticationContextToBytes(ac AuthenticationContext) (data []byte, err er
 //PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures
 func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	for _, p := range array {
-		temp, e := p.MarshalBinary()
+		temp, e := p.MarshalBinary()  // hope p not nil..
 		if e != nil {
-			return nil, fmt.Errorf("Error in S: %s", e)
+			return nil, e
 		}
 		data = append(data, temp...)
 	}
@@ -212,7 +210,7 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 	for _, s := range array {
 		temp, e := s.MarshalBinary()
 		if e != nil {
-			return nil, fmt.Errorf("Error in S: %s", e)
+			return nil, e
 		}
 		data = append(data, temp...)
 	}
@@ -221,7 +219,7 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 
 //ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures
 func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
-	data, e := authenticationContextToBytes(msg.C)
+	data, e := AuthenticationContextToBytes(msg.C)
 	if e != nil {
 		return nil, fmt.Errorf("error in context: %s", e)
 	}
@@ -255,20 +253,14 @@ func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen
 	if len(commits) <= 0 {
 		return nil, fmt.Errorf("Wrong commits:\n%v", commits)
 	}
-	// QUESTION FIXME why sha3(sha512()) was previously used ?
-	// TODO remember that I didn't write it, see later when building service if correct etc..
-	// QUESTION should we ensure that no 2 client get same generator ?
-	hasher := sha512.New()
-	var writer io.Writer = hasher // ...
-	idb := make([]byte, 4)
-	binary.BigEndian.PutUint32(idb, uint32(index)) // TODO verify
-	writer.Write(idb)
-	for _, R := range commits {
-		R.MarshalTo(writer)
+	hasher := suite.Hash()
+	hasher.Write([]byte(strconv.Itoa(index)))
+	if pointBytes, err := PointArrayToBytes(commits); err != nil {
+		return nil, err
+	} else {
+		hasher.Write(pointBytes)
 	}
-	hash := hasher.Sum(nil)
-	hasher = suite.Hash()
-	hasher.Write(hash)
-	gen = suite.Point().Mul(suite.Scalar().SetBytes(hasher.Sum(nil)), nil)
+	exponent := suite.Scalar().SetBytes(hasher.Sum(nil))
+	gen = suite.Point().Mul(exponent, nil)
 	return
 }

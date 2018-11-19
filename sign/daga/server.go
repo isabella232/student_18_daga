@@ -716,9 +716,9 @@ func (proof ServerProof) ToBytes() (data []byte, err error) {
 
 /*GenerateNewRoundSecret creates a new secret for the server.
 It returns the commitment to that secret to be included in the context and the new server*/
-func GenerateNewRoundSecret(suite Suite, server Server) (kyber.Point, Server) {
-	// FIXME rethink + instead store kp in server
+func GenerateNewRoundSecret(suite Suite, server Server) (kyber.Point) {
+	// FIXME rethink + instead store kp in server + make it a method of interfaceServer and stop exporting setroundsecret
 	kp := key.NewKeyPair(suite)
 	server.SetRoundSecret(kp.Private)
-	return kp.Public, server
+	return kp.Public
 }

@@ -5,7 +5,6 @@ This holds the messages used to communicate with the service over the network.
 */
 
 import (
-	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/network"
@@ -32,11 +31,15 @@ type CreateContext struct {
 	ServiceID ServiceID  // used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
 	Signature []byte     // used to authenticate 3rd-party service admin  (chicken-egg problem, we need to authenticate these requests, cannot accept every request..)
 	SubscribersKeys []kyber.Point
-	// TODO replace with ID of PoP instance later (IMHO DAGA should only be concerned with keys, no how to gather them but Linus prefer other way around => maybe offer both ways)
+	// TODO replace with ID of PoP instance later (IMHO DAGA should only be concerned with keys, no how the service gather them but Linus prefer other way around => maybe offer both ways)
 	// (it is the service's business to get the keys of its subscriber => can use a PoP party, can just ask for keys etc..)
+	// TODO FIXME + remember that DAGA expect Keys from the daga.Suite in use (=> maybe different from the PoP party => to be correct/general/etc.. would need KDFs)
+	DagaNodes *onet.Roster  // all the nodes that the 3rd-party service wants to include in its DAGA cothority
 }
-type CreateContextReply struct {
 
+type CreateContextReply struct {
+	Context Context
+	// TODO replace with ID of byzcoin instance later (but IMHO DAGA should not be concerned in how the service distribute / publish context => can use bizcoin to manage its own state but this is different from forcing every users(clients or services) to use byzcoin to retrieve context)
 }
 
 // PKclientCommitments will initiate the challenge generation protocol that will result in a PKclientChallenge
@@ -58,44 +61,28 @@ type ContextID uuid.UUID
 // and embed a corresponding Onet roster (how to reach the DAGA servers)
 type Context struct {
 	ID        ContextID
-	ServiceID ServiceID // ID of the 3rd-party service that use this context for auth. purposes
+	ServiceID ServiceID  // ID of the 3rd-party service that use this context for auth. purposes
+	Signatures [][]byte  // signatures that show endorsement of the context by all the daga servers
 	daga.MinimumAuthenticationContext
 	*onet.Roster
 }
 
-// returns a pointer to newly allocated Context struct initialized with the provided daga.AuthenticationContext
-// and a subset of fullRoster containing only the servers that are part of the daga.AuthenticationContext.
-// additionally, checks that the provided fullRoster contains at least one ServerIdentity for each DAGA server in dagaContext
-func NewContext(dagaContext daga.AuthenticationContext, fullRoster onet.Roster, serviceID ServiceID) (*Context, error) {
+// returns a pointer to newly allocated Context struct initialized with the provided daga.AuthenticationContext and roster
+func NewContext(dagaContext daga.AuthenticationContext, roster *onet.Roster, serviceID ServiceID, signatures [][]byte) (*Context, error) {
 
-	// maps public keys to the full identity
-	serverId := make(map[string]*network.ServerIdentity, len(fullRoster.List))
-	for _, sid := range fullRoster.List {
-		serverId[sid.Public.String()] = sid
-	}
-
-	// builds new (sub)-roster
-	X, Y := dagaContext.Members()
-	dagaList := make([]*network.ServerIdentity, 0, len(Y))
-	for _, pubKey := range Y {
-		if sid, ok := serverId[pubKey.String()]; ok {
-			dagaList = append(dagaList, sid)
-		} else {
-			return nil, fmt.Errorf("NewContext: provided roster doesn't contain an Identity for daga server with publicKey: %s", pubKey.String())
-		}
-	}
 	// TODO or instead create and export a daga function that validate context components
 	// recreate a daga context (and verify that the provided context is valid)
+	X, Y := dagaContext.Members()
 	newDagaContext, err := daga.NewMinimumAuthenticationContext(X, Y, dagaContext.ServersSecretsCommitments(), dagaContext.ClientsGenerators())
 	if err != nil {
 		return nil, err
 	}
-	dagaRoster := onet.NewRoster(dagaList)
 	return &Context{
 		ID:                           ContextID(uuid.Must(uuid.NewV4())),
 		ServiceID:                    serviceID,
+		Signatures: signatures,
 		MinimumAuthenticationContext: *newDagaContext,
-		Roster:                       dagaRoster,
+		Roster:                       roster,
 	}, nil
 }
 
@@ -104,38 +91,20 @@ func NewContext(dagaContext daga.AuthenticationContext, fullRoster onet.Roster, 
 // that one of our accepted context (TODO FIXME maybe not useful but maybe useful .. ).
 // after the check done, to proceed remember to keep context that is in message/request/reply for all computations.
 // FIXME compare IDs and basta, (maybe enforce strict equality by making context embed an hash of the fields that need to be strictly equal)
-// drop the idea that it might be useful to have "different-same" contexts (premature optimisation + if we)
+// and drop the idea that it might be useful to have "different-same" contexts (premature optimisation + dumb (unless we consider having ~random group members assigned in unpredictable ways to mitigate the problem of context propagation and anonymity when new subscriber arrive and old leave)
 // (different rosters => legitimate use to balance workload etc.. ??)
 func (c Context) Equals(other Context) bool {
 	// TODO consider moving this in kyber daga
-	containsSameElems := func(a, b []kyber.Point) bool {
-		// use maps to mimic set, first traverse first slice and populate map
-		// then traverse second slice checking if value present in map and indeed equal (stringEq ==> eq)
-		if len(a) != len(b) {
-			return false
-		}
-		set := make(map[string]struct{}, len(a))
-		exist := struct{}{}
-		for _, p := range a {
-			set[p.String()] = exist
-		}
-		for _, p := range b {
-			if _, present := set[p.String()]; !present {
-				return false
-			}
-		}
-		return true
-	}
 
 	//if reflect.DeepEqual(c, other) {  // TODO check if it is useful... maybe can never work..
 	//	return true
 	//} else {
 	X1, Y1 := c.Members()
 	X2, Y2 := other.Members()
-	return containsSameElems(X1, X2) &&
-		containsSameElems(Y1, Y2) &&
-		containsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
-		containsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
+	return ContainsSameElems(X1, X2) &&
+		ContainsSameElems(Y1, Y2) &&
+		ContainsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
+		ContainsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
 	//}
 }
 

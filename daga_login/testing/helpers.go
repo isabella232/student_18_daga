@@ -8,6 +8,7 @@ import (
 	"github.com/dedis/student_18_daga/daga_login"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGA"
 	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAChallengeGeneration"
+	"github.com/dedis/student_18_daga/daga_login/protocols/DAGAContextGeneration"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func init() {
 	log.ErrFatal(err)
 }
 
-// dummyService to provide state to the protocol instances
+// dummyService to provide state to the protocol instances when testing the protocols
 type DummyService struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
@@ -97,6 +98,30 @@ func (s DummyService) NewDAGAServerProtocol(t *testing.T, req daga_login.NetAuth
 	return dagaProtocol
 }
 
+// function called to initialize and start a new DAGA server protocol where current node takes a Leader role
+// "dummy" counterpart of daga_login.service.newDAGAServerProtocol() keep them more or less in sync
+func (s DummyService) NewDAGAContextGenerationProtocol(t *testing.T, req *daga_login.CreateContext) *DAGAContextGeneration.Protocol {
+	// build tree with leader as root
+	roster := req.DagaNodes
+	// pay attention to the fact that, for the protocol to work, the tree needs to be correctly shaped !!
+	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
+	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
+
+	// create and setup protocol instance
+	pi, err := s.CreateProtocol(DAGAContextGeneration.Name, tree)
+	require.NoError(t, err, "failed to create " + DAGAContextGeneration.Name)
+	require.NotNil(t, pi, "nil protocol instance but no error")
+	contextGeneration := pi.(*DAGAContextGeneration.Protocol)
+	contextGeneration.LeaderSetup(req)
+
+	// start
+	err = contextGeneration.Start()
+	require.NoError(t, err, "failed to start %s protocol: %s", DAGA.Name, err)
+
+	log.Lvlf3("service started %s protocol, waiting for completion", DAGAContextGeneration.Name)
+	return contextGeneration
+}
+
 // NewProtocol is called upon reception of a Protocol's first message when Onet needs
 // to instantiate the protocol. A Service is expected to manually create
 // the ProtocolInstance it is using. So this method will be potentially called on all nodes of a Tree (except the root, since it is
@@ -111,7 +136,9 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 			return nil, err
 		}
 		challengeGeneration := pi.(*DAGAChallengeGeneration.Protocol)
-		challengeGeneration.ChildSetup(s.AcceptContext)
+		challengeGeneration.ChildSetup(func(req *daga_login.PKclientCommitments) (daga.Server, error) {
+			return s.AcceptContext(req.Context)
+		})
 		return challengeGeneration, nil
 	case DAGA.Name:
 		pi, err := DAGA.NewProtocol(tn)
@@ -121,6 +148,16 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 		dagaProtocol := pi.(*DAGA.Protocol)
 		dagaProtocol.ChildSetup(s.AcceptContext)
 		return dagaProtocol, nil
+	case DAGAContextGeneration.Name:
+		pi, err := DAGAContextGeneration.NewProtocol(tn)
+		if err != nil {
+			return nil, err
+		}
+		contextGeneration := pi.(*DAGAContextGeneration.Protocol)
+		contextGeneration.ChildSetup(func(req *daga_login.CreateContext) error {
+			return nil // TODO, now we don't have much to check..
+		})
+		return contextGeneration, nil
 	default:
 		log.Panic("protocol not implemented/known")
 	}
@@ -130,13 +167,12 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 // TODO add possibility to return bad challenge channel
 func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []daga.Client, dagaServers []daga.Server,
 	dummyAuthRequest *daga.AuthenticationMessage, dummyContext *daga_login.Context) {
-	var serverKeys []kyber.Scalar
-	servers := local.Servers
-	for _, server := range servers {
-		serverKeys = append(serverKeys, local.GetPrivate(server))
+
+	dagaClients, dagaServers, minDagaContext, err := daga.GenerateTestContext(tSuite, rand.Intn(10)+2, len(local.Servers))
+	if err != nil {
+		log.Panic(err.Error())
 	}
-	dagaClients, dagaServers, minDagaContext, _ := daga.GenerateContext(tSuite, rand.Intn(10)+2, serverKeys)
-	dummyContext, _ = daga_login.NewContext(minDagaContext, *roster, daga_login.ServiceID(uuid.Must(uuid.NewV4())))
+	dummyContext, _ = daga_login.NewContext(minDagaContext, roster, daga_login.ServiceID(uuid.Must(uuid.NewV4())), nil)
 
 	// TODO QUESTION what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package with all helper ?
 	dummyChallengeChannel := func(commitments []kyber.Point) (daga.Challenge, error) {
@@ -173,6 +209,7 @@ func DagaServerFromKey(dagaServers []daga.Server) map[string]daga.Server {
 	return dagaServerFromKey
 }
 
+// used to test the protocols, dummy test service
 func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *daga.AuthenticationMessage, *daga_login.Context) {
 	// local test environment
 	servers, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
@@ -183,10 +220,9 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	_, dagaServers, dummyRequest, dummyContext := DummyDagaSetup(local, roster)
 
 	// populate dummy service states (real life we will need a setup protocol/procedure)
-	dagaServerFromKey := DagaServerFromKey(dagaServers)
-	for _, service := range services {
+	for i, service := range services {
 		service := service.(*DummyService)
-		service.DagaServer = dagaServerFromKey[service.ServerIdentity().Public.String()]
+		service.DagaServer = dagaServers[i]
 		service.AcceptContext = func(context daga_login.Context) (daga.Server, error) {
 			if context.Equals(*dummyContext) {
 				return service.DagaServer, nil

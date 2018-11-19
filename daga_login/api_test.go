@@ -44,18 +44,17 @@ func TestMain(m *testing.M) {
 // the dagaServer and context provided
 // TODO helper used to test API too => better to move to testing helpers => but KO import cycles..
 func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, dummyContext *daga_login.Context) {
-	dagaServerFromKey := testing2.DagaServerFromKey(dagaServers)
-	for _, s := range services {
+	for i, s := range services {
 		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
 		svc := s.(*service.Service)
 		svc.Setup = func(s *service.Service) error {
 			if s.Storage == nil {
-				dagaServer := dagaServerFromKey[s.ServerIdentity().Public.String()]
+				dagaServer := dagaServers[i]
 				s.Storage = &service.Storage{
-					State: service.State(map[daga_login.ServiceID]service.ServiceState{
+					State: service.State(map[daga_login.ServiceID]*service.ServiceState{
 						dummyContext.ServiceID: {
 							ID: dummyContext.ServiceID,
-							ContextStates: map[daga_login.ContextID]service.ContextState{
+							ContextStates: map[daga_login.ContextID]*service.ContextState{
 								dummyContext.ID: {
 									DagaServer: *daga_login.NetEncodeServer(dagaServer),
 									Context:    *dummyContext,

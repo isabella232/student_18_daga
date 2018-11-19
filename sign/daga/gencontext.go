@@ -13,7 +13,7 @@ func GenerateContext(suite Suite, c int, serverKeys []kyber.Scalar) ([]Client, [
 }
 
 // creates a context to be used in the tests
-func generateTestContext(suite Suite, c, s int) ([]Client, []Server, AuthenticationContext, error) {
+func GenerateTestContext(suite Suite, c, s int) ([]Client, []Server, AuthenticationContext, error) {
 	return generateContext(suite, c, s, nil)
 }
 
@@ -27,6 +27,7 @@ func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Cli
 		return nil, nil, nil, fmt.Errorf("invalid number of servers: %d", s)
 	}
 
+	// TODO alternatively specify only optServerKeys
 	if s > 0 && len(optServerKeys) != 0 {
 		return nil, nil, nil, errors.New("invalid number of servers: cannot specify both s and optServerKeys")
 	}
@@ -49,10 +50,9 @@ func generateContext(suite Suite, c, s int, optServerKeys []kyber.Scalar) ([]Cli
 
 	//Generates the per-round secrets for the ServerSignature and keep track of the commits
 	perRoundSecretCommits := make([]kyber.Point, 0, s)
-	for i, serv := range servers {
-		R, server := GenerateNewRoundSecret(suite, serv)
+	for _, serv := range servers {
+		R := GenerateNewRoundSecret(suite, serv)
 		perRoundSecretCommits = append(perRoundSecretCommits, R)
-		servers[i] = server
 	}
 
 	//Generates c clients with their per-round generators

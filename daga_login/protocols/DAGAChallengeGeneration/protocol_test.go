@@ -145,7 +145,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 	pi, _ = local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
-	pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(daga_login.Context) (daga.Server, error) {
+	pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(*daga_login.PKclientCommitments) (daga.Server, error) {
 		return dagaServers[0], nil
 	})
 	require.Panics(t, func() {
@@ -165,7 +165,7 @@ func TestChildrenSetup(t *testing.T) {
 	defer pi.(*DAGAChallengeGeneration.Protocol).Done()
 
 	require.NotPanics(t, func() {
-		pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(daga_login.Context) (daga.Server, error) {
+		pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(*daga_login.PKclientCommitments) (daga.Server, error) {
 			return dagaServers[0], nil
 		})
 	}, "should not panic on valid input")
@@ -198,11 +198,11 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 	}
 	pi, _ := local.CreateProtocol(DAGAChallengeGeneration.Name, tree)
 
-	pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(daga_login.Context) (daga.Server, error) {
+	pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(*daga_login.PKclientCommitments) (daga.Server, error) {
 		return dagaServers[0], nil
 	})
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(daga_login.Context) (daga.Server, error) {
+		pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(*daga_login.PKclientCommitments) (daga.Server, error) {
 			return dagaServers[0], nil
 		})
 	}, "should panic on already initialized node")
@@ -213,7 +213,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	pi.(*DAGAChallengeGeneration.Protocol).LeaderSetup(dummyReq, dagaServers[0])
 	require.Panics(t, func() {
-		pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(daga_login.Context) (daga.Server, error) {
+		pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(*daga_login.PKclientCommitments) (daga.Server, error) {
 			return dagaServers[0], nil
 		})
 	}, "should panic on already initialized node")
@@ -275,7 +275,7 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 
 	// TODO test name little misleading but ..
 
-	pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(daga_login.Context) (daga.Server, error) {
+	pi.(*DAGAChallengeGeneration.Protocol).ChildSetup(func(*daga_login.PKclientCommitments) (daga.Server, error) {
 		return dagaServers[0], nil
 	})
 	require.Panics(t, func() {

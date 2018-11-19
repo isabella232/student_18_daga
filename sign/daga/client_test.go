@@ -30,7 +30,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestNewInitialTagAndCommitments(t *testing.T) {
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// normal execution
 	_, Y := context.Members()
@@ -87,7 +87,7 @@ func newBadServerChannels(evilCs kyber.Scalar, evilSigs []ServerSignature) func(
 
 func TestNewClientProof(t *testing.T) {
 	// setup, test context, clients, servers
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -231,7 +231,7 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 
 func TestVerifyClientProof(t *testing.T) {
 	// setup, test context, clients, servers
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -288,7 +288,7 @@ func TestVerifyClientProof(t *testing.T) {
 
 func TestGetFinalLinkageTag(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -334,7 +334,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
-	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, 1)
+	clients, servers, context, _ = GenerateTestContext(suite, rand.Intn(10)+2, 1)
 	_, Y := context.Members()
 	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
@@ -400,7 +400,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
-	clients, servers, context, _ = generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
+	clients, servers, context, _ = GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 	//Assemble the client message
 	_, Y = context.Members()
 	tagAndCommitments, s = newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
@@ -440,7 +440,7 @@ func TestGetFinalLinkageTag(t *testing.T) {
 // FIXME or (but I won't lose more time on this) rewrite everything to follow best testing practises (more better named small tests for a start)
 func TestValidateClientMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+1, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -497,7 +497,7 @@ func TestValidateClientMessage(t *testing.T) {
 
 func TestToBytes_AuthenticationMessage(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())
@@ -515,7 +515,7 @@ func TestToBytes_AuthenticationMessage(t *testing.T) {
 
 func TestToBytes_ClientProof(t *testing.T) {
 	// setup, test context, clients, servers, and "network channel"
-	clients, servers, context, _ := generateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
+	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+1)
 
 	// setup dummy server "channels"
 	cs := suite.Scalar().Pick(suite.RandomStream())

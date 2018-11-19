@@ -48,9 +48,11 @@ type Protocol struct {
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
 	dagaServer          daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
+
+	// FIXME store original request instead (now I don't have to decode anymore => doesnt make sense to separate the fields)
 	context             daga_login.Context                            // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
 	pKClientCommitments []kyber.Point                                 // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
-	acceptContext       func(daga_login.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
+	acceptRequest       func(*daga_login.PKclientCommitments) (daga.Server, error) // a function to call to verify that request is accepted by our node (set by service at protocol creation time) and valid
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -79,35 +81,39 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 func (p *Protocol) LeaderSetup(req daga_login.PKclientCommitments, dagaServer daga.Server) {
 	// TODO consider removing the dagaServer parameter and accept a context validator that returns dagaserver (like in ChildSetup)
 	// TODO +: less differences between leader and child -: redundant checks
-	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
+	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptRequest != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
-	p.setContext(req.Context)
-	if len(req.Commitments) != len(p.context.ClientsGenerators())*3 {
+	if len(req.Context.R) == 0 || len(req.Context.H) == 0 || req.Context.Roster == nil {  // TODO maybe remove already checked by service + see remarks above
+		log.Panic("protocol setup: empty request")
+	}
+	p.context = req.Context
+	if len(req.Commitments) != len(p.context.ClientsGenerators())*3 {  // TODO maybe remove, already checked by service
 		log.Panic("protocol setup: wrong commitments length")
 	}
-	p.setPKClientCommitments(req.Commitments)
+	p.pKClientCommitments = req.Commitments
 	p.setDagaServer(dagaServer)
 	p.commitments = make([]daga.ChallengeCommitment, len(p.Tree().List()))
 	p.openings = make([]kyber.Scalar, len(p.Tree().List()))
 }
 
 // setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
-func (p *Protocol) ChildSetup(acceptContext func(ctx daga_login.Context) (daga.Server, error)) {
-	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
+func (p *Protocol) ChildSetup(acceptRequest func(*daga_login.PKclientCommitments) (daga.Server, error)) {
+	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptRequest != nil {
 		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
-	p.setAcceptContext(acceptContext)
+	p.setAcceptRequest(acceptRequest)
 	p.commitments = make([]daga.ChallengeCommitment, 1)
 	p.openings = make([]kyber.Scalar, 1)
 }
 
-// setter to let know the protocol instance "what is the daga Context validation strategy"
-func (p *Protocol) setAcceptContext(acceptContext func(ctx daga_login.Context) (daga.Server, error)) {
-	if acceptContext == nil {
-		log.Panic("protocol setup: nil context validator (acceptContext())")
+// TODO see if I keep those setters (if yes maybe add again the one I removed..) or if way too overkill and stupid
+// setter to let know the protocol instance "what is the request validation strategy"
+func (p *Protocol) setAcceptRequest(acceptRequest func(*daga_login.PKclientCommitments) (daga.Server, error)) {
+	if acceptRequest == nil {
+		log.Panic("protocol setup: nil request validator (acceptRequest())")
 	}
-	p.acceptContext = acceptContext
+	p.acceptRequest = acceptRequest
 }
 
 // setter to let know the protocol instance "which daga.Server it is"
@@ -116,20 +122,6 @@ func (p *Protocol) setDagaServer(dagaServer daga.Server) {
 		log.Panic("protocol setup: nil daga server")
 	}
 	p.dagaServer = dagaServer
-}
-
-// setter used to provide the context of the original PKClient request to the protocol instance
-func (p *Protocol) setContext(reqContext daga_login.Context) {
-	p.context = reqContext
-}
-
-// setter used to provide PKClient commitments to the protocol instance
-func (p *Protocol) setPKClientCommitments(commitments []kyber.Point) {
-	if len(commitments) == 0 {
-		// TODO FIXME would be nice to share with service the validator helpers..and to pack setContext and setPKclien.. in a single method setRequest
-		log.Panic("protocol setup: empty PKClient commitments")
-	}
-	p.pKClientCommitments = commitments
 }
 
 // method called to update state of the protocol (add opening) (sanity checks)
@@ -217,8 +209,10 @@ func (p *Protocol) Start() (err error) {
 	// TODO or add a "BroadcastInParallel" method
 	errs := p.Broadcast(&Announce{
 		LeaderCommit:        *leaderChallengeCommit,
-		Context:             p.context,
-		PKClientCommitments: p.pKClientCommitments,
+		OriginalRequest: daga_login.PKclientCommitments{
+			Commitments: p.pKClientCommitments,
+			Context: p.context,
+		},
 	})
 	if len(errs) != 0 {
 		return fmt.Errorf(Name+": failed to start: broadcast of Announce failed with error(s): %v", errs)
@@ -253,25 +247,18 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 	log.Lvlf3("%s: Received Leader's Announce", Name)
 	leaderTreeNode := msg.TreeNode
 
-	// store context in state
-	if dagaServer, err := p.acceptContext(msg.Context); err != nil {
+	// validate request (valid + accepted) and update state
+	if dagaServer, err := p.acceptRequest(&msg.OriginalRequest); err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	} else {
-		p.setContext(msg.Context)
+		p.context = msg.OriginalRequest.Context
+		p.pKClientCommitments = msg.OriginalRequest.Commitments
 		p.setDagaServer(dagaServer)
 	}
 
-	if len(msg.PKClientCommitments) != len(p.context.ClientsGenerators())*3 {
-		log.Panic(Name + ": failed to handle Leader's Announce: wrong commitments length")
-	}
-	// store PKClient commitments in state (TODO FIXME see remark above on merging those actions in one method + share req validator helper with Service and LeaderSetup)
-	p.setPKClientCommitments(msg.PKClientCommitments)
-
 	// verify signature of Leader's commitment
-	// FIXME fetch the key from the auth. context instead of from treeNode !
-	// FIXME/TODO then validate context before proceeding see discussion in https://github.com/dedis/student_18_daga/issues/25
-	// FIXME ==> need ways for the service to communicate the accepted context to the protocol instance => do as was done in server's protocol, pass validator callback to childrensetup
-
+	// FIXME WHY ??: if we trust the rosters all these node-node signatures/authentication are useless since it is handled by the DEDIS-tls in Onet..
+	// FIXME and if we don't, we need to fetch the key from the auth. context => leader need to send its own index in context with annouce
 	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, leaderTreeNode.ServerIdentity.Public)
 	if err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
