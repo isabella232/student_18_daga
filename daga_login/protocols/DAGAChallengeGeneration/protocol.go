@@ -415,7 +415,7 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 		// FIXME OR (equivalent/same) enforce same order in context.members and in context.roster <== easier and probably best but need to documente and add checks
 		// FIXME OR (equivalent/same) store mapping in Context => reorganize context to store {Y,R,serveridentity} together and add methods to retrieve roster out of this for when roster needed (more elegant but..)
 		// TODO while keeping in mind I'am maybe losing my time since the daga code/API is shitty
-		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), Y, p.Tree().List())
+		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), p.context.Roster.Publics(), p.Tree().List())
 		if nextServerTreeNode == nil {
 			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
 		}

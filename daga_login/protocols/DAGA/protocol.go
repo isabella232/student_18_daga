@@ -236,8 +236,8 @@ func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
 
 func (p *Protocol) sendToNextServer(context daga_login.Context, msg interface{}) error {
 	// figure out the node of the next-server in "ring"
-	_, Y := context.Members()
-	nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), Y, p.Tree().List())
+	//_, Y := context.Members()
+	nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), context.Roster.Publics(), p.Tree().List())
 	if nextServerTreeNode == nil {
 		return fmt.Errorf("failed to find next node")
 	}
