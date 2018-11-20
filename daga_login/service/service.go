@@ -201,6 +201,7 @@ func (s Service) validateContext(reqContext daga_login.Context) (daga.Server, er
 // helper to check if we accept the context that was sent part of the Auth/PKClient request,
 // if the context is accepted, returns the corresponding daga.Server (needed to process requests under the context)
 func (s Service) acceptContext(reqContext daga_login.Context) (daga.Server, error) {
+	// context is accepted => we took part in the context generation && 3rd-party service accepted => node has kept something in its state
 	if serviceState, err := s.serviceState(reqContext.ServiceID); err != nil {
 		return nil, errors.New("acceptContext: failed to retrieve 3rd-party service related state: " + err.Error())
 	} else if contextState, err := serviceState.contextState(reqContext.ID); err != nil {
@@ -283,6 +284,10 @@ func (s *Service) newDAGAServerProtocol(req *daga_login.Auth, dagaServer daga.Se
 func (s *Service) newDAGAChallengeGenerationProtocol(req *daga_login.PKclientCommitments, dagaServer daga.Server) (*DAGAChallengeGeneration.Protocol, error) {
 	// build tree with leader as root
 	roster := req.Context.Roster
+	// FIXME address the problem of node->daga key mapping:
+	// FIXME proposal enforce same order in roster and in members => problem dependant on external lib implementation (onet) to not mess with the order when building tree (now it is the case but tomorow ?)
+	// FIXME other posibility is build "ring out of tree" tree (probably better and cleaner but more work now)
+	// FIXME (but problem: aggregation would no longer work...=> manual aggregation with chanel handlers)
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
 	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())

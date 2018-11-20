@@ -22,6 +22,7 @@ const Name = "DAGAChallengeGeneration"
 type Announce struct {
 	LeaderCommit        daga.ChallengeCommitment    // contains the signed commitment of the Leader
 
+	LeaderIndexInContext int  // to allow the nodes to pick correct public key in context
 	// original request:
 	// the PKClient commitments (to tie them to the signatures issued at Finalize-time and avoid malicious agents being tempted to cheat/alter proof transcript)
 	// the context (of the original client request) (and hence the server keys used to verify signatures and eventually for the other nodes to check if they accept the request too)

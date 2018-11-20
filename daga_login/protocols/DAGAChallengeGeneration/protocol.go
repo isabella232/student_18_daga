@@ -209,6 +209,7 @@ func (p *Protocol) Start() (err error) {
 	// TODO or add a "BroadcastInParallel" method
 	errs := p.Broadcast(&Announce{
 		LeaderCommit:        *leaderChallengeCommit,
+		LeaderIndexInContext: p.dagaServer.Index(),
 		OriginalRequest: daga_login.PKclientCommitments{
 			Commitments: p.pKClientCommitments,
 			Context: p.context,
@@ -251,6 +252,7 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 	if dagaServer, err := p.acceptRequest(&msg.OriginalRequest); err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	} else {
+		// we can safely use leader provided context, we just validated it against our independent state
 		p.context = msg.OriginalRequest.Context
 		p.pKClientCommitments = msg.OriginalRequest.Commitments
 		p.setDagaServer(dagaServer)
@@ -258,8 +260,8 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 
 	// verify signature of Leader's commitment
 	// FIXME WHY ??: if we trust the rosters all these node-node signatures/authentication are useless since it is handled by the DEDIS-tls in Onet..
-	// FIXME and if we don't, we need to fetch the key from the auth. context => leader need to send its own index in context with annouce
-	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, leaderTreeNode.ServerIdentity.Public)
+	_, Y := p.context.Members()
+	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, Y[msg.LeaderIndexInContext])
 	if err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	}
@@ -299,12 +301,11 @@ func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) (err error) {
 	log.Lvlf3("%s: Leader received all Announce replies", Name)
 
 	// verify signatures of the commitments from all other nodes/children
+	_, Y := p.context.Members()
 	for _, announceReply := range msg {
 		challengeCommit := announceReply.Commit
 		// verify signature of node's commitment
-		// FIXME fetch the key from the auth. context instead of from treeNode ! and see fixme below
-		// FIXME in fact move this into kyber.daga and add a verify method/function that use only context and that check for duplicates signatures too
-		err := daga.VerifyChallengeCommitmentSignature(suite, challengeCommit, announceReply.ServerIdentity.Public)
+		err := daga.VerifyChallengeCommitmentSignature(suite, challengeCommit, Y[challengeCommit.Index])
 		if err != nil {
 			return fmt.Errorf("%s: failed to handle AnnounceReply, : %s", Name, err.Error())
 		}
@@ -408,6 +409,12 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 
 	if weAreNotLeader {
 		// not all nodes have received Finalize => figure out the node of the next-server in "ring" and send to it
+		// FIXME now that conode key =/= daga key, this no longer works => either redesign to do like was done in dagas/python (but denatures the daga paper way IMO)
+		// FIXME OR build the "ring out of tree topology" at leader (problem aggregation used at previous steps no longer work => need other way maybe channel handler)
+		// FIXME OR (equivalent) have the leader send the ordered roster as part of request
+		// FIXME OR (equivalent/same) enforce same order in context.members and in context.roster <== easier and probably best but need to documente and add checks
+		// FIXME OR (equivalent/same) store mapping in Context => reorganize context to store {Y,R,serveridentity} together and add methods to retrieve roster out of this for when roster needed (more elegant but..)
+		// TODO while keeping in mind I'am maybe losing my time since the daga code/API is shitty
 		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), Y, p.Tree().List())
 		if nextServerTreeNode == nil {
 			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
