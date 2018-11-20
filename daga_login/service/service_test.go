@@ -73,8 +73,8 @@ func TestService_CreateContext(t *testing.T) {
 
 		// create valid request
 		request := daga_login.CreateContext{
-			ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
-			DagaNodes: roster,
+			ServiceID:       daga_login.ServiceID(uuid.Must(uuid.NewV4())),
+			DagaNodes:       roster,
 			SubscribersKeys: testing2.RandomPointSlice(32),
 		}
 
@@ -96,7 +96,7 @@ func TestService_CreateContext(t *testing.T) {
 		// verify correctness ...
 		context := reply.Context
 		_, Y := context.Members()
-		contextBytes, err := daga.AuthenticationContextToBytes(context)  // TODO see to include other things (roster Ids etc..)
+		contextBytes, err := daga.AuthenticationContextToBytes(context) // TODO see to include other things (roster Ids etc..)
 		require.NoError(t, err)
 		for i, pubKey := range Y {
 			require.NoError(t, daga.SchnorrVerify(tSuite, pubKey, contextBytes, context.Signatures[i]))

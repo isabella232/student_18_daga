@@ -112,16 +112,11 @@ package main
 //	// 1) build an authentication context from scratch using user provided keys (or provide users key pairs etc) while being
 //	//		trusted to delete the private keys if they created them and be trusted to not keep any link between user and keys (or don't care depending on how the remaining part of system designed),
 //	//		then ask nicely to the DAGA cothority to do its job providing it the context => register context API endpoint
-//	//		=> poor man's DAGA... impossible to verify that service is nice => bad but why not
-//	//		=> or depending on how the remaining parts are implemented can just work nicely
 //	//
 //	// 1) organize a PoP party to allow their potential user to register to the service (if need one person 1 user, else relaxed "Pop" party)
 //	// 		build the auth context out of the party transcript
 //	//		then ask nicely to the DAGA cothority to ... => register context API
 //
-//	// 2) register context: TODO etc..multiple choices for a conode admin, open up to N context or
-//	//    DAGA slave cothority that use whatever context
-//	//
 //	// don't forget the context revocation end of round !! LOTS of implementations choices.... !
 //}
 //

@@ -47,11 +47,11 @@ type Protocol struct {
 	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments (to random challenge) at correct index (in auth. context), on the children to store leaderCommitment at 0
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
-	dagaServer          daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
+	dagaServer daga.Server // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
 
 	// FIXME store original request instead (now I don't have to decode anymore => doesnt make sense to separate the fields)
-	context             daga_login.Context                            // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
-	pKClientCommitments []kyber.Point                                 // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
+	context             daga_login.Context                                         // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
+	pKClientCommitments []kyber.Point                                              // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
 	acceptRequest       func(*daga_login.PKclientCommitments) (daga.Server, error) // a function to call to verify that request is accepted by our node (set by service at protocol creation time) and valid
 }
 
@@ -84,11 +84,11 @@ func (p *Protocol) LeaderSetup(req daga_login.PKclientCommitments, dagaServer da
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptRequest != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
-	if len(req.Context.R) == 0 || len(req.Context.H) == 0 || req.Context.Roster == nil {  // TODO maybe remove already checked by service + see remarks above
+	if len(req.Context.R) == 0 || len(req.Context.H) == 0 || req.Context.Roster == nil { // TODO maybe remove already checked by service + see remarks above
 		log.Panic("protocol setup: empty request")
 	}
 	p.context = req.Context
-	if len(req.Commitments) != len(p.context.ClientsGenerators())*3 {  // TODO maybe remove, already checked by service
+	if len(req.Commitments) != len(p.context.ClientsGenerators())*3 { // TODO maybe remove, already checked by service
 		log.Panic("protocol setup: wrong commitments length")
 	}
 	p.pKClientCommitments = req.Commitments
@@ -208,11 +208,11 @@ func (p *Protocol) Start() (err error) {
 	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization) and send in parallel (that's another thing..) as was done in skipchain ?
 	// TODO or add a "BroadcastInParallel" method
 	errs := p.Broadcast(&Announce{
-		LeaderCommit:        *leaderChallengeCommit,
+		LeaderCommit:         *leaderChallengeCommit,
 		LeaderIndexInContext: p.dagaServer.Index(),
 		OriginalRequest: daga_login.PKclientCommitments{
 			Commitments: p.pKClientCommitments,
-			Context: p.context,
+			Context:     p.context,
 		},
 	})
 	if len(errs) != 0 {

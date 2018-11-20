@@ -44,9 +44,9 @@ func runProtocol(t *testing.T, nbrNodes int) {
 
 	dummyReq := &daga_login.CreateContext{
 		SubscribersKeys: protocols_testing.RandomPointSlice(13),
-		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
-		DagaNodes: roster,
-		Signature: make([]byte, 32),  // TODO later real signature
+		ServiceID:       daga_login.ServiceID(uuid.Must(uuid.NewV4())),
+		DagaNodes:       roster,
+		Signature:       make([]byte, 32), // TODO later real signature
 	}
 
 	// create and setup root protocol instance + start protocol
@@ -58,7 +58,7 @@ func runProtocol(t *testing.T, nbrNodes int) {
 
 	// verify correctness ...
 	_, Y := context.Members()
-	contextBytes, err := daga.AuthenticationContextToBytes(context)  // TODO see to include other things (roster Ids etc..)
+	contextBytes, err := daga.AuthenticationContextToBytes(context) // TODO see to include other things (roster Ids etc..)
 	require.NoError(t, err)
 	present := false
 	for i, pubKey := range Y {

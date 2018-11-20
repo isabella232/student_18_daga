@@ -38,12 +38,13 @@ func init() {
 // Protocol holds the state of the context generation protocol instance.
 type Protocol struct {
 	*onet.TreeNodeInstance
-	result          chan daga_login.Context                   // channel that will receive the result of the protocol, only root/leader read/write to it
-	context         *daga_login.Context                       // the context being built (used only by leader)
-	indexOf         map[onet.TreeNodeID]int                   // map treeNodes to their index (used only by leader)
-	dagaServer      daga.Server                               // to hold the newly created "daga identity" of the node for the new context/round
-	originalRequest *daga_login.CreateContext                 // set by leader/service, from API call and then propagated to other instances as part of the announce message, to allow them to decide to proccess request or not
-	acceptRequest   func(ctx *daga_login.CreateContext) error // used by child nodes to verify that a request (forwarded by leader) is valid and accepted by the node, set by service at protocol creation time
+	result              chan daga_login.Context                                        // channel that will receive the result of the protocol, only root/leader read/write to it
+	context             *daga_login.Context                                            // the context being built (used only by leader)
+	indexOf             map[onet.TreeNodeID]int                                        // map treeNodes to their index (used only by leader)
+	dagaServer          daga.Server                                                    // to hold the newly created "daga identity" of the node for the new context/round
+	originalRequest     *daga_login.CreateContext                                      // set by leader/service, from API call and then propagated to other instances as part of the announce message, to allow them to decide to proccess request or not
+	acceptRequest       func(ctx *daga_login.CreateContext) error                      // used by child nodes to verify that a request (forwarded by leader) is valid and accepted by the node, set by service at protocol creation time
+	startServingContext func(context daga_login.Context, dagaServer daga.Server) error // used by child nodes to provide result of protocol to the parent service, set by service at protocol creation time
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -97,19 +98,30 @@ func (p *Protocol) LeaderSetup(req *daga_login.CreateContext) {
 }
 
 // setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
-func (p *Protocol) ChildSetup(acceptRequest func(*daga_login.CreateContext) error) {
+func (p *Protocol) ChildSetup(acceptRequest func(*daga_login.CreateContext) error,
+	startServingContext func(context daga_login.Context, dagaServer daga.Server) error) {
 	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil { // TODO
 		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
 	p.setAcceptRequest(acceptRequest)
+	p.setStartServingContext(startServingContext)
 }
 
+// TODO probably remove those "not that useful setters"/avoid to be frowned upon ^^
 // setter to let know the protocol instance "what is the request validation strategy"
 func (p *Protocol) setAcceptRequest(acceptRequest func(*daga_login.CreateContext) error) {
 	if acceptRequest == nil {
 		log.Panic("protocol setup: nil request validator (acceptRequest())")
 	}
 	p.acceptRequest = acceptRequest
+}
+
+// setter to let know the parent service instance "what was the result of the protocol"
+func (p *Protocol) setStartServingContext(startServingContext func(context daga_login.Context, dagaServer daga.Server) error) {
+	if startServingContext == nil {
+		log.Panic("protocol setup: nil startServingContext()")
+	}
+	p.startServingContext = startServingContext
 }
 
 // Start sends the Announce-message to all children,

@@ -28,13 +28,13 @@ const (
 
 // CreateContext will initiate the context generation protocol that will result in a CreateContextReply
 type CreateContext struct {
-	ServiceID ServiceID  // used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
-	Signature []byte     // used to authenticate 3rd-party service admin  (chicken-egg problem, we need to authenticate these requests, cannot accept every request..)
+	ServiceID       ServiceID // used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
+	Signature       []byte    // used to authenticate 3rd-party service admin  (chicken-egg problem, we need to authenticate these requests, cannot accept every request..)
 	SubscribersKeys []kyber.Point
 	// TODO replace with ID of PoP instance later (IMHO DAGA should only be concerned with keys, no how the service gather them but Linus prefer other way around => maybe offer both ways)
 	// (it is the service's business to get the keys of its subscriber => can use a PoP party, can just ask for keys etc..)
 	// TODO FIXME + remember that DAGA expect Keys from the daga.Suite in use (=> maybe different from the PoP party => to be correct/general/etc.. would need KDFs)
-	DagaNodes *onet.Roster  // all the nodes that the 3rd-party service wants to include in its DAGA cothority
+	DagaNodes *onet.Roster // all the nodes that the 3rd-party service wants to include in its DAGA cothority
 }
 
 type CreateContextReply struct {
@@ -60,8 +60,8 @@ type ContextID uuid.UUID
 // Context implements the daga.AuthenticationContext interface
 // and embed a corresponding Onet roster (how to reach the DAGA servers)
 type Context struct {
-	ID        ContextID
-	ServiceID ServiceID  // ID of the 3rd-party service that use this context for auth. purposes
+	ID         ContextID
+	ServiceID  ServiceID // ID of the 3rd-party service that use this context for auth. purposes
 	Signatures [][]byte  // signatures that show endorsement of the context by all the daga servers
 	daga.MinimumAuthenticationContext
 	*onet.Roster
@@ -80,7 +80,7 @@ func NewContext(dagaContext daga.AuthenticationContext, roster *onet.Roster, ser
 	return &Context{
 		ID:                           ContextID(uuid.Must(uuid.NewV4())),
 		ServiceID:                    serviceID,
-		Signatures: signatures,
+		Signatures:                   signatures,
 		MinimumAuthenticationContext: *newDagaContext,
 		Roster:                       roster,
 	}, nil

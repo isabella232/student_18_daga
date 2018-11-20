@@ -21,7 +21,7 @@ const Name = "DAGAContextGeneration"
 // It request that all other nodes generate a new `daga.Server` identity
 // and send back a commitment R to their new/fresh per-round secret r (R=rG)
 type Announce struct {
-	AssignedIndex int // the Leader assigned index of the node's `daga.Server` under the "to be created context"
+	AssignedIndex   int // the Leader assigned index of the node's `daga.Server` under the "to be created context"
 	OriginalRequest daga_login.CreateContext
 }
 
@@ -35,8 +35,8 @@ type StructAnnounce struct {
 // AnnounceReply is sent from all other nodes back to the Leader, it contains what the leader asked,
 // the public key Y of their new `daga.Server` identity and the commitment R to their fresh per-round secret r
 type AnnounceReply struct {
-	Y     kyber.Point
-	R     kyber.Point
+	Y kyber.Point
+	R kyber.Point
 }
 
 // StructAnnounceReply just contains AnnounceReply and the data necessary to identify and
@@ -49,7 +49,7 @@ type StructAnnounceReply struct {
 // Sign is sent from Leader upon reception and processing of all AnnounceReply.
 // it request approval (a signature) - from all other nodes - for the newly built context
 type Sign struct {
-	Context daga.MinimumAuthenticationContext  // TODO DECIDE what kind of context here (include roster or not ?)
+	Context daga.MinimumAuthenticationContext // TODO DECIDE what kind of context here (include roster or not ?)
 }
 
 // StructSign just contains Sign and the data necessary to identify and

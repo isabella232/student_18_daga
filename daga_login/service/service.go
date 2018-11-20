@@ -76,7 +76,7 @@ func (s *Service) ValidateCreateContextReq(req *daga_login.CreateContext) error 
 func (s *Service) acceptCreateContextRequest(req *daga_login.CreateContext) bool {
 	// TODO check we are part of roster...
 
-	if _, err := s.serviceState(req.ServiceID); err != nil {  // unknown service/1st time
+	if _, err := s.serviceState(req.ServiceID); err != nil { // unknown service/1st time
 		// TODO/FIXME for later check existing partnership/agreement, for now open access DAGA node.. accept everything
 		// TODO => probably move this elsewhere, e.g at request authentication time in authenticateRequest or in caller
 
@@ -84,7 +84,7 @@ func (s *Service) acceptCreateContextRequest(req *daga_login.CreateContext) bool
 		s.Storage.State[req.ServiceID] = &ServiceState{
 			ID:            req.ServiceID,
 			ContextStates: make(map[daga_login.ContextID]*ContextState),
-			adminKey:      nil,  // TODO, openPGP, fetch key from keyserver
+			adminKey:      nil, // TODO, openPGP, fetch key from keyserver
 		}
 	}
 
@@ -119,24 +119,11 @@ func (s *Service) CreateContext(req *daga_login.CreateContext) (*daga_login.Crea
 		return nil, errors.New("CreateContext: " + err.Error())
 	} else {
 		if context, dagaServer, err := contextGeneration.WaitForResult(); err != nil {
-			return nil, err
+			return nil, errors.New("CreateContext: " + err.Error())
 		} else {
-			// FIXME here publish to byzcoin etc.. (and decide what by who.., IMO it's to the 3rd party service responsibility to publish the context)
-			// FIXME and if we decide (why ? "convenience" ?) to store the dagaServer in byzcoin too => need to encrypt it (using which key ? => node's key from private.toml)
-
-			// store in local state/cache
-			serviceState, err := s.serviceState(context.ServiceID)
-			if err != nil {  // unknown service/1st time, create service state
-				log.Panic("CreateContext: something wrong, 3rd-party service state not present in DAGA service's storage/state")
+			if err := s.startServingContext(context, dagaServer); err != nil {
+				return nil, errors.New("CreateContext: " + err.Error())
 			}
-			if _, err := serviceState.contextState(context.ID); err == nil {
-				return nil, fmt.Errorf("CreateContext: ... seems that a context with same ID (%s) is already existing", context.ID)
-			}
-			serviceState.ContextStates[context.ID] = &ContextState{
-				Context: context,
-				DagaServer: *daga_login.NetEncodeServer(dagaServer),
-			}
-
 			return &daga_login.CreateContextReply{
 				Context: context,
 			}, nil
@@ -201,13 +188,15 @@ func (s Service) validateContext(reqContext daga_login.Context) (daga.Server, er
 // helper to check if we accept the context that was sent part of the Auth/PKClient request,
 // if the context is accepted, returns the corresponding daga.Server (needed to process requests under the context)
 func (s Service) acceptContext(reqContext daga_login.Context) (daga.Server, error) {
-	// context is accepted => we took part in the context generation && 3rd-party service accepted => node has kept something in its state
+	// if context is accepted => we took part in the context generation && 3rd-party service is accepted => node has kept something in its state
 	if serviceState, err := s.serviceState(reqContext.ServiceID); err != nil {
 		return nil, errors.New("acceptContext: failed to retrieve 3rd-party service related state: " + err.Error())
 	} else if contextState, err := serviceState.contextState(reqContext.ID); err != nil {
 		return nil, errors.New("acceptContext: failed to retrieve context related state: " + err.Error())
 	} else {
-		if contextState.Context.Equals(reqContext) { // TODO/FIXME see equals comments, use another function or implement logic here
+		// TODO/ and/or/maybe verify context signature (should not be necessary if integrity preserved/protected by equals/hash and we have a trusted copy somewhere)
+		// TODO => FIXME see equals comments, depend on what features we want, see later, use another function or implement logic here
+		if contextState.Context.Equals(reqContext) {
 			return contextState.DagaServer.NetDecode()
 		} else {
 			return nil, errors.New("acceptContext: context not accepted")
@@ -257,6 +246,7 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 // function called to initialize and start a new DAGA (Server's) protocol where current node takes a "Leader" role
 func (s *Service) newDAGAServerProtocol(req *daga_login.Auth, dagaServer daga.Server) (*DAGA.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
+	// FIXME probably want to add roster to signed/authenticated data at context creation time
 
 	// build tree with leader as root
 	roster := req.Context.Roster
@@ -284,10 +274,6 @@ func (s *Service) newDAGAServerProtocol(req *daga_login.Auth, dagaServer daga.Se
 func (s *Service) newDAGAChallengeGenerationProtocol(req *daga_login.PKclientCommitments, dagaServer daga.Server) (*DAGAChallengeGeneration.Protocol, error) {
 	// build tree with leader as root
 	roster := req.Context.Roster
-	// FIXME address the problem of node->daga key mapping:
-	// FIXME proposal enforce same order in roster and in members => problem dependant on external lib implementation (onet) to not mess with the order when building tree (now it is the case but tomorow ?)
-	// FIXME other posibility is build "ring out of tree" tree (probably better and cleaner but more work now)
-	// FIXME (but problem: aggregation would no longer work...=> manual aggregation with chanel handlers)
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
 	// protocol assumes that all other nodes are direct children of leader (use aggregation before calling some handlers)
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
@@ -362,7 +348,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 			return nil, err
 		}
 		dagaServerProtocol := pi.(*DAGA.Protocol)
-		dagaServerProtocol.ChildSetup(s.validateContext)  // TODO same as above/below validate full request
+		dagaServerProtocol.ChildSetup(s.validateContext) // TODO same as above/below validate full request
 		return dagaServerProtocol, nil
 	case DAGAContextGeneration.Name:
 		pi, err := DAGAContextGeneration.NewProtocol(tn)
@@ -370,7 +356,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 			return nil, err
 		}
 		contextGeneration := pi.(*DAGAContextGeneration.Protocol)
-		contextGeneration.ChildSetup(s.ValidateCreateContextReq)
+		contextGeneration.ChildSetup(s.ValidateCreateContextReq, s.startServingContext)
 		return contextGeneration, nil
 	default:
 		log.Panic("NewProtocol: protocol not implemented/known")
@@ -416,6 +402,7 @@ func setupState(s *Service) error {
 	return nil
 }
 
+// returns the 3rd-party related state or an error if 3rd-party service unknown
 func (s *Service) serviceState(sid daga_login.ServiceID) (*ServiceState, error) {
 	if sid == daga_login.ServiceID(uuid.Nil) {
 		return nil, errors.New("serviceState: Nil/Zero ID")
@@ -425,6 +412,26 @@ func (s *Service) serviceState(sid daga_login.ServiceID) (*ServiceState, error) 
 	} else {
 		return serviceState, nil
 	}
+}
+
+// start serving (accepting requests related to) `context` using `dagaServer`
+func (s *Service) startServingContext(context daga_login.Context, dagaServer daga.Server) error {
+
+	// FIXME here publish to byzcoin etc.. (and decide what should be done by who.., IMO it's to the 3rd party service responsibility to publish the context)
+	// FIXME and if we decide (why ? "convenience" ?) to store the dagaServer in byzcoin too => need to encrypt it (using which key ? => node's key from private.toml)
+	// store in local state/cache
+	serviceState, err := s.serviceState(context.ServiceID)
+	if err != nil {
+		log.Panic("startServingContext: something wrong, 3rd-party service related state not present in DAGA service's storage/state")
+	}
+	if _, err := serviceState.contextState(context.ID); err == nil {
+		return fmt.Errorf("startServingContext: ... seems that a context with same ID (%s) is already existing", context.ID)
+	}
+	serviceState.ContextStates[context.ID] = &ContextState{
+		Context:    context,
+		DagaServer: *daga_login.NetEncodeServer(dagaServer),
+	}
+	return nil
 }
 
 // newService receives the context that holds information about the node it's

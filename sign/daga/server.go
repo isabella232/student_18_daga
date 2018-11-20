@@ -58,7 +58,7 @@ func (s *server) SetRoundSecret(secret kyber.Scalar) {
 //	return newChallengeCommitment(suite, &s)
 //}
 
-/*ServerMessage stores the message sent by a server to one or many others*/
+// ServerMessage stores the message sent by a server to one or many others
 type ServerMessage struct {
 	Request AuthenticationMessage
 	Tags    []kyber.Point
@@ -67,14 +67,14 @@ type ServerMessage struct {
 	Sigs    []ServerSignature
 }
 
-/*ChallengeCommitment stores the index of the server, the commitment value and the signature for the commitment*/
+// ChallengeCommitment stores the index of the server, the commitment value and the signature for the commitment
 type ChallengeCommitment struct {
 	Commit kyber.Point
 	ServerSignature
 }
 
-/*ServerSignature stores a signature created by a server and the server's index*/
-// FIXME see why index needed and if we cannot get rid of it, when receiveing a challengecommit the receiver knows who the sender is
+// ServerSignature stores a signature created by a server and the server's index
+// TODO see why index is really needed and if we cannot get rid of it, when receiveing a challengecommit the receiver knows who the sender is
 // > can probably know its public key => can probably verify signature without looking it up in context using index
 // mhh seems that it is only used to check/assert same index when traversing the slice of commitments in verify... maybe remove it..
 // + TODO use different types for different signatures...pffff rhaa
@@ -95,12 +95,13 @@ func (c Challenge) VerifySignatures(suite Suite, serverKeys []kyber.Point, pkCli
 	if signData, err := c.ToBytes(pkClientCommitments); err != nil {
 		return err
 	} else {
-		encountered := map[int]bool{}
+		encountered := map[int]struct{}{}
+		yes := struct{}{}
 		for _, sig := range c.Sigs {
-			if encountered[sig.Index] == true {
-				return fmt.Errorf("duplicate signature")
+			if _, ok := encountered[sig.Index]; ok {
+				return fmt.Errorf("duplicate signature") // TODO FIXME works if we ensure/assume no duplicate public key in context + correct key always fetched from context using sig.Index..but IMHO this is messy and error prone...=> better to check actual signature for duplicates + give the benefit to spot duplicate keys in context
 			}
-			encountered[sig.Index] = true
+			encountered[sig.Index] = yes
 
 			if err := SchnorrVerify(suite, serverKeys[sig.Index], signData, sig.Sig); err != nil {
 				return errors.New("failed to verify signature of server " + strconv.Itoa(sig.Index) + ": " + err.Error())
@@ -127,14 +128,14 @@ func (c Challenge) ToBytes(pkClientCommitments []kyber.Point) ([]byte, error) {
 	return signData, nil
 }
 
-/*ChallengeCheck stores all the information passed along the servers to check and sign the challenge*/
+// ChallengeCheck stores all the information passed along the servers to check and sign the challenge
 type ChallengeCheck struct {
 	Challenge
 	Commits  []ChallengeCommitment
 	Openings []kyber.Scalar
 }
 
-/*ServerProof stores a server proof of his computations*/
+// ServerProof stores a server proof of his computations
 type ServerProof struct {
 	T1 kyber.Point
 	T2 kyber.Point
@@ -144,7 +145,7 @@ type ServerProof struct {
 	R2 kyber.Scalar
 }
 
-/*NewChallengeCommitment creates the server's commitment and its opening for the distributed challenge generation*/
+// NewChallengeCommitment creates the server's commitment and its opening for the distributed challenge generation
 func NewChallengeCommitment(suite Suite, server Server) (commit *ChallengeCommitment, opening kyber.Scalar, err error) {
 	opening = suite.Scalar().Pick(suite.RandomStream())
 	com := suite.Point().Mul(opening, nil)
@@ -168,7 +169,7 @@ func NewChallengeCommitment(suite Suite, server Server) (commit *ChallengeCommit
 func VerifyChallengeCommitmentSignature(suite Suite, commit ChallengeCommitment, pubKey kyber.Point) error {
 	// QUESTION FIXME: How to check that a point is on the curve (and correct subgroup of curve) ? (don't remember why but the answer is you don't need if you use edwards curve25519)
 	// FIXME but still this is a valid concern since if we change the curve/suite_implementation we would like the code to remain correct or ?
-	//Convert the commitment and verify the signature
+	// Convert the commitment and verify the signature
 	msg, err := commit.Commit.MarshalBinary()
 	if err != nil {
 		return fmt.Errorf("failed to encode commitment: %s", err)
@@ -180,8 +181,7 @@ func VerifyChallengeCommitmentSignature(suite Suite, commit ChallengeCommitment,
 	return nil
 }
 
-// FIXME remove probably, unused and maybe..bof
-/*VerifyChallengeCommitmentsSignatures verifies that all the commitments are valid and correctly signed*/
+// VerifyChallengeCommitmentsSignatures verifies that all the commitments are valid and correctly signed
 func VerifyChallengeCommitmentsSignatures(suite Suite, context AuthenticationContext, commits []ChallengeCommitment) error {
 	for i, com := range commits {
 		if i != com.Index {
@@ -200,7 +200,7 @@ func CheckOpening(suite Suite, commitment kyber.Point, opening kyber.Scalar) boo
 	return commitment.Equal(suite.Point().Mul(opening, nil))
 }
 
-/*CheckOpenings verifies each commitment/opening and returns the computed master challenge*/
+// CheckOpenings verifies each commitment/opening and returns the computed master challenge
 func checkOpenings(suite Suite, context AuthenticationContext, commits []ChallengeCommitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
 	// FIXME rename (compute master challenge + verify)
 	if context == nil {
@@ -224,7 +224,7 @@ func checkOpenings(suite Suite, context AuthenticationContext, commits []Challen
 	return cs, nil
 }
 
-/*InitializeChallenge creates a ChallengeCheck structure, It checks the openings before doing so*/
+// InitializeChallenge creates a ChallengeCheck structure, It checks the openings before doing so
 func InitializeChallenge(suite Suite, context AuthenticationContext, commits []ChallengeCommitment, openings []kyber.Scalar) (*ChallengeCheck, error) {
 	if context == nil || len(commits) == 0 || len(commits) != len(openings) {
 		return nil, fmt.Errorf("invalid inputs")
@@ -239,9 +239,9 @@ func InitializeChallenge(suite Suite, context AuthenticationContext, commits []C
 	return &ChallengeCheck{Challenge: Challenge{Cs: cs, Sigs: nil}, Commits: commits, Openings: openings}, nil
 }
 
-/*CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
-It also adds the server's signature to the list if the round-robin is not completed (the challenge has not yet made it back to the leader)
-It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server*/
+// CheckUpdateChallenge verifies that all the previous servers computed the same challenges and that their signatures are valid
+// It also adds the server's signature to the list if the round-robin is not completed (the challenge has not yet made it back to the leader)
+// It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server
 func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challengeCheck *ChallengeCheck, pkClientCommitments []kyber.Point, server Server) error {
 	//Check the signatures and check for duplicates
 	_, Y := context.Members()
@@ -282,8 +282,8 @@ func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challengeC
 	return nil
 }
 
-/*FinalizeChallenge is used to convert the data passed between the servers into the challenge sent to the client
-It must be used after the leader got the message back and ran CheckUpdateChallenge*/
+// FinalizeChallenge is used to convert the data passed between the servers into the challenge sent to the client
+// It must be used after the leader got the message back and ran CheckUpdateChallenge
 func FinalizeChallenge(context AuthenticationContext, challenge *ChallengeCheck) (Challenge, error) {
 	if context == nil || challenge == nil {
 		return Challenge{}, fmt.Errorf("invalid inputs")
@@ -311,7 +311,7 @@ func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage
 	}, nil
 }
 
-/*ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client*/
+// ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client
 // TODO DRY see what can be shared with GetFinalLinkageTag ...+ probably rewrite ..
 func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 
@@ -435,7 +435,7 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	return nil
 }
 
-/*generateServerProof creates the server proof for its computations*/
+// generateServerProof creates the server proof for its computations
 func generateServerProof(suite Suite, context AuthenticationContext, s kyber.Scalar, T kyber.Point, msg *ServerMessage, server Server) (proof *ServerProof, err error) {
 	//Input validation
 	if context == nil {
@@ -510,7 +510,7 @@ func generateServerProof(suite Suite, context AuthenticationContext, s kyber.Sca
 	}, nil
 }
 
-/*verifyServerProof verifies a server proof*/
+// verifyServerProof verifies a server proof
 func verifyServerProof(suite Suite, context AuthenticationContext, i int, msg *ServerMessage) bool {
 	//Input checks
 	if context == nil || msg == nil {
@@ -576,7 +576,7 @@ func verifyServerProof(suite Suite, context AuthenticationContext, i int, msg *S
 	return true
 }
 
-/*generateMisbehavingProof creates the proof of a misbehaving client*/ // QUESTION server ? purpose of comment ?
+// generateMisbehavingProof creates the proof of a misbehaving server  // TODO rename...
 func generateMisbehavingProof(suite Suite, Z kyber.Point, server Server) (proof *ServerProof, err error) {
 	//Input checks
 	if Z == nil {
@@ -621,7 +621,7 @@ func generateMisbehavingProof(suite Suite, Z kyber.Point, server Server) (proof 
 	}, nil
 }
 
-/*verifyMisbehavingProof verifies a proof of a misbehaving client*/ // QUESTION server ? ..
+//verifyMisbehavingProof verifies a proof of a misbehaving server TODO rename...
 func verifyMisbehavingProof(suite Suite, serverPublicKey kyber.Point, proof *ServerProof, Z kyber.Point) bool {
 	//Input checks
 	if serverPublicKey == nil || proof == nil || Z == nil {
@@ -714,9 +714,9 @@ func (proof ServerProof) ToBytes() (data []byte, err error) {
 	return data, nil
 }
 
-/*GenerateNewRoundSecret creates a new secret for the server.
-It returns the commitment to that secret to be included in the context and the new server*/
-func GenerateNewRoundSecret(suite Suite, server Server) (kyber.Point) {
+// GenerateNewRoundSecret creates a new secret for the server.
+// It returns the commitment to that secret to be included in the context and the new server
+func GenerateNewRoundSecret(suite Suite, server Server) kyber.Point {
 	// FIXME rethink + instead store kp in server + make it a method of interfaceServer and stop exporting setroundsecret
 	kp := key.NewKeyPair(suite)
 	server.SetRoundSecret(kp.Private)

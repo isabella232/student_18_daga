@@ -196,7 +196,7 @@ func AuthenticationContextToBytes(ac AuthenticationContext) (data []byte, err er
 //PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures
 func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	for _, p := range array {
-		temp, e := p.MarshalBinary()  // hope p not nil..
+		temp, e := p.MarshalBinary() // hope p not nil..
 		if e != nil {
 			return nil, e
 		}

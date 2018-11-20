@@ -27,7 +27,7 @@ type SubscriberState struct {
 type ServiceState struct { // TODO better name to not confuse with daga service or don't care and use godoc for that
 	ID daga_login.ServiceID
 	// FIXME name, address contact infos etc.. (use OpenPGP identity that has everything needed)
-	adminKey      kyber.Point                           // to auth. service owner/admin (verify signatures) FIXME use OpenPGP infrastructure and web of trust, cached version of key retrieved from key servers etc..verify trust etc..
+	adminKey      kyber.Point                            // to auth. service owner/admin (verify signatures) FIXME use OpenPGP infrastructure and web of trust, cached version of key retrieved from key servers etc..verify trust etc..
 	ContextStates map[daga_login.ContextID]*ContextState // maps 3rd-party services to their (potentially multiple) auth. context(s)
 }
 
@@ -45,8 +45,8 @@ func (ss *ServiceState) contextState(cid daga_login.ContextID) (*ContextState, e
 // hold the state related to an auth. context (the context, the daga server, ...
 // TODO maybe rename or reorganize
 type ContextState struct {
-	Context          daga_login.Context             // the daga auth. context
+	Context daga_login.Context // the daga auth. context
 	// see lab notes, we currently decided to not use that for the login service (but IMHO we should keep it..)
 	//SubscriberStates map[LinkageTag]SubscriberState // maps clients/subscriber tags (anonymousId) to their auth. state (# of auth. during round, current "anon key", timestamp last auth. / key TTL etc.. TODO better name
-	DagaServer       daga_login.NetServer           // daga 'server' for this daga auth. context (contains server's per-round secret etc..)
+	DagaServer daga_login.NetServer // daga 'server' for this daga auth. context (contains server's per-round secret etc..)
 }

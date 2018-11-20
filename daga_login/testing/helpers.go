@@ -29,7 +29,7 @@ func init() {
 	log.ErrFatal(err)
 }
 
-// dummyService to provide state to the protocol instances when testing the protocols
+// dummyService to provide state to the protocol instances/play role of parent service when testing the *protocols*
 type DummyService struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
@@ -109,7 +109,7 @@ func (s DummyService) NewDAGAContextGenerationProtocol(t *testing.T, req *daga_l
 
 	// create and setup protocol instance
 	pi, err := s.CreateProtocol(DAGAContextGeneration.Name, tree)
-	require.NoError(t, err, "failed to create " + DAGAContextGeneration.Name)
+	require.NoError(t, err, "failed to create "+DAGAContextGeneration.Name)
 	require.NotNil(t, pi, "nil protocol instance but no error")
 	contextGeneration := pi.(*DAGAContextGeneration.Protocol)
 	contextGeneration.LeaderSetup(req)
@@ -122,10 +122,6 @@ func (s DummyService) NewDAGAContextGenerationProtocol(t *testing.T, req *daga_l
 	return contextGeneration
 }
 
-// NewProtocol is called upon reception of a Protocol's first message when Onet needs
-// to instantiate the protocol. A Service is expected to manually create
-// the ProtocolInstance it is using. So this method will be potentially called on all nodes of a Tree (except the root, since it is
-// the one starting the protocols) to generate the PI on those other nodes.
 // "dummy" counterpart of daga_login.service.NewProtocol() keep them more or less in sync
 func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl3("received protocol msg, instantiating new protocol instance of " + tn.ProtocolName())
@@ -155,7 +151,9 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 		}
 		contextGeneration := pi.(*DAGAContextGeneration.Protocol)
 		contextGeneration.ChildSetup(func(req *daga_login.CreateContext) error {
-			return nil // TODO, now we don't have much to check..
+			return nil // we don't have much to check.., we're testing the protocols, and the function is used only to test complete valid run in principle
+		}, func(context daga_login.Context, dagaServer daga.Server) error {
+			return nil // same don't need to do anything with the results
 		})
 		return contextGeneration, nil
 	default:

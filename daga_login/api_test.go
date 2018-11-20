@@ -42,12 +42,12 @@ func TestMain(m *testing.M) {
 
 // override/replace the Setup function of the Service(s) with a function that populate their state/storage with
 // the dagaServer and context provided
-// TODO helper used to test API too => better to move to testing helpers => but KO import cycles..
+// TODO helper used to test service too => better to move to testing helpers => but KO import cycles..
 func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, dummyContext *daga_login.Context) {
 	for i, s := range services {
 		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
 		svc := s.(*service.Service)
-		svc.Setup = func (index int) func(s *service.Service) error {
+		svc.Setup = func(index int) func(s *service.Service) error {
 			return func(s *service.Service) error {
 				if s.Storage == nil {
 					dagaServer := dagaServers[index]
