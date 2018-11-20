@@ -27,25 +27,27 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, c
 	for i, s := range services {
 		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
 		service := s.(*Service)
-		service.Setup = func(s *Service) error {
-			if s.Storage == nil {
-				dagaServer := dagaServers[i]
-				s.Storage = &Storage{
-					State: State(map[daga_login.ServiceID]*ServiceState{
-						context.ServiceID: {
-							ID: context.ServiceID,
-							ContextStates: map[daga_login.ContextID]*ContextState{
-								context.ID: {
-									DagaServer: *daga_login.NetEncodeServer(dagaServer),
-									Context:    context,
+		service.Setup = func(index int) func(s *Service) error {
+			return func(s *Service) error {
+				if s.Storage == nil {
+					dagaServer := dagaServers[index]
+					s.Storage = &Storage{
+						State: State(map[daga_login.ServiceID]*ServiceState{
+							context.ServiceID: {
+								ID: context.ServiceID,
+								ContextStates: map[daga_login.ContextID]*ContextState{
+									context.ID: {
+										DagaServer: *daga_login.NetEncodeServer(dagaServer),
+										Context:    context,
+									},
 								},
 							},
-						},
-					}),
+						}),
+					}
 				}
+				return nil
 			}
-			return nil
-		}
+		}(i)
 	}
 }
 
