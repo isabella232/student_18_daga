@@ -154,7 +154,7 @@ func (p *Protocol) saveCommitment(index int, commitment daga.ChallengeCommitment
 	if index >= len(p.commitments) {
 		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d, you probably forgot to call ChildSetup", index, len(p.commitments))
 	}
-	// FIXME QUESTION what is the correct way to panic ? in such cases
+	// FIXME QUESTION what is the correct way to "panic" ? in such cases
 	if p.commitments[index].Commit != nil {
 		log.Panicf("already one commitment at p.commitment[%d]", index)
 	}
@@ -364,6 +364,7 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 
 	// to figure out the node of the next-server in "ring"
 	// FIXME would like to have a "ring built with tree" topology to just have to sendToChildren
+	// FIXME run new "subprotocol" with new tree for the finalize step ?
 	_, Y := p.context.Members()
 	nextServerIndex := (p.dagaServer.Index() + 1) % len(Y)
 	var nextServerTreeNode *onet.TreeNode

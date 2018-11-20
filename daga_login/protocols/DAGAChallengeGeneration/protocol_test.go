@@ -8,6 +8,7 @@ import (
 	protocols_testing "github.com/dedis/student_18_daga/daga_login/testing"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
 )
 
@@ -39,7 +40,8 @@ func runProtocol(t *testing.T, nbrNodes int) {
 	}
 
 	// create and setup root protocol instance + start protocol
-	challengeGeneration := services[0].(*protocols_testing.DummyService).NewDAGAChallengeGenerationProtocol(t, dummyReq)
+	serviceIndex := rand.Intn(len(services))
+	challengeGeneration := services[serviceIndex].(*protocols_testing.DummyService).NewDAGAChallengeGenerationProtocol(t, dummyReq)
 
 	challenge, err := challengeGeneration.WaitForResult()
 	require.NoError(t, err, "failed to get result of protocol run")
