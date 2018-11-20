@@ -409,13 +409,15 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 	}
 
 	if weAreNotLeader {
-		// not all nodes have received Finalize => figure out the node of the next-server in "ring" and send to it
-		// FIXME now that conode key =/= daga key, this no longer works => either redesign to do like was done in dagas/python (but denatures the daga paper way IMO)
-		// FIXME OR build the "ring out of tree topology" at leader (problem aggregation used at previous steps no longer work => need other way maybe channel handler)
-		// FIXME OR (equivalent) have the leader send the ordered roster as part of request
-		// FIXME OR (equivalent/same) enforce same order in context.members and in context.roster <== easier and probably best but need to documente and add checks
-		// FIXME OR (equivalent/same) store mapping in Context => reorganize context to store {Y,R,serveridentity} together and add methods to retrieve roster out of this for when roster needed (more elegant but..)
-		// TODO while keeping in mind I'am maybe losing my time since the daga code/API is shitty
+		// not all nodes have received Finalize => figure out the node of the next-server in "ring" and send to it.
+
+		// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
+		// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
+		// like described in DAGA paper (nothing changed fundamentally).
+		// since nodes can (and probably have) multiple daga server identities (per context),
+		// if we prefer keeping the indices in context for the "ring order",
+		// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
+		// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
 		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), p.context.Roster.Publics(), p.Tree().List())
 		if nextServerTreeNode == nil {
 			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
