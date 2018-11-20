@@ -81,6 +81,7 @@ func (p *Protocol) LeaderSetup(req *daga_login.CreateContext) {
 
 	// create context skeleton/factory
 	p.context = &daga_login.Context{
+		ServiceID: req.ServiceID,
 		MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
 			G: struct {
 				X []kyber.Point
