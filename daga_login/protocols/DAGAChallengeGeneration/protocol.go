@@ -30,7 +30,7 @@ import (
 var suite = daga.NewSuiteEC()
 
 // QUESTION TODO educated timeout formula that scale with number of nodes etc..
-const Timeout = 5 * time.Second
+const Timeout = 5000 * time.Second
 
 func init() {
 	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
@@ -245,7 +245,7 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 		}
 	}()
 
-	log.Lvlf3("%s: Received Leader's Announce", Name)
+	log.Lvlf3("%s: %s Received Leader's Announce", Name, p.ServerIdentity())
 	leaderTreeNode := msg.TreeNode
 
 	// validate request (valid + accepted) and update state
@@ -333,7 +333,7 @@ func (p *Protocol) HandleOpen(msg StructOpen) (err error) {
 		}
 	}()
 
-	log.Lvlf3("%s: Received Leader's Open", Name)
+	log.Lvlf3("%s: %s Received Leader's Open", Name, p.ServerIdentity())
 	// TODO nil/empty msg checks
 
 	// verify that leader's opening correctly open its commitment
@@ -347,7 +347,7 @@ func (p *Protocol) HandleOpen(msg StructOpen) (err error) {
 	ownOpening := p.opening(0)
 	return p.SendTo(msg.TreeNode, &OpenReply{
 		Opening: ownOpening,
-		Index:   p.dagaServer.Index(),
+		Index:   p.dagaServer.Index(),  // FIXME use index in roster
 	})
 }
 
@@ -363,8 +363,8 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 	log.Lvlf3("%s: Leader received all Open replies", Name)
 
 	// to figure out the node of the next-server in "ring"
-	// FIXME would like to have a "ring built with tree" topology to just have to sendToChildren
-	// FIXME run new "subprotocol" with new tree for the finalize step ?
+	// TODO would like to have a "ring built with tree" topology to just have to sendToChildren
+	// TODO run new "subprotocol" with new tree for the finalize step ? mhhh bof..
 	_, Y := p.context.Members()
 	nextServerIndex := (p.dagaServer.Index() + 1) % len(Y)
 	var nextServerTreeNode *onet.TreeNode
@@ -372,6 +372,8 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 	//After receiving all the openings, leader verifies them and initializes the challengeCheck structure
 	for _, openReply := range msg {
 		p.saveOpening(openReply.Index, openReply.Opening)
+		// FIXME use index in roster moron.. + remove this stupid premature optimisation that hurt readability and DRY
+		// use nextNode later
 		if openReply.Index == nextServerIndex {
 			nextServerTreeNode = openReply.TreeNode
 		}
@@ -397,7 +399,7 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 // Step 4.5 of daga challenge generation protocol described in Syta - 4.7.4
 func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 	defer p.Done()
-	log.Lvlf3("%s: Received Finalize", Name)
+	log.Lvlf3("%s: %s Received Finalize", Name, p.ServerIdentity())
 
 	// check if we are the leader
 	_, Y := p.context.Members()
@@ -418,6 +420,8 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 		// if we prefer keeping the indices in context for the "ring order",
 		// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
 		// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
+		// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
+		// FIXME use index in roster you moron... ^^
 		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), p.context.Roster.Publics(), p.Tree().List())
 		if nextServerTreeNode == nil {
 			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
