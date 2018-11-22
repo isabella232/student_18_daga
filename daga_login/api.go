@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
+	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/sign/daga"
@@ -17,6 +18,27 @@ import (
 const ServiceName = "daga"
 
 var suite = daga.NewSuiteEC()
+
+// issue a CreateContext call to the daga cothority specified by roster
+// TODO blabla need partnership (unless open servers)
+func (ac AdminCLient) CreateContext(subscribers []kyber.Point, roster *onet.Roster) (*Context, error) {
+	// build request
+	request := CreateContext{
+		ServiceID:       ac.ServiceID,
+		SubscribersKeys: subscribers,
+		DagaNodes:       roster,
+		Signature:       make([]byte, 32), // TODO openPGP sig etc..
+	}
+	reply := CreateContextReply{}
+
+	// send to random server in cothority
+	dst := roster.RandomServerIdentity()
+	if err := ac.SendProtobuf(dst, &request, &reply); err != nil {
+		return nil, fmt.Errorf("error sending CreateContext request to %s : %s", dst, err)
+	}
+
+	return &reply.Context, nil
+}
 
 // TODO maybe belongs to daga or maybe doesn't deserve its type..
 type PKclientVerifier func([]kyber.Point) (daga.Challenge, error)

@@ -361,7 +361,7 @@ func (p *Protocol) HandleDone(msg StructDone) error {
 
 	// verify signatures // TODO/FIXME use keys from the context at the HandleSign step to prevent leader replacing the keys (if useful, see remark at HandleSign step)
 	_, Y := msg.FinalContext.Members()
-	if contextBytes, err := daga.AuthenticationContextToBytes(msg.FinalContext); err != nil {  // TODO see to include other things (roster, Ids etc..)
+	if contextBytes, err := daga.AuthenticationContextToBytes(msg.FinalContext); err != nil { // TODO see to include other things (roster, Ids etc..)
 		return fmt.Errorf("%s: failed to handle Done: %s", Name, err)
 	} else {
 		for i, pubKey := range Y {

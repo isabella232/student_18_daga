@@ -4,6 +4,7 @@ import (
 	"github.com/dedis/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/student_18_daga/sign/daga"
+	"github.com/satori/go.uuid"
 )
 
 // Client implements the daga.Client interface and embeds an onet.Client and TODO whatever I'll need but is not needed by kyber.daga
@@ -29,4 +30,17 @@ func NewClient(i int, s kyber.Scalar) (*Client, error) {
 			Onet:   onet.NewClient(suite, ServiceName),
 		}, nil
 	}
+}
+
+// TODO FIXME move elsewhere later or remove completely (used to test api/cli)
+// AdminCLient the client side struct used by 3rd-party services admins to call context management endpoints
+type AdminCLient struct {
+	// TODO PGP identity etc..
+	ServiceID ServiceID
+	*onet.Client
+}
+
+// NewAdminClient is used to initialize a new AdminClient
+func NewAdminClient() *AdminCLient {
+	return &AdminCLient{Client: onet.NewClient(suite, ServiceName), ServiceID: ServiceID(uuid.Must(uuid.NewV4()))}
 }

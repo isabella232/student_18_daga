@@ -15,10 +15,12 @@ import (
 	"testing"
 )
 
+// TODO refactor test helpers, create helpers that build various requests, and have the test that test API endpoints accept request as parameter
+
 var tSuite = daga.NewSuiteEC()
 
 func TestMain(m *testing.M) {
-	log.MainTest(m)
+	log.MainTest(m, 4)
 }
 
 // override/replace the Setup function of the Service(s) with a function that populate their state/storage with
@@ -92,6 +94,7 @@ func TestService_CreateContext(t *testing.T) {
 		reply, err := s.(*Service).CreateContext(&request)
 		require.NoError(t, err)
 		require.NotZero(t, reply)
+		require.NotZero(t, reply.Context)
 
 		// verify correctness ...
 		context := reply.Context
@@ -161,6 +164,103 @@ func TestService_Auth(t *testing.T) {
 		require.True(t, context.Equals(*dummyContext), "context part of reply different than context of request")
 		// verify / extract tag
 		Tf, err := daga.GetFinalLinkageTag(tSuite, dummyContext, *serverMsg)
+		require.NoError(t, err, "failed to extract tag from the resulting serverMsg")
+		require.NotZero(t, Tf)
+	}
+}
+
+// verify that PKClient works for context created with CreateContext
+// TODO test other pairs of interactions
+func TestService_CreateContextAndPKClient(t *testing.T) {
+	local := onet.NewTCPTest(tSuite)
+	hosts, roster, _ := local.GenTree(5, true)
+	defer local.CloseAll()
+
+	services := local.GetServices(hosts, DagaID)
+
+	for _, s := range services {
+
+		// calls CreateContext
+		context, _ := getTestContext(t, s.(*Service), roster, 5)
+
+		commitments := testing2.RandomPointSlice(len(context.ClientsGenerators()) * 3)
+		reply, err := s.(*Service).PKClient(
+			&daga_login.PKclientCommitments{
+				Context:     context,
+				Commitments: commitments},
+		)
+		require.NoError(t, err)
+		require.NotZero(t, reply)
+
+		// verify that all servers correctly signed the challenge
+		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
+		_, Y := context.Members()
+		require.NoError(t, daga.Challenge(*reply).VerifySignatures(tSuite, Y, commitments))
+		//time.Sleep(2*time.Second)
+	}
+}
+
+// retrieve a test context created by calling the CreateContext endpoint with dummy parameters, to use it in other tests
+func getTestContext(t *testing.T, s *Service, roster *onet.Roster, numClients int) (daga_login.Context, []daga.Client) {
+
+	clients := make([]daga.Client, numClients)
+	keys := make([]kyber.Point, 0, numClients)
+	for i, _ := range clients {
+		client, err := daga.NewClient(tSuite, i, nil)
+		require.NoError(t, err)
+		clients[i] = client
+		keys = append(keys, client.PublicKey())
+	}
+
+	createContextRequest := daga_login.CreateContext{
+		Signature:       make([]byte, 32), // TODO openPGP etc..
+		DagaNodes:       roster,
+		SubscribersKeys: keys,
+		ServiceID:       daga_login.ServiceID(uuid.Must(uuid.NewV4())),
+	}
+	createContextReply, err := s.CreateContext(&createContextRequest)
+	require.NoError(t, err)
+	require.NotZero(t, createContextReply)
+	require.NotZero(t, createContextReply.Context)
+
+	return createContextReply.Context, clients
+}
+
+// verify that Auth works for context created with CreateContext and Challenge received from PKClient, i.e: "full test"
+func TestService_CreateContextAndPKclientAndAuth(t *testing.T) {
+	local := onet.NewTCPTest(tSuite)
+	hosts, roster, _ := local.GenTree(5, true)
+	defer local.CloseAll()
+
+	for _, s := range local.GetServices(hosts, DagaID) {
+		log.Lvl2("Sending request to", s)
+
+		// calls CreateContext
+		context, clients := getTestContext(t, s.(*Service), roster, 5)
+
+		// calls PKClient
+		authMsg, err := daga.NewAuthenticationMessage(tSuite, context, clients[0], func(commits []kyber.Point) (daga.Challenge, error) {
+			request := daga_login.PKclientCommitments{
+				Commitments: commits,
+				Context:     context,
+			}
+			reply, err := s.(*Service).PKClient(&request)
+			require.NoError(t, err)
+			return daga.Challenge(*reply), nil
+		})
+
+		// calls Auth
+		authRequest := daga_login.Auth(*daga_login.NetEncodeAuthenticationMessage(context, *authMsg))
+		authReply, err := s.(*Service).Auth(&authRequest)
+		require.NoError(t, err)
+		require.NotZero(t, authReply)
+
+		serverMsg, context, err := daga_login.NetServerMessage(*authReply).NetDecode()
+		require.NoError(t, err)
+		require.True(t, context.Equals(context), "context part of reply different than context of request")
+
+		// verify / extract tag
+		Tf, err := daga.GetFinalLinkageTag(tSuite, context, *serverMsg)
 		require.NoError(t, err, "failed to extract tag from the resulting serverMsg")
 		require.NotZero(t, Tf)
 	}

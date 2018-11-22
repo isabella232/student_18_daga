@@ -88,6 +88,8 @@ func (s *Service) acceptCreateContextRequest(req *daga_login.CreateContext) bool
 		}
 	}
 
+	// TODO FIXME check context not already existing
+
 	return true
 }
 
@@ -381,14 +383,17 @@ func (s *Service) save() {
 // but when endpoint called and no-op if already setup
 func setupState(s *Service) error {
 	if s.Storage == nil {
-		s.Storage = &Storage{}
+		s.Storage = &Storage{
+			State: State(map[daga_login.ServiceID]*ServiceState{}),
+		}
 		msg, err := s.Load(storageID)
 		if err != nil {
 			return err
 		}
 		if msg == nil {
-			// first time or nothing, load from permanent storage files
+			// first time or nothing, load from permanent storage files maybe..FIXME from byzcoin ? later..
 			// TODO/FIXME/QUESTION if makes sense
+
 			return nil
 		} else {
 			var ok bool
@@ -418,7 +423,9 @@ func (s *Service) serviceState(sid daga_login.ServiceID) (*ServiceState, error) 
 func (s *Service) startServingContext(context daga_login.Context, dagaServer daga.Server) error {
 
 	// FIXME here publish to byzcoin etc.. (and decide what should be done by who.., IMO it's to the 3rd party service responsibility to publish the context)
+	// FIXME and if no matter my opinion still want to publish from here, do it only from Leader (currently this is called at all nodes at the end of context generation protocol)
 	// FIXME and if we decide (why ? "convenience" ?) to store the dagaServer in byzcoin too => need to encrypt it (using which key ? => node's key from private.toml)
+
 	// store in local state/cache
 	serviceState, err := s.serviceState(context.ServiceID)
 	if err != nil {

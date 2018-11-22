@@ -30,7 +30,7 @@ import (
 var suite = daga.NewSuiteEC()
 
 // QUESTION TODO educated timeout formula that scale with number of nodes etc..
-const Timeout = 5000 * time.Second
+const Timeout = 5 * time.Second
 
 func init() {
 	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
@@ -347,7 +347,7 @@ func (p *Protocol) HandleOpen(msg StructOpen) (err error) {
 	ownOpening := p.opening(0)
 	return p.SendTo(msg.TreeNode, &OpenReply{
 		Opening: ownOpening,
-		Index:   p.dagaServer.Index(),  // FIXME use index in roster
+		Index:   p.dagaServer.Index(), // FIXME use index in roster
 	})
 }
 

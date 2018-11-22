@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/dedis/kyber"
 	"github.com/dedis/onet/network"
-	"github.com/dedis/student_18_daga/sign/daga"
 	"io/ioutil"
 )
 
@@ -30,41 +29,28 @@ func ContainsSameElems(a, b []kyber.Point) bool {
 	return true
 }
 
-////helper I use in stead of having a proper bootstrap method for now
-//func ReadContext(path string) (Context, error) {
-//	if msg, err := read(path); err != nil {
-//		return Context{}, errors.New("readContext:" + err.Error())
-//	} else {
-//		if netContext, ok := msg.(*NetContext); !ok {
-//			return Context{}, errors.New("readContext: type assertion error, expected NetContext")
-//		} else {
-//			return netContext.NetDecode()
-//		}
-//	}
-//}
-
 //helper I use in stead of having a proper bootstrap method for now
-func ReadServer(path string) (daga.Server, error) {
+func ReadContext(path string) (*Context, error) {
 	if msg, err := read(path); err != nil {
-		return nil, errors.New("ReadServer:" + err.Error())
+		return nil, errors.New("readContext:" + err.Error())
 	} else {
-		if netServer, ok := msg.(*NetServer); !ok {
-			return nil, errors.New("ReadServer: type assertion error, expected NetServer")
+		if context, ok := msg.(*Context); !ok {
+			return nil, errors.New("readContext: type assertion error, expected Context")
 		} else {
-			return netServer.NetDecode()
+			return context, nil
 		}
 	}
 }
 
 //helper I use in stead of having a proper bootstrap method for now
-func ReadClientPrivateKey(path string) (kyber.Scalar, error) {
+func ReadClient(path string) (*Client, error) {
 	if msg, err := read(path); err != nil {
-		return nil, errors.New("readPrivateKey:" + err.Error())
+		return nil, errors.New("readClient:" + err.Error())
 	} else {
 		if netClient, ok := msg.(*NetClient); !ok {
-			return nil, errors.New("readPrivateKey: type assertion error, expected NetClient")
+			return nil, errors.New("readClient: type assertion error, expected NetClient")
 		} else {
-			return netClient.PrivateKey, nil
+			return netClient.NetDecode()
 		}
 	}
 }
