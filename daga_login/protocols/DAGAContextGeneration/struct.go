@@ -71,10 +71,8 @@ type StructSignReply struct {
 	SignReply
 }
 
-// TODO / FIXME (potentially) unnecessary protocol step, decide if keep, way to provide final context + all sigs to the nodes
-// without fetching it from byzcoin (and useful now that I still don't use byzcoin to keep the states)
-// Done is sent from Leader to other nodes, contain all the signatures.
-// TODO if decide to keep consider reducing the amount of data being sent (nodes already have (or can save in previous steps) portions of context
+// Done is sent from Leader to other nodes, contain the final result/context
+// TODO consider reducing the amount of data being sent (nodes already have (or can save in previous steps) portions of context
 type Done struct {
 	FinalContext daga_login.Context
 }

@@ -44,7 +44,7 @@ type Protocol struct {
 	result chan daga.ServerMessage // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
 
 	dagaServer    daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
-	request       daga_login.NetAuthenticationMessage           // the client's request (set by service using LeaderSetup), used only by leader/first node
+	request       daga_login.NetAuthenticationMessage           // the client's request (set by service using LeaderSetup)
 	acceptContext func(daga_login.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
@@ -134,7 +134,7 @@ func (p *Protocol) Start() (err error) {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
 
-	return p.sendToNextServer(context, &ServerMsg{
+	return p.sendToNextServer(&ServerMsg{
 		NetServerMessage: *daga_login.NetEncodeServerMessage(context, serverMsg),
 	})
 }
@@ -175,11 +175,13 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
 
-	// check if context accepted by our node
+	// check if context accepted by our node  // FIXME validate entire request like was done for other protocols
 	if dagaServer, err := p.acceptContext(context); err != nil {
 		return fmt.Errorf("%s: context not accepted by node: %s", Name, err)
 	} else {
 		p.setDagaServer(dagaServer)
+		p.request.Context = context
+		//p.setRequest(msg.NetServerMessage.Request)  // TODO maybe for consistency
 	}
 
 	// run "protocol"
@@ -202,7 +204,7 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 		}
 		return p.SendTo(p.TreeNode(), &msg) // send to self
 	} else {
-		return p.sendToNextServer(context, &ServerMsg{
+		return p.sendToNextServer(&ServerMsg{
 			NetServerMessage: netServerMsg,
 		})
 	}
@@ -234,21 +236,25 @@ func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
 	return nil
 }
 
-func (p *Protocol) sendToNextServer(context daga_login.Context, msg interface{}) error {
+// TODO see remark in protocols/utils, would be nice to share more code between daga protocols
+func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// figure out the node of the next-server in "ring"
-	//_, Y := context.Members()
-	nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), context.Roster.Publics(), p.Tree().List())
-	if nextServerTreeNode == nil {
-		return fmt.Errorf("failed to find next node")
+	// figure out the node of the next-server in "ring"
+
+	// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
+	// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
+	// like described in DAGA paper (nothing changed fundamentally).
+	// since nodes can (and probably have) multiple daga server identities (per context),
+	// if we prefer keeping the indices in context for the "ring order",
+	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
+	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
+	// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
+	// TODO and if not and we keep current solution, combine indexOf and nextnode in a cleverer algo to use a single loop
+	ownIndex, _ := daga_login.IndexOf(p.request.Context.Roster.Publics(), p.Public())
+	if nextServerTreeNode, err := protocols.NextNode(ownIndex, p.request.Context.Roster.Publics(), p.Tree().List()); err != nil {
+		return fmt.Errorf("sendToNextServer: %s", err)
+	} else {
+		// send to next server in ring
+		return p.SendTo(nextServerTreeNode, msg)
 	}
-
-	// TODO FIXME would be nice to just call send to children ==> "ring-tree"
-
-	// TODO FIXME if possible and if make sense would like to check if same serverIdentity that the one in Context.Roster...
-	// TODO Or should we always trust Tree etc.. ? and if that doesnt make sense maybe the Roster in Context in superfluous and only complexify the code
-	// (currently only used to communicate a roster from client to service for service to build the tree)
-	// anyway if cannot do more clever things here, then the whole function is pointless, can use sendto(nextnode(), etc..) at the calling site
-
-	// send to next server in line
-	return p.SendTo(nextServerTreeNode, msg)
 }

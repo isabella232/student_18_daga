@@ -365,18 +365,12 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 	// to figure out the node of the next-server in "ring"
 	// TODO would like to have a "ring built with tree" topology to just have to sendToChildren
 	// TODO run new "subprotocol" with new tree for the finalize step ? mhhh bof..
-	_, Y := p.context.Members()
-	nextServerIndex := (p.dagaServer.Index() + 1) % len(Y)
-	var nextServerTreeNode *onet.TreeNode
+	// TODO or send to everyone including self in a for loop (like was done in wolinsky/dagas), onet will dispatch locally for us..
+	// TODO => (+) DRY a little the code and avoid having to figure out who is next node, (-) by avoiding ... we distance ourselves a little from daga (no longer ring communication but star)
 
 	//After receiving all the openings, leader verifies them and initializes the challengeCheck structure
 	for _, openReply := range msg {
 		p.saveOpening(openReply.Index, openReply.Opening)
-		// FIXME use index in roster moron.. + remove this stupid premature optimisation that hurt readability and DRY
-		// use nextNode later
-		if openReply.Index == nextServerIndex {
-			nextServerTreeNode = openReply.TreeNode
-		}
 	}
 	// TODO nicify kyber.daga "API" / previous code if possible => then clean/hide details of protocols here
 	challengeCheck, err := daga.InitializeChallenge(suite, p.context, p.commitments, p.openings)
@@ -390,7 +384,7 @@ func (p *Protocol) HandleOpenReply(msg []StructOpenReply) (err error) {
 	}
 
 	// forward to next server ("ring topology")
-	return p.SendTo(nextServerTreeNode, &Finalize{
+	return p.sendToNextServer(&Finalize{
 		ChallengeCheck: *challengeCheck,
 	})
 }
@@ -412,24 +406,7 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 
 	if weAreNotLeader {
 		// not all nodes have received Finalize => figure out the node of the next-server in "ring" and send to it.
-
-		// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
-		// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
-		// like described in DAGA paper (nothing changed fundamentally).
-		// since nodes can (and probably have) multiple daga server identities (per context),
-		// if we prefer keeping the indices in context for the "ring order",
-		// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
-		// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
-		// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
-		// FIXME use index in roster you moron... ^^
-		nextServerTreeNode := protocols.NextNode(p.dagaServer.Index(), p.context.Roster.Publics(), p.Tree().List())
-		if nextServerTreeNode == nil {
-			return fmt.Errorf("%s: failed to handle Finalize, failed to find next node: ", Name)
-		}
-		err := p.SendTo(nextServerTreeNode, &Finalize{
-			ChallengeCheck: msg.ChallengeCheck,
-		})
-		return err
+		return p.sendToNextServer(&Finalize{ChallengeCheck: msg.ChallengeCheck})
 	} else {
 		// step 5
 		// we are the leader, and all nodes already updated the challengecheck struct => Finalize the challenge
@@ -440,5 +417,27 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 		// make result available to service that will send it back to client
 		p.result <- clientChallenge
 		return nil
+	}
+}
+
+// TODO see remark in protocols/utils, would be nice to share more code between daga protocols
+func (p *Protocol) sendToNextServer(msg interface{}) error {
+	// figure out the node of the next-server in "ring"
+
+	// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
+	// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
+	// like described in DAGA paper (nothing changed fundamentally).
+	// since nodes can (and probably have) multiple daga server identities (per context),
+	// if we prefer keeping the indices in context for the "ring order",
+	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
+	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
+	// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
+	// TODO and if not and we keep current solution, combine indexOf and nextnode in a cleverer algo to use a single loop
+	ownIndex, _ := daga_login.IndexOf(p.context.Roster.Publics(), p.Public())
+	if nextServerTreeNode, err := protocols.NextNode(ownIndex, p.context.Roster.Publics(), p.Tree().List()); err != nil {
+		return fmt.Errorf("sendToNextServer: %s", err)
+	} else {
+		// send to next server in ring
+		return p.SendTo(nextServerTreeNode, msg)
 	}
 }

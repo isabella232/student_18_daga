@@ -277,6 +277,9 @@ func (p *Protocol) HandleSign(msg StructSign) (err error) {
 		return fmt.Errorf("%s: failed to handle (dishonest)Leader's Sign: wrong node public key", Name)
 	}
 
+	// TODO FIXME how can the nodes verify that the other keys are not sybil keys of leader ?
+	// TODO (and if the case what can go wrong, since can assume we are honest and daga works in anytrust => nothing can go wrong or ?)
+
 	// verify that the generators are correctly computed (do it again)
 	for i, leaderGenerator := range msg.Context.H {
 		if generator, err := daga.GenerateClientGenerator(suite, i, msg.Context.R); err != nil {
@@ -341,7 +344,6 @@ func (p *Protocol) HandleSignReply(msg []StructSignReply) (err error) {
 	}
 	p.result <- *finalContext
 
-	// TODO decide if we are done here of if we transmit it to other nodes
 	// broadcast the now done context
 	errs := p.Broadcast(&Done{
 		FinalContext: *finalContext,
@@ -357,6 +359,18 @@ func (p *Protocol) HandleDone(msg StructDone) error {
 	defer p.Done()
 	log.Lvlf3("%s: Received Done", Name)
 
-	// TODO do something with finalContext (verify signatures, make available to service etc..) and make daga.Server available to service
-	return nil
+	// verify signatures // TODO/FIXME use keys from the context at the HandleSign step to prevent leader replacing the keys (if useful, see remark at HandleSign step)
+	_, Y := msg.FinalContext.Members()
+	if contextBytes, err := daga.AuthenticationContextToBytes(msg.FinalContext); err != nil {  // TODO see to include other things (roster, Ids etc..)
+		return fmt.Errorf("%s: failed to handle Done: %s", Name, err)
+	} else {
+		for i, pubKey := range Y {
+			if err := daga.SchnorrVerify(suite, pubKey, contextBytes, msg.FinalContext.Signatures[i]); err != nil {
+				return fmt.Errorf("%s: failed to handle Done: %s", Name, err)
+			}
+		}
+	}
+
+	// make context and matching dagaServer identity available to parent service
+	return p.startServingContext(msg.FinalContext, p.dagaServer)
 }
