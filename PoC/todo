@@ -1,0 +1,7 @@
+create node app / or reuse existing node app maybe even better to demonstrate practical scenario (e.g. wikijs)
+create connector
+create docker image for node app (RP)
+create OP/IdP using dex + connector
+create docker image for OP
+docker compose + setup full system
+
