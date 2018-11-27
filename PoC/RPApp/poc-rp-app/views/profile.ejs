@@ -6,7 +6,7 @@
   </head>
   <body>
     <h1><%= title %></h1>
-    <p>Welcome to <%= title %></p>
-    <a href="/login">Log In</a>
+    <p>Welcome <%= user.displayName %>!</p>
+    <p>session secret: <%= secret%></p>
   </body>
 </html>

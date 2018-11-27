@@ -1,0 +1,14 @@
+version: '3'
+services:
+  rp:
+    build:
+      context: ./RPApp
+      args:
+        PORT: ${PORT}
+    ports:
+     - ${PORT}:${PORT}
+     - 9229:9229
+  op:
+    build: ./OPApp
+    ports:
+     - 5556:5556
