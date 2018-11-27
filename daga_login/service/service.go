@@ -77,7 +77,8 @@ func (s *Service) acceptCreateContextRequest(req *daga_login.CreateContext) bool
 	// TODO check we are part of roster...
 
 	if _, err := s.serviceState(req.ServiceID); err != nil { // unknown service/1st time
-		// TODO/FIXME for later check existing partnership/agreement, for now open access DAGA node.. accept everything
+		// for now open access DAGA node, accept everything
+		// TODO/FIXME for later check existing partnership/agreement,
 		// TODO => probably move this elsewhere, e.g at request authentication time in authenticateRequest or in caller
 
 		// create/setup service state
@@ -86,19 +87,24 @@ func (s *Service) acceptCreateContextRequest(req *daga_login.CreateContext) bool
 			ContextStates: make(map[daga_login.ContextID]*ContextState),
 			adminKey:      nil, // TODO, openPGP, fetch key from keyserver
 		}
+	} else {
+		// TODO FIXME check context not already existing
 	}
-
-	// TODO FIXME check context not already existing
 
 	return true
 }
 
+// only authorized people (such as admins of 3rd-party services (RP) who have an agreement, implicit or not with the admin of the daga node(s))
+// should be able to trigger the creation of new contexts.
 func authenticateRequest(req *daga_login.CreateContext) error {
 	// FIXME use OpenPGP (or whatever.. or don't ...) + move elsewhere (maybe utils)
 
 	// fetch public key from keyserver / trusted 3rd party
 
 	// verify signature
+
+	// TODO seems that Linus is working on a an authentication/authorization service/framework => why not using it when done
+	// https://github.com/dedis/cothority/pull/1050/commits/770631ca43a5e02a43825a7837b9f8132d8798ad
 
 	return nil
 }
@@ -234,7 +240,7 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 
-	// FIXME always use context picked by our own mean and check that context in req is the exact same !!
+	// FIXME always use context picked by our own mean or / and check that context in req is the exact same !! => see remarks in acceptContext
 
 	// start challenge generation protocol
 	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(req, dagaServer); err != nil {
@@ -326,7 +332,7 @@ func (s *Service) newDAGAContextGenerationProtocol(req *daga_login.CreateContext
 // the ProtocolInstance it is using. So this method will be potentially called on all nodes of a Tree (except the root, since it is
 // the one starting the protocols) to generate the PI on those other nodes.
 // if it returns nil, nil then the default NewProtocol is called (the one defined in protocol)
-// FIXME outdated documentation in template
+// FIXME outdated documentation in cothority_template => propose replacement
 // TODO share code between protocols (same structure, cast to new interface and call ChildSetup on it ?)
 // TODO and if like now the setup becomes more and more similar to the one for Leader, consider making small modifications to get rid of this NewProtocol, return nil, nil and have everything in protocol if possible
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
@@ -350,7 +356,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 			return nil, err
 		}
 		dagaServerProtocol := pi.(*DAGA.Protocol)
-		dagaServerProtocol.ChildSetup(s.validateContext) // TODO same as above/below validate full request
+		dagaServerProtocol.ChildSetup(s.validateContext) // TODO same as above/below validate full request vs only context
 		return dagaServerProtocol, nil
 	case DAGAContextGeneration.Name:
 		pi, err := DAGAContextGeneration.NewProtocol(tn)
@@ -379,8 +385,8 @@ func (s *Service) save() {
 //
 // TODO FIXME see if can redesign this mess later when we have a bootstrap method
 // rationale for not being a method anymore: to do testing more easily need ways to swap the function with a stub
-// + since it was called in newService previously => called from init (even in the test => crash) => "solution" don't call it at setup time
-// but when endpoint called and no-op if already setup
+// + since it was called in newService previously => called from init (even in the test => crash) => "solution" don't call it at newService time
+// but when endpoints called and no-op if already setup
 func setupState(s *Service) error {
 	if s.Storage == nil {
 		s.Storage = &Storage{
@@ -425,6 +431,7 @@ func (s *Service) startServingContext(context daga_login.Context, dagaServer dag
 	// FIXME here publish to byzcoin etc.. (and decide what should be done by who.., IMO it's to the 3rd party service responsibility to publish the context)
 	// FIXME and if no matter my opinion still want to publish from here, do it only from Leader (currently this is called at all nodes at the end of context generation protocol)
 	// FIXME and if we decide (why ? "convenience" ?) to store the dagaServer in byzcoin too => need to encrypt it (using which key ? => node's key from private.toml)
+	// (if that makes sense, if cannot already be protected by other features of byzcoin)
 
 	// store in local state/cache
 	serviceState, err := s.serviceState(context.ServiceID)

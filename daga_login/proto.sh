@@ -1,4 +1,4 @@
-#!/bin/bash -e -u
+#!/bin/bash
 struct_files=(`find . -name proto.go | sort`)
 
 for index in ${!struct_files[@]}; do

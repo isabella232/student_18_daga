@@ -49,7 +49,7 @@ type Protocol struct {
 
 	dagaServer daga.Server // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
 
-	// FIXME store original request instead (now I don't have to decode anymore => doesnt make sense to separate the fields)
+	// FIXME store original PKclientCommitments request instead (now I don't have to decode anymore => doesnt make sense to separate the fields)
 	context             daga_login.Context                                         // the context of the client request (set by leader when received from API call and then propagated to other instances as part of the announce message)
 	pKClientCommitments []kyber.Point                                              // the commitments of the PKClient PK that were sent by client to request our honest distributed challenge
 	acceptRequest       func(*daga_login.PKclientCommitments) (daga.Server, error) // a function to call to verify that request is accepted by our node (set by service at protocol creation time) and valid
@@ -149,12 +149,11 @@ func (p *Protocol) opening(index int) kyber.Scalar {
 	return p.openings[index]
 }
 
-// method called to update state of the protocol (add commitment) (doesn't check commitment signature, add only commitment whose signature is verified !)
+// method called to update state of the protocol (add commitment) (doesn't check commitment signature, call only with commitments whose signature is verified !)
 func (p *Protocol) saveCommitment(index int, commitment daga.ChallengeCommitment) {
 	if index >= len(p.commitments) {
 		log.Panicf("index (%d) out of bound while setting commitment in state, len(p.commitment) = %d, you probably forgot to call ChildSetup", index, len(p.commitments))
 	}
-	// FIXME QUESTION what is the correct way to "panic" ? in such cases
 	if p.commitments[index].Commit != nil {
 		log.Panicf("already one commitment at p.commitment[%d]", index)
 	}
@@ -185,8 +184,6 @@ func (p *Protocol) Start() (err error) {
 	}()
 
 	// quick check that give hint that every other node is indeed a direct child of root.
-	// when leader create and start protocol upon reception of PKclient commitments (in the service)
-	// it will populate Tree with the auth. Context/roster (only nodes that are part of the daga auth. context).
 	if len(p.Children()) != len(p.context.ServersSecretsCommitments())-1 {
 		return errors.New(Name + ": failed to start: tree has invalid shape")
 	}
@@ -206,7 +203,7 @@ func (p *Protocol) Start() (err error) {
 
 	// broadcast Announce requesting that all other nodes do the same and send back their signed commitments.
 	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization) and send in parallel (that's another thing..) as was done in skipchain ?
-	// TODO or add a "BroadcastInParallel" method
+	// TODO or add a "BroadcastInParallel" method in onet
 	errs := p.Broadcast(&Announce{
 		LeaderCommit:         *leaderChallengeCommit,
 		LeaderIndexInContext: p.dagaServer.Index(),
@@ -259,7 +256,7 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 	}
 
 	// verify signature of Leader's commitment
-	// FIXME WHY ??: if we trust the rosters all these node-node signatures/authentication are useless since it is handled by the DEDIS-tls in Onet..
+	// FIXME WHY ??: if we trust the rosters (and the daga context) all these node-node signatures/authentication are useless since it is handled by the DEDIS-tls in Onet..
 	_, Y := p.context.Members()
 	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, Y[msg.LeaderIndexInContext])
 	if err != nil {
@@ -347,7 +344,7 @@ func (p *Protocol) HandleOpen(msg StructOpen) (err error) {
 	ownOpening := p.opening(0)
 	return p.SendTo(msg.TreeNode, &OpenReply{
 		Opening: ownOpening,
-		Index:   p.dagaServer.Index(), // FIXME use index in roster
+		Index:   p.dagaServer.Index(),
 	})
 }
 
@@ -428,7 +425,7 @@ func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
 	// like described in DAGA paper (nothing changed fundamentally).
 	// since nodes can (and probably have) multiple daga server identities (per context),
-	// if we prefer keeping the indices in context for the "ring order",
+	// if we prefer keeping the indices in context for the "ring order", (no particular reason to do so..)
 	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
 	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
 	// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
