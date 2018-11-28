@@ -33,8 +33,8 @@ func TestNewInitialTagAndCommitments(t *testing.T) {
 	clients, servers, context, _ := GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 
 	// normal execution
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 	T0, S := tagAndCommitments.T0, tagAndCommitments.SCommits
 	require.NotNil(t, T0, "T0 nil")
 	require.NotNil(t, S, "sCommits nil")
@@ -95,8 +95,8 @@ func TestNewClientProof(t *testing.T) {
 	sendCommitsReceiveChallenge := dummyServerChannel
 
 	// normal execution, create client proof
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 
 	proof, err := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 	require.NoError(t, err, "newClientProof returned an error on valid inputs")
@@ -146,9 +146,9 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 	if context == nil {
 		return ClientProof{}, errors.New("nil context")
 	}
-	X, Y := context.Members()
+	members := context.Members()
 
-	if len(X) <= 1 {
+	if len(members.X) <= 1 {
 		return ClientProof{}, errors.New("newMaliciousClientProof: there is only one client in the context, this means DAGA is pointless")
 		// moreover the following code (and more or less DAGA paper) assumes that there is at least 2 clients/predicates
 		// in the context/OR-predicate, if this condition is not met there won't be an "subChallenges" to generate by the
@@ -158,7 +158,7 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 
 	//construct the proof.Prover for client's PK predicate and its proof.ProverContext
 	prover := newClientProver(suite, context, tagAndCommitments, client, s)
-	proverCtx := newClientProverCtx(suite, len(X))
+	proverCtx := newClientProverCtx(suite, len(members.X))
 
 	//3-move interaction with server
 	//	start the proof.Prover and proof machinery in new goroutine  // TODO maybe create a function
@@ -176,8 +176,8 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 
 	//	forward random commitments to random remote server/verifier
 	//	and receive master challenge from remote server(s)
-	randomPointSlice := make([]kyber.Point, 0, 3*len(X))
-	for i := 0; i < 3*len(X); i++ {
+	randomPointSlice := make([]kyber.Point, 0, 3*len(members.X))
+	for i := 0; i < 3*len(members.X); i++ {
 		randomPointSlice = append(randomPointSlice, suite.Point().Pick(suite.RandomStream()))
 	}
 	challenge, err := sendCommitsReceiveChallenge(randomPointSlice)
@@ -186,7 +186,7 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 		return ClientProof{}, errors.New("newMaliciousClientProof:" + err.Error())
 	}
 
-	if err := challenge.VerifySignatures(suite, Y, randomPointSlice); err != nil {
+	if err := challenge.VerifySignatures(suite, members.Y, randomPointSlice); err != nil {
 		// FIXME kill prover goroutine
 		return ClientProof{}, errors.New("newMaliciousClientProof:" + err.Error())
 	}
@@ -208,14 +208,14 @@ func newMaliciousClientProof(suite Suite, context AuthenticationContext,
 	}
 
 	// build new malicious commitments (using verification formula) to include in transcript
-	T := make([]kyber.Point, 3*len(X))
-	for i := 0; i < len(X); i++ {
+	T := make([]kyber.Point, 3*len(members.X))
+	for i := 0; i < len(members.X); i++ {
 		// satisfy the kyber.proof framework "contract" see issue/comments/fixmes added in kyber.proof
 		r0, r1 := P.R[2*i], P.R[2*i+1]
 		if i != client.Index() { // swap, they were sent in that non-obvious order because of internal details of kyber.proof framework => would deserve a reordering layer or at least some documentation IMO
 			r0, r1 = P.R[2*i+1], P.R[2*i]
 		}
-		T[3*i] = suite.Point().Add(suite.Point().Mul(P.C[i], X[i]), suite.Point().Mul(r0, nil))
+		T[3*i] = suite.Point().Add(suite.Point().Mul(P.C[i], members.X[i]), suite.Point().Mul(r0, nil))
 		//fmt.Printf("c: %v\nr: %v\n", proof.C[i], r0)
 		//fmt.Printf(" => t = cX%d + rG = %v\n\n", i, T[3*i])
 		T[3*i+1] = suite.Point().Add(suite.Point().Mul(P.C[i], tagAndCommitments.SCommits[len(tagAndCommitments.SCommits)-1]), suite.Point().Mul(r1, nil))
@@ -240,8 +240,8 @@ func TestVerifyClientProof(t *testing.T) {
 	proverIndex := 0
 
 	// create valid proof and auth. message
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[proverIndex].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[proverIndex].Index()])
 	proof, _ := newClientProof(suite, context, clients[proverIndex], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 
 	clientMsg := AuthenticationMessage{
@@ -335,8 +335,8 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	//Misbehaving clients
 	// TODO add mutliple different scenarios
 	clients, servers, context, _ = GenerateTestContext(suite, rand.Intn(10)+2, 1)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 	// 1 server, bad tagAndCommitments, invalid proof => reject proof => cannot get (even try to get) final tag
 	S := tagAndCommitments.SCommits
 
@@ -402,8 +402,8 @@ func TestGetFinalLinkageTag(t *testing.T) {
 	// n>1 servers, bad tagAndCommitments, valid proof => flag as misbehaving => receive null final tag
 	clients, servers, context, _ = GenerateTestContext(suite, rand.Intn(10)+2, rand.Intn(10)+2)
 	//Assemble the client message
-	_, Y = context.Members()
-	tagAndCommitments, s = newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members = context.Members()
+	tagAndCommitments, s = newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 	S = tagAndCommitments.SCommits
 	S[2] = suite.Point().Null()
 	sendCommitsReceiveChallenge = newDummyServerChannels(cs, servers)
@@ -522,8 +522,8 @@ func TestToBytes_ClientProof(t *testing.T) {
 	sendCommitsReceiveChallenge := newDummyServerChannels(cs, servers)
 
 	//Create test client proof
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 	proof, _ := newClientProof(suite, context, clients[0], *tagAndCommitments, s, sendCommitsReceiveChallenge)
 
 	//Normal execution

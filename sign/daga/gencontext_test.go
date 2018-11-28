@@ -16,7 +16,7 @@ func TestGenerateTestContext(t *testing.T) {
 	if err != nil || clients == nil || servers == nil || context == nil {
 		t.Error("Impossible to generate context")
 	}
-	X, Y := context.Members()
+	members := context.Members()
 
 	//Testing lengths
 	if len(clients) != c {
@@ -27,7 +27,7 @@ func TestGenerateTestContext(t *testing.T) {
 		t.Error("Wrong H length")
 	}
 
-	if len(X) != c {
+	if len(members.X) != c {
 		t.Error("Wrong X length")
 	}
 
@@ -39,7 +39,7 @@ func TestGenerateTestContext(t *testing.T) {
 		t.Error("Wrong R length")
 	}
 
-	if len(Y) != s {
+	if len(members.Y) != s {
 		t.Error("Wrong Y length")
 	}
 

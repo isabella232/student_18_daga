@@ -57,11 +57,11 @@ func runProtocol(t *testing.T, nbrNodes int) {
 	require.NotZero(t, context)
 
 	// verify correctness ...
-	_, Y := context.Members()
+	members := context.Members()
 	contextBytes, err := daga.AuthenticationContextToBytes(context) // TODO see to include other things (roster Ids etc..)
 	require.NoError(t, err)
 	present := false
-	for i, pubKey := range Y {
+	for i, pubKey := range members.Y {
 		require.NoError(t, daga.SchnorrVerify(tSuite, pubKey, contextBytes, context.Signatures[i]))
 		if pubKey.Equal(dagaServer.PublicKey()) {
 			if !present {

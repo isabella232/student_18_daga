@@ -360,11 +360,11 @@ func (p *Protocol) HandleDone(msg StructDone) error {
 	log.Lvlf3("%s: Received Done", Name)
 
 	// verify signatures // TODO/FIXME use keys from the context at the HandleSign step to prevent leader replacing the keys (if useful, see remark at HandleSign step)
-	_, Y := msg.FinalContext.Members()
+	members := msg.FinalContext.Members()
 	if contextBytes, err := daga.AuthenticationContextToBytes(msg.FinalContext); err != nil { // TODO see to include other things (roster, Ids etc..)
 		return fmt.Errorf("%s: failed to handle Done: %s", Name, err)
 	} else {
-		for i, pubKey := range Y {
+		for i, pubKey := range members.Y {
 			if err := daga.SchnorrVerify(suite, pubKey, contextBytes, msg.FinalContext.Signatures[i]); err != nil {
 				return fmt.Errorf("%s: failed to handle Done: %s", Name, err)
 			}

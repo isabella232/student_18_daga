@@ -38,7 +38,7 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, c
 							context.ServiceID: {
 								ID: context.ServiceID,
 								ContextStates: map[daga_login.ContextID]*ContextState{
-									context.ID: {
+									context.ContextID: {
 										DagaServer: *daga_login.NetEncodeServer(dagaServer),
 										Context:    context,
 									},
@@ -98,10 +98,10 @@ func TestService_CreateContext(t *testing.T) {
 
 		// verify correctness ...
 		context := reply.Context
-		_, Y := context.Members()
+		members := context.Members()
 		contextBytes, err := daga.AuthenticationContextToBytes(context) // TODO see to include other things (roster Ids etc..)
 		require.NoError(t, err)
-		for i, pubKey := range Y {
+		for i, pubKey := range members.Y {
 			require.NoError(t, daga.SchnorrVerify(tSuite, pubKey, contextBytes, context.Signatures[i]))
 		}
 	}
@@ -134,8 +134,8 @@ func TestService_PKClient(t *testing.T) {
 
 		// verify that all servers correctly signed the challenge
 		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
-		_, Y := dummyContext.Members()
-		daga.Challenge(*reply).VerifySignatures(tSuite, Y, commitments)
+		members := dummyContext.Members()
+		daga.Challenge(*reply).VerifySignatures(tSuite, members.Y, commitments)
 	}
 }
 
@@ -194,8 +194,8 @@ func TestService_CreateContextAndPKClient(t *testing.T) {
 
 		// verify that all servers correctly signed the challenge
 		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
-		_, Y := context.Members()
-		require.NoError(t, daga.Challenge(*reply).VerifySignatures(tSuite, Y, commitments))
+		members := context.Members()
+		require.NoError(t, daga.Challenge(*reply).VerifySignatures(tSuite, members.Y, commitments))
 		//time.Sleep(2*time.Second)
 	}
 }
@@ -303,7 +303,7 @@ func TestValidateContextShouldErrorOnInvalidContext(t *testing.T) {
 			R: testing2.RandomPointSlice(8), // len != 9 => invalid
 		},
 		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
-		ID:        daga_login.ContextID(uuid.Must(uuid.NewV4())),
+		ContextID: daga_login.ContextID(uuid.Must(uuid.NewV4())),
 	}
 
 	context, err := service.validateContext(badContext)
@@ -324,7 +324,7 @@ func TestValidateContextShouldErrorOnEmptyRoster(t *testing.T) {
 			R: testing2.RandomPointSlice(9),
 		},
 		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
-		ID:        daga_login.ContextID(uuid.Must(uuid.NewV4())),
+		ContextID: daga_login.ContextID(uuid.Must(uuid.NewV4())),
 	}
 	context, err := service.validateContext(badContext)
 	require.Error(t, err, "should return error on empty roster")
@@ -360,7 +360,7 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 			R: testing2.RandomPointSlice(9),
 		},
 		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
-		ID:        daga_login.ContextID(uuid.Must(uuid.NewV4())),
+		ContextID: daga_login.ContextID(uuid.Must(uuid.NewV4())),
 	}
 	context, err := service.validateContext(badNetContext)
 	require.Error(t, err, "should return error on not accepted context")

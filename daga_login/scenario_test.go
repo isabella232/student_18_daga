@@ -18,21 +18,21 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 	//Encoding
 
 	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) (daga.Challenge, error) {
-		_, Y := context.Members()
+		members := context.Members()
 
 		//Network transfer
 		//Decoding
 		// I'm not testing the network marshall lib..
 
 		//Server generation of the challenge upon receiving t
-		var j = rand.Intn(len(Y)) //Randomly selects the leader
+		var j = rand.Intn(len(members.Y)) //Randomly selects the leader
 
 		//The commitments and the openings will be stored in the following array to ease their manipulation
 		//They will be transferred on the network according to the protocols below
 		var commits []daga.ChallengeCommitment
 		var openings []kyber.Scalar
 		//Initialize both arrays
-		for num := 0; num < len(Y); num++ {
+		for num := 0; num < len(members.Y); num++ {
 			commits = append(commits, daga.ChallengeCommitment{})
 			openings = append(openings, suite.Scalar().Zero())
 		}
@@ -98,8 +98,8 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 		//Each server receives the message
 		//then executes CheckUpdateChallenge
 		//and finally pass the challenge to the next one until it reaches the leader again
-		for shift := 1; shift <= len(Y); shift++ {
-			index := (j + shift) % (len(Y))
+		for shift := 1; shift <= len(members.Y); shift++ {
+			index := (j + shift) % (len(members.Y))
 			//Receive the previous message
 
 			//Executes CheckUpdateChallenge
@@ -147,16 +147,16 @@ func TestScenario(t *testing.T) {
 	//Network transfer
 	//Decoding
 
-	X, Y := serviceContext.Members()
+	members := serviceContext.Members()
 
 	//Client's protocols
-	var i = rand.Intn(len(X))
+	var i = rand.Intn(len(members.X))
 	sendCommitsReceiveChallenge := testServerProtocolsOnClientRequests(serviceContext, servers)
 	msg, err := daga.NewAuthenticationMessage(suite, serviceContext, clients[i], sendCommitsReceiveChallenge)
 	assert.NoError(t, err)
 
 	//Arbitrarily select a server to send the message to
-	j := rand.Intn(len(Y))
+	j := rand.Intn(len(members.Y))
 
 	//Simulate the transfer of the client message to the server
 
@@ -170,10 +170,10 @@ func TestScenario(t *testing.T) {
 	}
 
 	for shift := range servers {
-		index := (j + shift) % len(Y)
+		index := (j + shift) % len(members.Y)
 		e := daga.ServerProtocol(suite, msgServ, servers[index])
 		if e != nil {
-			fmt.Printf("Error in the server protocols at server %d, shift %d:\n%s\n", (j+shift)%len(Y), shift, e)
+			fmt.Printf("Error in the server protocols at server %d, shift %d:\n%s\n", (j+shift)%len(members.Y), shift, e)
 			return
 		}
 		//The server pass the massage to the next one

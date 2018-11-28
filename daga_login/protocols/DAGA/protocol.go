@@ -190,8 +190,8 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 	}
 
 	// forward to next node or broadcast to everyone if we are the last one
-	_, Y := context.Members()
-	weAreLastServer := len(serverMsg.Indexes) == len(Y)
+	members := context.Members()
+	weAreLastServer := len(serverMsg.Indexes) == len(members.Y)
 
 	netServerMsg := *daga_login.NetEncodeServerMessage(context, serverMsg)
 	if weAreLastServer {

@@ -49,8 +49,8 @@ func runProtocol(t *testing.T, nbrNodes int) {
 
 	// verify that all servers correctly signed the challenge
 	// QUESTION: not sure if I should test theses here.. IMO the sut is the protocol, not the daga code it uses
-	_, Y := dummyContext.Members()
-	challenge.VerifySignatures(tSuite, Y, dummyReq.Commitments)
+	members := dummyContext.Members()
+	challenge.VerifySignatures(tSuite, members.Y, dummyReq.Commitments)
 }
 
 func TestLeaderSetup(t *testing.T) {

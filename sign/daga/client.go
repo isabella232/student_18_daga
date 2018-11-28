@@ -104,8 +104,8 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	}
 
 	// DAGA client Steps 1, 2, 3:
-	_, Y := context.Members()
-	TAndS, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[client.Index()])
+	members := context.Members()
+	TAndS, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[client.Index()])
 
 	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
 	if P, err := newClientProof(suite, context, client, *TAndS, s, sendCommitsReceiveChallenge); err != nil {
@@ -126,11 +126,11 @@ func validateAuthenticationMessage(suite Suite, msg AuthenticationMessage) error
 	if msg.C == nil {
 		return errors.New("validateAuthenticationMessage: nil context")
 	}
-	X, Y := msg.C.Members()
+	members := msg.C.Members()
 	//Number of clients
-	i := len(X)
+	i := len(members.X)
 	//Number of servers
-	j := len(Y)
+	j := len(members.Y)
 	//A commitment for each server exists and the second element is the generator S=(Z,g,S1,..,Sj)
 	if len(msg.SCommits) != j+2 {
 		return fmt.Errorf("validateAuthenticationMessage: wrong number of commitments in sCommits (%d), expected: %d", len(msg.SCommits), j+2)
@@ -256,7 +256,7 @@ func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMe
 	if e != nil {
 		return nil, fmt.Errorf("error in request: %s", e)
 	}
-	_, Y := context.Members()
+	members := context.Members()
 	for i, p := range msg.Proofs {
 		// FIXME : someone can just remove the proofs from message and no checks....... garbage..
 		//verify signatures
@@ -271,14 +271,14 @@ func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMe
 		}
 		data = append(data, temp...)
 		data = append(data, []byte(strconv.Itoa(msg.Indexes[i]))...)
-		err = SchnorrVerify(suite, Y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
+		err = SchnorrVerify(suite, members.Y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
 		if err != nil {
 			return nil, fmt.Errorf("error in signature: %d\n%s", i, err)
 		}
 		//verify proofs
 		var valid bool
 		if p.R2 == nil {
-			valid = verifyMisbehavingProof(suite, Y[i], &p, msg.Request.SCommits[0])
+			valid = verifyMisbehavingProof(suite, members.Y[i], &p, msg.Request.SCommits[0])
 		} else {
 			valid = verifyServerProof(suite, context, i, &msg)
 		}

@@ -52,25 +52,31 @@ type Suite interface {
 // messages within this context.
 // See Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.3
 type AuthenticationContext interface {
-	Members() ([]kyber.Point, []kyber.Point)
+	Members() Members
 	ClientsGenerators() []kyber.Point
 	ServersSecretsCommitments() []kyber.Point
+}
+
+// the members of an auth. context
+//
+// X the public keys of the clients/users
+//
+// Y the public keys of the servers
+type Members struct {
+	X, Y []kyber.Point
 }
 
 // minimum DAGA context, containing nothing but what DAGA needs to work internally
 // used for the test suite and/or to build other more complete contexts !
 //
-// G contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (g.x) and the servers (g.y)
+// G contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (G.X) and the servers (G.Y)
 //
 // R contains the commitments of the servers to their unique per-round secrets
 //
 // H contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
 // TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
 type MinimumAuthenticationContext struct {
-	G struct {
-		X []kyber.Point
-		Y []kyber.Point
-	}
+	G Members
 	R []kyber.Point
 	H []kyber.Point
 }
@@ -86,10 +92,7 @@ type MinimumAuthenticationContext struct {
 // h the unique per-round generators of the group associated to each clients
 func NewMinimumAuthenticationContext(x, y, r, h []kyber.Point) (*MinimumAuthenticationContext, error) {
 	context := MinimumAuthenticationContext{
-		G: struct {
-			X []kyber.Point
-			Y []kyber.Point
-		}{
+		G: Members {
 			X: x,
 			Y: y,
 		},
@@ -104,8 +107,8 @@ func NewMinimumAuthenticationContext(x, y, r, h []kyber.Point) (*MinimumAuthenti
 }
 
 // returns the public keys of the members of an AuthenticationContext, client keys in X and server keys in Y
-func (ac MinimumAuthenticationContext) Members() (X, Y []kyber.Point) {
-	return ac.G.X, ac.G.Y
+func (ac MinimumAuthenticationContext) Members() (Members) {
+	return ac.G
 }
 
 // returns the per-round generator of the clients for this AuthenticationContext
@@ -118,9 +121,9 @@ func (ac MinimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point
 }
 
 func ValidateContext(context AuthenticationContext) error {
-	X, Y := context.Members()
+	members := context.Members()
 	// TODO other thing, notably on generators
-	if len(X) != len(context.ClientsGenerators()) || len(Y) != len(context.ServersSecretsCommitments()) || len(X) == 0 || len(Y) == 0 {
+	if len(members.X) != len(context.ClientsGenerators()) || len(members.Y) != len(context.ServersSecretsCommitments()) || len(members.X) == 0 || len(members.Y) == 0 {
 		return errors.New("NewMinimumAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
 	return nil
@@ -165,14 +168,14 @@ func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error)
 
 //ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures
 func AuthenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
-	X, Y := ac.Members()
-	temp, e := PointArrayToBytes(X)
+	members := ac.Members()
+	temp, e := PointArrayToBytes(members.X)
 	if e != nil {
 		return nil, fmt.Errorf("Error in X: %s", e)
 	}
 	data = append(data, temp...)
 
-	temp, e = PointArrayToBytes(Y)
+	temp, e = PointArrayToBytes(members.Y)
 	if e != nil {
 		return nil, fmt.Errorf("Error in Y: %s", e)
 	}
@@ -248,10 +251,10 @@ func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
 //generateClientGenerator generates a per-round generator for a given client
 func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen kyber.Point, err error) {
 	if index < 0 {
-		return nil, fmt.Errorf("Wrond index: %d", index)
+		return nil, fmt.Errorf("wrond index: %d", index)
 	}
 	if len(commits) <= 0 {
-		return nil, fmt.Errorf("Wrong commits:\n%v", commits)
+		return nil, fmt.Errorf("wrong commits:\n%v", commits)
 	}
 	hasher := suite.Hash()
 	hasher.Write([]byte(strconv.Itoa(index)))

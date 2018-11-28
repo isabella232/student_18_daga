@@ -187,8 +187,8 @@ func VerifyChallengeCommitmentsSignatures(suite Suite, context AuthenticationCon
 		if i != com.Index {
 			return fmt.Errorf("wrong commitment index: got %d expected %d", com.Index, i)
 		}
-		_, Y := context.Members()
-		if err := VerifyChallengeCommitmentSignature(suite, com, Y[i]); err != nil {
+		members := context.Members()
+		if err := VerifyChallengeCommitmentSignature(suite, com, members.Y[i]); err != nil {
 			return err
 		}
 	}
@@ -206,12 +206,12 @@ func checkOpenings(suite Suite, context AuthenticationContext, commits []Challen
 	if context == nil {
 		return nil, fmt.Errorf("empty context")
 	}
-	_, Y := context.Members()
-	if len(commits) != len(Y) {
-		return nil, fmt.Errorf("incorrect number of commits: got %d expected %d", len(commits), len(Y))
+	members := context.Members()
+	if len(commits) != len(members.Y) {
+		return nil, fmt.Errorf("incorrect number of commits: got %d expected %d", len(commits), len(members.Y))
 	}
-	if len(openings) != len(Y) {
-		return nil, fmt.Errorf("incorrect number of openings: got %d expected %d", len(openings), len(Y))
+	if len(openings) != len(members.Y) {
+		return nil, fmt.Errorf("incorrect number of openings: got %d expected %d", len(openings), len(members.Y))
 	}
 
 	cs = suite.Scalar().Zero()
@@ -244,8 +244,8 @@ func InitializeChallenge(suite Suite, context AuthenticationContext, commits []C
 // It must be used after the leader ran InitializeChallenge and after each server received the challenge from the previous server
 func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challengeCheck *ChallengeCheck, pkClientCommitments []kyber.Point, server Server) error {
 	//Check the signatures and check for duplicates
-	_, Y := context.Members()
-	if err := challengeCheck.Challenge.VerifySignatures(suite, Y, pkClientCommitments); err != nil {
+	members := context.Members()
+	if err := challengeCheck.Challenge.VerifySignatures(suite, members.Y, pkClientCommitments); err != nil {
 		return fmt.Errorf("CheckUpdateChallenge: %s", err)
 	}
 
@@ -264,7 +264,7 @@ func CheckUpdateChallenge(suite Suite, context AuthenticationContext, challengeC
 	}
 
 	//Add the server's signature to the list if it is not the last challengeCheck call (by leader/root once every server added its grain of salt)
-	if len(challengeCheck.Sigs) == len(Y) {
+	if len(challengeCheck.Sigs) == len(members.Y) {
 		return nil
 	}
 	signData, err := challengeCheck.Challenge.ToBytes(pkClientCommitments)
@@ -288,9 +288,9 @@ func FinalizeChallenge(context AuthenticationContext, challenge *ChallengeCheck)
 	if context == nil || challenge == nil {
 		return Challenge{}, fmt.Errorf("invalid inputs")
 	}
-	_, Y := context.Members()
-	if len(challenge.Sigs) != len(Y) {
-		return Challenge{}, fmt.Errorf("signature count does not match: got %d expected %d", len(challenge.Sigs), len(Y))
+	members := context.Members()
+	if len(challenge.Sigs) != len(members.Y) {
+		return Challenge{}, fmt.Errorf("signature count does not match: got %d expected %d", len(challenge.Sigs), len(members.Y))
 	}
 
 	return Challenge{Cs: challenge.Cs, Sigs: challenge.Sigs}, nil
@@ -328,9 +328,9 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 
 	context := msg.Request.C
 
-	_, Y := context.Members()
+	members := context.Members()
 	//Checks that not all servers already did the protocols
-	if len(msg.Indexes) >= len(Y) {
+	if len(msg.Indexes) >= len(members.Y) {
 		return fmt.Errorf("ServerProtocol: too many calls of the protocols") // FIXME... ok... smells like fish..
 	}
 
@@ -356,7 +356,7 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 
 			data = append(data, []byte(strconv.Itoa(msg.Indexes[i]))...)
 
-			err = SchnorrVerify(suite, Y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
+			err = SchnorrVerify(suite, members.Y[msg.Sigs[i].Index], data, msg.Sigs[i].Sig)
 			if err != nil {
 				return fmt.Errorf("error in signature: "+strconv.Itoa(i)+"\n%s", err)
 			}
@@ -369,8 +369,8 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 		for i, p := range msg.Proofs {
 			var valid bool
 			if p.R2 == nil {
-				_, Y := context.Members()
-				valid = verifyMisbehavingProof(suite, Y[i], &p, msg.Request.SCommits[0])
+				members := context.Members()
+				valid = verifyMisbehavingProof(suite, members.Y[i], &p, msg.Request.SCommits[0])
 			} else {
 				valid = verifyServerProof(suite, context, i, msg)
 			}

@@ -257,8 +257,8 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 
 	// verify signature of Leader's commitment
 	// FIXME WHY ??: if we trust the rosters (and the daga context) all these node-node signatures/authentication are useless since it is handled by the DEDIS-tls in Onet..
-	_, Y := p.context.Members()
-	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, Y[msg.LeaderIndexInContext])
+	members := p.context.Members()
+	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, members.Y[msg.LeaderIndexInContext])
 	if err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	}
@@ -298,11 +298,11 @@ func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) (err error) {
 	log.Lvlf3("%s: Leader received all Announce replies", Name)
 
 	// verify signatures of the commitments from all other nodes/children
-	_, Y := p.context.Members()
+	members := p.context.Members()
 	for _, announceReply := range msg {
 		challengeCommit := announceReply.Commit
 		// verify signature of node's commitment
-		err := daga.VerifyChallengeCommitmentSignature(suite, challengeCommit, Y[challengeCommit.Index])
+		err := daga.VerifyChallengeCommitmentSignature(suite, challengeCommit, members.Y[challengeCommit.Index])
 		if err != nil {
 			return fmt.Errorf("%s: failed to handle AnnounceReply, : %s", Name, err.Error())
 		}
@@ -393,8 +393,8 @@ func (p *Protocol) HandleFinalize(msg StructFinalize) error {
 	log.Lvlf3("%s: %s Received Finalize", Name, p.ServerIdentity())
 
 	// check if we are the leader
-	_, Y := p.context.Members()
-	weAreNotLeader := len(msg.ChallengeCheck.Sigs) != len(Y) // TODO once daga API cleaned remove that...
+	members := p.context.Members()
+	weAreNotLeader := len(msg.ChallengeCheck.Sigs) != len(members.Y) // TODO once daga API cleaned remove that...
 
 	// Executes CheckUpdateChallenge (to verify and add signature, or verify only if we are last node/leader)
 	if err := daga.CheckUpdateChallenge(suite, p.context, &msg.ChallengeCheck, p.pKClientCommitments, p.dagaServer); err != nil {

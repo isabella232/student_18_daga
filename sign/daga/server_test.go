@@ -322,8 +322,8 @@ func TestInitializeServerMessage(t *testing.T) {
 			t.Errorf("Error in r for server %d", server.Index())
 		}
 	}
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 
 	// setup test server "channels" with valid dummy challenge
 	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
@@ -354,8 +354,8 @@ func TestServerProtocol(t *testing.T) {
 	for _, server := range servers {
 		require.NotNil(t, server.RoundSecret(), "Error in r for server %d", server.Index())
 	}
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 
 	// setup test server "channels" with valid dummy challenge
 	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
@@ -448,8 +448,8 @@ func TestServerProtocol(t *testing.T) {
 
 func TestGenerateServerProof(t *testing.T) {
 	clients, servers, context, _ := GenerateTestContext(suite, 2, 2)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 	T0, _ := tagAndCommitments.T0, tagAndCommitments.SCommits
 
 	// setup test server "channels" with valid dummy challenge
@@ -515,8 +515,8 @@ func TestGenerateServerProof(t *testing.T) {
 
 func TestVerifyServerProof(t *testing.T) {
 	clients, servers, context, _ := GenerateTestContext(suite, 2, rand.Intn(10)+2)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 
 	// setup test server "channels" with valid dummy challenge
 	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
@@ -633,8 +633,8 @@ func TestVerifyServerProof(t *testing.T) {
 
 func TestGenerateMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := GenerateTestContext(suite, 2, 2)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 
 	// setup test server "channels" with valid dummy challenge
 	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
@@ -669,8 +669,8 @@ func TestGenerateMisbehavingProof(t *testing.T) {
 
 func TestVerifyMisbehavingProof(t *testing.T) {
 	clients, servers, context, _ := GenerateTestContext(suite, 2, 2)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 
 	// setup test server "channels" with valid dummy challenge
 	sendCommitsReceiveChallenge := newDummyServerChannels(suite.Scalar().Pick(suite.RandomStream()), servers)
@@ -758,8 +758,8 @@ func TestGenerateNewRoundSecret(t *testing.T) {
 
 func TestToBytes_ServerProof(t *testing.T) {
 	clients, servers, context, _ := GenerateTestContext(suite, 2, 2)
-	_, Y := context.Members()
-	tagAndCommitments, s := newInitialTagAndCommitments(suite, Y, context.ClientsGenerators()[clients[0].Index()])
+	members := context.Members()
+	tagAndCommitments, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[clients[0].Index()])
 	_, S := tagAndCommitments.T0, tagAndCommitments.SCommits
 
 	// setup test server "channels" with valid dummy challenge

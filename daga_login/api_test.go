@@ -56,7 +56,7 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, d
 							dummyContext.ServiceID: {
 								ID: dummyContext.ServiceID,
 								ContextStates: map[daga_login.ContextID]*service.ContextState{
-									dummyContext.ID: {
+									dummyContext.ContextID: {
 										DagaServer: *daga_login.NetEncodeServer(dagaServer),
 										Context:    *dummyContext,
 									},

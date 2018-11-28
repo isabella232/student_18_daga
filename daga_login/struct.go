@@ -33,13 +33,13 @@ func NewContext(dagaContext daga.AuthenticationContext, roster *onet.Roster, ser
 
 	// TODO or instead create and export a daga function that validate context components
 	// recreate a daga context (and verify that the provided context is valid)
-	X, Y := dagaContext.Members()
-	newDagaContext, err := daga.NewMinimumAuthenticationContext(X, Y, dagaContext.ServersSecretsCommitments(), dagaContext.ClientsGenerators())
+	members := dagaContext.Members()
+	newDagaContext, err := daga.NewMinimumAuthenticationContext(members.X, members.Y, dagaContext.ServersSecretsCommitments(), dagaContext.ClientsGenerators())
 	if err != nil {
 		return nil, err
 	}
 	return &Context{
-		ID:                           ContextID(uuid.Must(uuid.NewV4())),
+		ContextID:                    ContextID(uuid.Must(uuid.NewV4())),
 		ServiceID:                    serviceID,
 		Signatures:                   signatures,
 		MinimumAuthenticationContext: *newDagaContext,
@@ -60,10 +60,10 @@ func (c Context) Equals(other Context) bool {
 	//if reflect.DeepEqual(c, other) {  // TODO check if it is useful... maybe can never work..
 	//	return true
 	//} else {
-	X1, Y1 := c.Members()
-	X2, Y2 := other.Members()
-	return ContainsSameElems(X1, X2) &&
-		ContainsSameElems(Y1, Y2) &&
+	members1 := c.Members()
+	members2 := other.Members()
+	return ContainsSameElems(members1.X, members2.X) &&
+		ContainsSameElems(members1.Y, members2.Y) &&
 		ContainsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
 		ContainsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
 	//}

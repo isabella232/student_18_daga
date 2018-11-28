@@ -11,12 +11,6 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-// PROTOSTART
-// package daga_login;
-// type :ServiceID:bytes
-// type :ContextID:bytes
-// import "onet.proto";
-
 // CreateContext will initiate the context generation protocol that will result in a CreateContextReply
 type CreateContext struct {
 	// used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
@@ -54,7 +48,7 @@ type ContextID uuid.UUID
 // Context implements the daga.AuthenticationContext interface
 // and embed a corresponding Onet roster (how to reach the DAGA servers)
 type Context struct {
-	ID         ContextID
+	ContextID ContextID
 	// ID of the 3rd-party service that use this context for auth. purposes
 	ServiceID  ServiceID
 	// signatures that show endorsement of the context by all the daga servers

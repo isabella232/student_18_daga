@@ -178,7 +178,7 @@ func (s *Service) Auth(req *daga_login.Auth) (*daga_login.AuthReply, error) {
 // helper that check if received context is valid, (fully populated, accepted, etc..)
 // returns the daga.Server used to work with this context, nil if ok to proceed, or nil, err otherwise
 func (s Service) validateContext(reqContext daga_login.Context) (daga.Server, error) {
-	if len(reqContext.Roster.List) == 0 || reqContext.ID == daga_login.ContextID(uuid.Nil) || reqContext.ServiceID == daga_login.ServiceID(uuid.Nil) {
+	if len(reqContext.Roster.List) == 0 || reqContext.ContextID == daga_login.ContextID(uuid.Nil) || reqContext.ServiceID == daga_login.ServiceID(uuid.Nil) {
 		return nil, errors.New("validateContext: empty Context")
 	}
 
@@ -199,7 +199,7 @@ func (s Service) acceptContext(reqContext daga_login.Context) (daga.Server, erro
 	// if context is accepted => we took part in the context generation && 3rd-party service is accepted => node has kept something in its state
 	if serviceState, err := s.serviceState(reqContext.ServiceID); err != nil {
 		return nil, errors.New("acceptContext: failed to retrieve 3rd-party service related state: " + err.Error())
-	} else if contextState, err := serviceState.contextState(reqContext.ID); err != nil {
+	} else if contextState, err := serviceState.contextState(reqContext.ContextID); err != nil {
 		return nil, errors.New("acceptContext: failed to retrieve context related state: " + err.Error())
 	} else {
 		// TODO/ and/or/maybe verify context signature (should not be necessary if integrity preserved/protected by equals/hash and we have a trusted copy somewhere)
@@ -438,10 +438,10 @@ func (s *Service) startServingContext(context daga_login.Context, dagaServer dag
 	if err != nil {
 		log.Panic("startServingContext: something wrong, 3rd-party service related state not present in DAGA service's storage/state")
 	}
-	if _, err := serviceState.contextState(context.ID); err == nil {
-		return fmt.Errorf("startServingContext: ... seems that a context with same ID (%s) is already existing", context.ID)
+	if _, err := serviceState.contextState(context.ContextID); err == nil {
+		return fmt.Errorf("startServingContext: ... seems that a context with same ID (%s) is already existing", context.ContextID)
 	}
-	serviceState.ContextStates[context.ID] = &ContextState{
+	serviceState.ContextStates[context.ContextID] = &ContextState{
 		Context:    context,
 		DagaServer: *daga_login.NetEncodeServer(dagaServer),
 	}
