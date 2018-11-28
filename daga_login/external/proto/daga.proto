@@ -1,4 +1,5 @@
-//TODO provide it in sign/daga and maybe remove the "copy types" introduced in proto.go (if not frowned upon by others..)
+//TODO provide it in sign/daga and maybe remove the "copy types" introduced in proto.go
+//TODO but that would only be half of the story since the awk file cannot handle type aliases
 //
 //syntax = "proto2";
 //package daga;
