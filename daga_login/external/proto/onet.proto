@@ -1,0 +1,10 @@
+syntax = "proto2";
+package onet;
+import "network.proto";
+
+message Roster {
+  required bytes id = 1;
+  repeated network.ServerIdentity list = 2;
+  required bytes aggregate = 3;
+}
+

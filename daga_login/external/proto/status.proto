@@ -1,0 +1,13 @@
+import "network.proto";
+message StatusRequest{
+
+}
+
+message StatusResponse {
+    map<string, Status> system = 1;
+    optional network.ServerIdentity server = 2;
+
+    message Status {
+        map<string, string> field = 1;
+    }
+}

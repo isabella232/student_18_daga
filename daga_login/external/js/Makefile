@@ -1,2 +1,3 @@
 all:
-	node js/build_proto.js
+	node build_proto.js
+	node build.js

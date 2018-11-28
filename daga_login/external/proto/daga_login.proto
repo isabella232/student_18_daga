@@ -1,0 +1,60 @@
+syntax = "proto2";
+package daga_login;
+import "daga.proto";
+import "onet.proto";
+import "network.proto";
+
+message Auth {
+  required Context context = 1;
+  repeated bytes scommits = 2;
+  required bytes t0 = 3;
+  required daga.ClientProof proof = 4;
+}
+
+message AuthReply {
+  required NetAuthenticationMessage request = 1;
+  repeated bytes tags = 2;
+  repeated daga.ServerProof proofs = 3;
+  repeated sint64 indexes = 4;
+  repeated daga.ServerSignature sigs = 5;
+}
+
+message Context {
+  required bytes context_id = 1;
+  required bytes service_id = 2;
+  repeated bytes signatures = 3;
+  required daga.Members g = 4;
+  repeated bytes r = 5;
+  repeated bytes h = 6;
+  required bytes id = 7;
+  repeated network.ServerIdentity list = 8;
+  required bytes aggregate = 9;
+}
+
+message CreateContext {
+  required bytes service_id = 1;
+  required bytes signature = 2;
+  repeated bytes subscribers_keys = 3;
+  optional onet.Roster daga_nodes = 4;
+}
+
+message CreateContextReply {
+  required Context context = 1;
+}
+
+message NetAuthenticationMessage {
+  required Context context = 1;
+  repeated bytes scommits = 2;
+  required bytes t0 = 3;
+  required daga.ClientProof proof = 4;
+}
+
+message PKclientChallenge {
+  required bytes cs = 1;
+  repeated daga.ServerSignature sigs = 2;
+}
+
+message PKclientCommitments {
+  required Context context = 1;
+  repeated bytes commitments = 2;
+}

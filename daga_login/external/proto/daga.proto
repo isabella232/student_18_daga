@@ -1,0 +1,40 @@
+syntax = "proto2";
+package daga;
+
+message Challenge {
+  required bytes cs = 1;
+  repeated ServerSignature sigs = 2;
+}
+
+message ClientProof {
+  required Challenge cs = 1;
+  repeated bytes t = 2;
+  repeated bytes c = 3;
+  repeated bytes r = 4;
+}
+
+message Members {
+  repeated bytes x = 1;
+  repeated bytes y = 2;
+}
+
+message MinimumAuthenticationContext {
+  required Members g = 1;
+  repeated bytes r = 2;
+  repeated bytes h = 3;
+}
+
+message ServerProof {
+  required bytes t1 = 1;
+  required bytes t2 = 2;
+  required bytes t3 = 3;
+  required bytes c = 4;
+  required bytes r1 = 5;
+  required bytes r2 = 6;
+}
+
+message ServerSignature {
+  required sint64 index = 1;
+  required bytes sig = 2;
+}
+
