@@ -2,6 +2,20 @@ package daga_login
 
 /*
 This holds the messages used to communicate with the daga service over the network.
+this file has 2 purposes,
+	- provide the go data-structures used in the daga cothority API
+	- provide their description: => the file can be used as input to proto.awk that will transpile them into proto files (protobuf) for interoperability.
+
+this means that the content of the file need to stay proto.awk friendly:
+	- only struct types, no type aliases,
+	- no anonymous fields and types
+    - no functions/methods,
+	- no "same line comments"
+	- no blank lines/"holes inside the struct definitions
+
+additionally this means that the data-structures need to stay onet/protobuf friendly:
+	- only public/exported fields
+	- no interface fields (in general.., kyber.Point/Scalar ok, see how onet package handle encoding/decoding etc.)
 */
 
 import (
