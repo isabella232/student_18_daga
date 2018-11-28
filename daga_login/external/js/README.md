@@ -1,7 +1,7 @@
 # Web-interface to the daga cothority service
 
 The cothority-services can interact using protobuf over websockets with other
-languages. This directory provides the tools used to interact with the daga service's endpoints from JS.
+languages. This directory provides the tools used to interact with the daga-cothority-service's endpoints from JS.
 
 `bundle.js` is a compilation of the `src/`-directory.
 
