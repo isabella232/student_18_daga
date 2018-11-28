@@ -194,7 +194,7 @@ func TestCheckUpdateChallenge(t *testing.T) {
 	challenge, _ := InitializeChallenge(suite, context, commits, openings)
 	cs := challenge.Cs
 
-	// TODO share randompointhelper with the daga_login testing package
+	// TODO share randompointhelper with the dagacothority testing package
 	var dummyPKClientCommitments []kyber.Point
 	for _, _ = range clients {
 		dummyPKClientCommitments = append(dummyPKClientCommitments, suite.Point().Pick(suite.RandomStream()))
@@ -264,7 +264,7 @@ func TestFinalizeChallenge(t *testing.T) {
 		openings = append(openings, open)
 	}
 
-	// TODO share randompointhelper with the daga_login testing package
+	// TODO share randompointhelper with the dagacothority testing package
 	var dummyPKClientCommitments []kyber.Point
 	for _, _ = range clients {
 		dummyPKClientCommitments = append(dummyPKClientCommitments, suite.Point().Pick(suite.RandomStream()))

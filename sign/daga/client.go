@@ -24,17 +24,17 @@ type minimumClient struct {
 	index int
 }
 
-//returns the public key of the client/server
+// PublicKey returns the public key of the client/server
 func (c minimumClient) PublicKey() kyber.Point {
 	return c.key.Public
 }
 
-//returns the private key of the client/server
+// PrivateKey returns the private key of the client/server
 func (c minimumClient) PrivateKey() kyber.Scalar {
 	return c.key.Private
 }
 
-//returns the client's (or server's) index in auth. contex
+// Index returns the client's (or server's) index in auth. context
 func (c minimumClient) Index() int {
 	return c.index
 }
@@ -46,7 +46,7 @@ func (c minimumClient) Index() int {
 //
 //}
 
-// returns a Client that holds a newly allocated minimumClient initialized with index i and secret key s (if provided)
+// NewClient returns a Client that holds a newly allocated minimumClient initialized with index i and secret key s (if provided)
 // if not provided a new key is picked at random
 func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 	if i < 0 {
@@ -72,7 +72,7 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 	}, nil
 }
 
-// authenticationMessage stores an authentication message request (M0)
+// AuthenticationMessage stores an authentication message request (M0)
 // sent by a client to an arbitrarily chosen server (listed in the context).
 //
 // Upon receiving the client’s message, all servers collectively process M0
@@ -93,13 +93,15 @@ type AuthenticationMessage struct {
 	P0 ClientProof
 }
 
+// NewAuthenticationMessage returns a pointer to a new AuthenticationMessage for/under `context` by `client`.
+// it performs the daga client protocol:
+// 	- PKclient proof of knowledge with a PKclientVerifier (`sendCommitsReceiveChallenge` abstraction of remote proof verifiers)
+//	- assemble everything
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	client Client,
-	sendCommitsReceiveChallenge func([]kyber.Point) (Challenge, error)) (*AuthenticationMessage, error) {
-	// TODO FIXME think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
-	// FIXME create a validate context helper and see where it belongs (I started to write context validation related code in the cothority implementation)
+	sendCommitsReceiveChallenge PKclientVerifier) (*AuthenticationMessage, error) {
 
-	if len(context.ClientsGenerators()) <= client.Index() {
+	if len(context.ClientsGenerators()) <= client.Index() || ValidateContext(context) != nil {
 		return nil, errors.New("context not valid, or wrong client index")
 	}
 
@@ -107,7 +109,7 @@ func NewAuthenticationMessage(suite Suite, context AuthenticationContext,
 	members := context.Members()
 	TAndS, s := newInitialTagAndCommitments(suite, members.Y, context.ClientsGenerators()[client.Index()])
 
-	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server
+	// DAGA client Step 4: sigma protocol / interactive proof of knowledge PKclient, with one random server (abstracted by sendCommitsReceiveChallenge)
 	if P, err := newClientProof(suite, context, client, *TAndS, s, sendCommitsReceiveChallenge); err != nil {
 		return nil, err
 	} else {

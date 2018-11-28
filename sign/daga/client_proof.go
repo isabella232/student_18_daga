@@ -285,12 +285,15 @@ type ClientProof struct {
 	R  []kyber.Scalar
 }
 
+// PKclientVerifier function that returns (eventually) a Challenge when provided with commitments
+type PKclientVerifier func([]kyber.Point) (Challenge, error)
+
 // builds a new ClientProof (Step 4 of client's protocol) and returns it to caller
 func newClientProof(suite Suite, context AuthenticationContext,
 	client Client,
 	tagAndCommitments initialTagAndCommitments,
 	s kyber.Scalar,
-	sendCommitsReceiveChallenge func([]kyber.Point) (Challenge, error)) (ClientProof, error) {
+	sendCommitsReceiveChallenge PKclientVerifier) (ClientProof, error) {
 
 	if context == nil {
 		return ClientProof{}, errors.New("nil context")

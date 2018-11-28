@@ -106,12 +106,12 @@ func NewMinimumAuthenticationContext(x, y, r, h []kyber.Point) (*MinimumAuthenti
 	}
 }
 
-// returns the public keys of the members of an AuthenticationContext, client keys in X and server keys in Y
+// Members returns the public keys of the members of an AuthenticationContext, client keys in X and server keys in Y
 func (ac MinimumAuthenticationContext) Members() Members {
 	return ac.G
 }
 
-// returns the per-round generator of the clients for this AuthenticationContext
+// ClientsGenerators returns the per-round generator of the clients for this AuthenticationContext
 func (ac MinimumAuthenticationContext) ClientsGenerators() []kyber.Point {
 	return ac.H
 }
@@ -122,7 +122,7 @@ func (ac MinimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point
 
 func ValidateContext(context AuthenticationContext) error {
 	members := context.Members()
-	// TODO other thing, notably on generators
+	// TODO other thing, notably on generators, (points/keys don't have small order, generators are generators (ok that one is stupid all points are generators^^) etc..)
 	if len(members.X) != len(context.ClientsGenerators()) || len(members.Y) != len(context.ServersSecretsCommitments()) || len(members.X) == 0 || len(members.Y) == 0 {
 		return errors.New("NewMinimumAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
@@ -248,7 +248,7 @@ func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
 	return data, nil
 }
 
-//generateClientGenerator generates a per-round generator for a given client
+// GenerateClientGenerator generates a per-round generator for a given client
 func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen kyber.Point, err error) {
 	if index < 0 {
 		return nil, fmt.Errorf("wrond index: %d", index)

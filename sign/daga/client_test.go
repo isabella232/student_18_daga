@@ -68,7 +68,7 @@ func signDummyChallenge(cs kyber.Scalar, servers []Server, pkClientCommitments [
 
 // test helper that returns dummy "channel" to act as a dummy server/verifier
 // that return challenge upon reception of the prover's commitments
-func newDummyServerChannels(cs kyber.Scalar, servers []Server) func([]kyber.Point) (Challenge, error) {
+func newDummyServerChannels(cs kyber.Scalar, servers []Server) PKclientVerifier {
 	sendCommitsReceiveChallenge := func(pKClientCommitments []kyber.Point) (Challenge, error) {
 		return signDummyChallenge(cs, servers, pKClientCommitments)
 	}
