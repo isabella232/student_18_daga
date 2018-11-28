@@ -1,60 +1,93 @@
 syntax = "proto2";
 package daga_login;
-import "daga.proto";
 import "onet.proto";
-import "network.proto";
 
-message Auth {
-  required Context context = 1;
-  repeated bytes scommits = 2;
-  required bytes t0 = 3;
-  required daga.ClientProof proof = 4;
-}
-
-message AuthReply {
-  required NetAuthenticationMessage request = 1;
-  repeated bytes tags = 2;
-  repeated daga.ServerProof proofs = 3;
-  repeated sint64 indexes = 4;
-  repeated daga.ServerSignature sigs = 5;
-}
-
-message Context {
-  required bytes context_id = 1;
-  required bytes service_id = 2;
-  repeated bytes signatures = 3;
-  required daga.Members g = 4;
-  repeated bytes r = 5;
-  repeated bytes h = 6;
-  required bytes id = 7;
-  repeated network.ServerIdentity list = 8;
-  required bytes aggregate = 9;
-}
-
+// CreateContext will initiate the context generation protocol that will result in a CreateContextReply
 message CreateContext {
-  required bytes service_id = 1;
+  // used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
+  required bytes serviceid = 1;
   required bytes signature = 2;
-  repeated bytes subscribers_keys = 3;
-  optional onet.Roster daga_nodes = 4;
+  repeated bytes subscriberskeys = 3;
+  // all the nodes that the 3rd-party service wants to include in its DAGA cothority
+  optional onet.Roster daganodes = 4;
 }
 
 message CreateContextReply {
   required Context context = 1;
 }
 
-message NetAuthenticationMessage {
+// PKclientCommitments will initiate the challenge generation protocol that will result (on success) in a PKclientChallenge
+message PKclientCommitments {
+  // to early reject auth requests part of context that the server doesn't care about
+  required Context context = 1;
+  repeated bytes commitments = 2;
+}
+
+// copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
+// TODO(/never): (find better solution) or why not using same proto.go generation procedure in sign/daga etc..
+message PKclientChallenge {
+  required bytes cs = 1;
+  repeated ServerSignature sigs = 2;
+}
+
+// copy of daga.ServerSignature to make awk proto generation happy (don't have proto generation in sign/daga)
+message ServerSignature {
+  required sint32 index = 1;
+  required bytes sig = 2;
+}
+
+// Auth will start the authentication of client that will result (on success) in an AuthReply
+// it provides a net (and awk friendly) compatible representation of the daga.AuthenticationMessage struct
+// (which embeds a context which is an interface)
+message Auth {
   required Context context = 1;
   repeated bytes scommits = 2;
   required bytes t0 = 3;
-  required daga.ClientProof proof = 4;
+  required ClientProof proof = 4;
 }
 
-message PKclientChallenge {
-  required bytes cs = 1;
-  repeated daga.ServerSignature sigs = 2;
+// AuthReply provides a net (and awk friendly) compatible representation of the daga.ServerMessage struct
+// (which embeds an auth message struct which embeds a context which ..)
+// FIXME don't reply with server message but only tag (authentified/endorsed by all servers) and fix the "dumbnesses" in daga.server..
+message AuthReply {
+  required Auth request = 1;
+  repeated bytes tags = 2;
+  repeated ServerProof proofs = 3;
+  repeated sint32 indexes = 4;
+  repeated ServerSignature sigs = 5;
 }
 
-message PKclientCommitments {
-  required Context context = 1;
-  repeated bytes commitments = 2;
+// copy of daga.ServerProof to make awk proto generation happy (don't have proto generation in sign/daga)
+// TODO see FIXME above
+message ServerProof {
+  required bytes t1 = 1;
+  required bytes t2 = 2;
+  required bytes t3 = 3;
+  required bytes c = 4;
+  required bytes r1 = 5;
+  required bytes r2 = 6;
+}
+
+// Context implements the daga.AuthenticationContext interface
+// and embed a corresponding Onet roster (how to reach the DAGA servers)
+message Context {
+  required bytes contextid = 1;
+  // ID of the 3rd-party service that use this context for auth. purposes
+  required bytes serviceid = 2;
+  // signatures that show endorsement of the context by all the daga servers
+  repeated bytes signatures = 3;
+  // awk friendly version of daga.MinimumAuthenticationContext { daga.Members, R, H } that was previously relied upon to implement the interface
+  repeated bytes x = 4;
+  repeated bytes y = 5;
+  repeated bytes r = 6;
+  repeated bytes h = 7;
+  optional onet.Roster roster = 8;
+}
+
+// copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
+message ClientProof {
+  required PKclientChallenge cs = 1;
+  repeated bytes t = 2;
+  repeated bytes c = 3;
+  repeated bytes r = 4;
 }
