@@ -4,11 +4,13 @@ package daga_login
 This holds the messages used to communicate with the daga service over the network.
 this file has 2 purposes,
 	- provide the go data-structures used in the daga cothority API
-	- provide their description: => the file can be used as input to proto.awk that will transpile them into proto files (protobuf) for interoperability.
+	- provide their description: => the file can be used as input to proto.awk that
+									can transpile it into a proto file (protobuf) for interoperability.
 
 this means that the content of the file need to stay proto.awk friendly:
 	- only struct types, no type aliases,
 	- no anonymous fields and types
+	- no same line declaration of fields
     - no functions/methods,
 	- no "same line comments"
 	- no blank lines/"holes inside the struct definitions
@@ -33,7 +35,7 @@ import (
 type CreateContext struct {
 	// used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
 	ServiceID       ServiceID
-	Signature []byte
+	Signature       []byte
 	SubscribersKeys []kyber.Point
 	// all the nodes that the 3rd-party service wants to include in its DAGA cothority
 	DagaNodes *onet.Roster
@@ -53,7 +55,7 @@ type PKclientCommitments struct {
 // copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
 // TODO(/never): (find better solution) or why not using same proto.go generation procedure in sign/daga etc..
 type PKclientChallenge struct {
-	Cs kyber.Scalar
+	Cs   kyber.Scalar
 	Sigs []ServerSignature
 }
 
@@ -100,11 +102,14 @@ type ServerProof struct {
 type Context struct {
 	ContextID ContextID
 	// ID of the 3rd-party service that use this context for auth. purposes
-	ServiceID  ServiceID
+	ServiceID ServiceID
 	// signatures that show endorsement of the context by all the daga servers
 	Signatures [][]byte
 	// awk friendly version of daga.MinimumAuthenticationContext { daga.Members, R, H } that was previously relied upon to implement the interface
-	X, Y, R, H []kyber.Point
+	X      []kyber.Point
+	Y      []kyber.Point
+	R      []kyber.Point
+	H      []kyber.Point
 	Roster *onet.Roster
 }
 

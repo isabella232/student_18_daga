@@ -42,14 +42,14 @@ func NewContext(dagaContext daga.AuthenticationContext, roster *onet.Roster, ser
 	} else {
 		members := dagaContext.Members()
 		return &Context{
-			ContextID:                    ContextID(uuid.Must(uuid.NewV4())),
-			ServiceID:                    serviceID,
-			Signatures:                   signatures,
-			X: members.X,
-			Y: members.Y,
-			R: dagaContext.ServersSecretsCommitments(),
-			H: dagaContext.ClientsGenerators(),
-			Roster:                       roster,
+			ContextID:  ContextID(uuid.Must(uuid.NewV4())),
+			ServiceID:  serviceID,
+			Signatures: signatures,
+			X:          members.X,
+			Y:          members.Y,
+			R:          dagaContext.ServersSecretsCommitments(),
+			H:          dagaContext.ClientsGenerators(),
+			Roster:     roster,
 		}, nil
 	}
 }
@@ -58,8 +58,8 @@ func NewContext(dagaContext daga.AuthenticationContext, roster *onet.Roster, ser
 // returns the context members (their public keys)
 func (c Context) Members() daga.Members {
 	return daga.Members{
-		X: c.X,  // client/user keys
-		Y: c.Y,  // server keys
+		X: c.X, // client/user keys
+		Y: c.Y, // server keys
 	}
 }
 
@@ -105,12 +105,12 @@ func NetEncodeChallenge(challenge daga.Challenge) *PKclientChallenge {
 	for _, dagaServerSig := range challenge.Sigs {
 		copyOfProofChallengeSigs = append(copyOfProofChallengeSigs, ServerSignature{
 			Index: dagaServerSig.Index,
-			Sig: dagaServerSig.Sig,
+			Sig:   dagaServerSig.Sig,
 		})
 	}
 
 	return &PKclientChallenge{
-		Cs: challenge.Cs,
+		Cs:   challenge.Cs,
 		Sigs: copyOfProofChallengeSigs,
 	}
 }
@@ -122,7 +122,7 @@ func (pkc PKclientChallenge) NetDecode() *daga.Challenge {
 	for _, serverSig := range pkc.Sigs {
 		copyOfProofChallengeSigs = append(copyOfProofChallengeSigs, daga.ServerSignature{
 			Index: serverSig.Index,
-			Sig: serverSig.Sig,
+			Sig:   serverSig.Sig,
 		})
 	}
 
@@ -140,9 +140,9 @@ func NetEncodeAuthenticationMessage(context Context, msg daga.AuthenticationMess
 
 	copyOfProof := ClientProof{
 		Cs: *copyOfProofChallenge,
-		R: msg.P0.R,
-		C: msg.P0.C,
-		T: msg.P0.T,
+		R:  msg.P0.R,
+		C:  msg.P0.C,
+		T:  msg.P0.T,
 	}
 
 	return &Auth{
@@ -161,20 +161,20 @@ func (a Auth) NetDecode() (*daga.AuthenticationMessage, Context) {
 	for _, serverSig := range a.Proof.Cs.Sigs {
 		copyOfProofChallengeSigs = append(copyOfProofChallengeSigs, daga.ServerSignature{
 			Index: serverSig.Index,
-			Sig: serverSig.Sig,
+			Sig:   serverSig.Sig,
 		})
 	}
 
 	copyOfProofChallenge := daga.Challenge{
-		Cs: a.Proof.Cs.Cs,
+		Cs:   a.Proof.Cs.Cs,
 		Sigs: copyOfProofChallengeSigs,
 	}
 
 	copyOfProof := daga.ClientProof{
 		Cs: copyOfProofChallenge,
-		R: a.Proof.R,
-		C: a.Proof.C,
-		T: a.Proof.T,
+		R:  a.Proof.R,
+		C:  a.Proof.C,
+		T:  a.Proof.T,
 	}
 
 	msg := daga.AuthenticationMessage{
@@ -195,7 +195,7 @@ func NetEncodeServerMessage(context Context, msg *daga.ServerMessage) *AuthReply
 	for _, dagaServerSig := range msg.Sigs {
 		copyOfSigs = append(copyOfSigs, ServerSignature{
 			Index: dagaServerSig.Index,
-			Sig: dagaServerSig.Sig,
+			Sig:   dagaServerSig.Sig,
 		})
 	}
 
@@ -203,7 +203,7 @@ func NetEncodeServerMessage(context Context, msg *daga.ServerMessage) *AuthReply
 	copyOfServerProofs := make([]ServerProof, 0, len(msg.Proofs))
 	for _, dagaServerProof := range msg.Proofs {
 		copyOfServerProofs = append(copyOfServerProofs, ServerProof{
-			C: dagaServerProof.C,
+			C:  dagaServerProof.C,
 			R1: dagaServerProof.R1,
 			R2: dagaServerProof.R2,
 			T1: dagaServerProof.T1,
@@ -230,7 +230,7 @@ func (ar AuthReply) NetDecode() (*daga.ServerMessage, Context) {
 	for _, serverSig := range ar.Sigs {
 		copyOfSigs = append(copyOfSigs, daga.ServerSignature{
 			Index: serverSig.Index,
-			Sig: serverSig.Sig,
+			Sig:   serverSig.Sig,
 		})
 	}
 
@@ -238,7 +238,7 @@ func (ar AuthReply) NetDecode() (*daga.ServerMessage, Context) {
 	copyOfServerProofs := make([]daga.ServerProof, 0, len(ar.Proofs))
 	for _, serverProof := range ar.Proofs {
 		copyOfServerProofs = append(copyOfServerProofs, daga.ServerProof{
-			C: serverProof.C,
+			C:  serverProof.C,
 			R1: serverProof.R1,
 			R2: serverProof.R2,
 			T1: serverProof.T1,

@@ -92,7 +92,7 @@ type MinimumAuthenticationContext struct {
 // h the unique per-round generators of the group associated to each clients
 func NewMinimumAuthenticationContext(x, y, r, h []kyber.Point) (*MinimumAuthenticationContext, error) {
 	context := MinimumAuthenticationContext{
-		G: Members {
+		G: Members{
 			X: x,
 			Y: y,
 		},
@@ -107,7 +107,7 @@ func NewMinimumAuthenticationContext(x, y, r, h []kyber.Point) (*MinimumAuthenti
 }
 
 // returns the public keys of the members of an AuthenticationContext, client keys in X and server keys in Y
-func (ac MinimumAuthenticationContext) Members() (Members) {
+func (ac MinimumAuthenticationContext) Members() Members {
 	return ac.G
 }
 

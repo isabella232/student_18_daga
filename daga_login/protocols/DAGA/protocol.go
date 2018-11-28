@@ -44,7 +44,7 @@ type Protocol struct {
 	result chan daga.ServerMessage // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
 
 	dagaServer    daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
-	request       daga_login.Auth           // the client's request (set by service using LeaderSetup)
+	request       daga_login.Auth                               // the client's request (set by service using LeaderSetup)
 	acceptContext func(daga_login.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
