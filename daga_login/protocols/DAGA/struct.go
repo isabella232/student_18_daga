@@ -17,7 +17,7 @@ const Name = "DAGA_Server_protocol"
 
 // represents a daga.ServerMessage that is not yet completed by all servers
 type ServerMsg struct {
-	daga_login.NetServerMessage
+	daga_login.AuthReply
 }
 
 // StructServerMsg just contains ServerMsg and the data necessary to identify and
@@ -29,7 +29,7 @@ type StructServerMsg struct {
 
 // represents a daga.ServerMessage that is completed by all servers and ready to be sent to client
 type FinishedServerMsg struct {
-	daga_login.NetServerMessage
+	daga_login.AuthReply
 }
 
 // StructServerMsg just contains FinishedServerMsg and the data necessary to identify and

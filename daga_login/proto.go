@@ -7,9 +7,13 @@ This holds the messages used to communicate with the daga service over the netwo
 import (
 	"github.com/dedis/kyber"
 	"github.com/dedis/onet"
-	"github.com/dedis/student_18_daga/sign/daga"
-	"github.com/satori/go.uuid"
 )
+
+// PROTOSTART
+// package daga_login;
+// type :ServiceID:bytes
+// type :ContextID:bytes
+// import "onet.proto";
 
 // CreateContext will initiate the context generation protocol that will result in a CreateContextReply
 type CreateContext struct {
@@ -25,25 +29,57 @@ type CreateContextReply struct {
 	Context Context
 }
 
-// PKclientCommitments will initiate the challenge generation protocol that will result in a PKclientChallenge
+// PKclientCommitments will initiate the challenge generation protocol that will result (on success) in a PKclientChallenge
 type PKclientCommitments struct {
 	// to early reject auth requests part of context that the server doesn't care about
 	Context     Context
 	Commitments []kyber.Point
 }
 
-type PKclientChallenge daga.Challenge
+// copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
+// TODO(/never): (find better solution) or why not using same proto.go generation procedure in sign/daga etc..
+type PKclientChallenge struct {
+	Cs kyber.Scalar
+	Sigs []ServerSignature
+}
+
+// copy of daga.ServerSignature to make awk proto generation happy (don't have proto generation in sign/daga)
+type ServerSignature struct {
+	Index int
+	Sig   []byte
+}
 
 // Auth will start the authentication of client that will result (on success) in an AuthReply
-type Auth NetAuthenticationMessage
+// it provides a net (and awk friendly) compatible representation of the daga.AuthenticationMessage struct
+// (which embeds a context which is an interface)
+type Auth struct {
+	Context  Context
+	SCommits []kyber.Point
+	T0       kyber.Point
+	Proof    ClientProof
+}
 
+// AuthReply provides a net (and awk friendly) compatible representation of the daga.ServerMessage struct
+// (which embeds an auth message struct which embeds a context which ..)
 // FIXME don't reply with server message but only tag (authentified/endorsed by all servers) and fix the "dumbnesses" in daga.server..
-type AuthReply NetServerMessage
+type AuthReply struct {
+	Request Auth
+	Tags    []kyber.Point
+	Proofs  []ServerProof
+	Indexes []int
+	Sigs    []ServerSignature
+}
 
-// FIXME investigate if satori is still the package to use, saw claims that it should be deprecated in favor of newer forks
-// ID of 3rd party service (that use DAGA as its auth. mechanism, don't confuse with Onet.ServiceID)
-type ServiceID uuid.UUID
-type ContextID uuid.UUID
+// copy of daga.ServerProof to make awk proto generation happy (don't have proto generation in sign/daga)
+// TODO see FIXME above
+type ServerProof struct {
+	T1 kyber.Point
+	T2 kyber.Point
+	T3 kyber.Point
+	C  kyber.Scalar
+	R1 kyber.Scalar
+	R2 kyber.Scalar
+}
 
 // Context implements the daga.AuthenticationContext interface
 // and embed a corresponding Onet roster (how to reach the DAGA servers)
@@ -53,25 +89,15 @@ type Context struct {
 	ServiceID  ServiceID
 	// signatures that show endorsement of the context by all the daga servers
 	Signatures [][]byte
-	daga.MinimumAuthenticationContext
-	*onet.Roster
+	// awk friendly version of daga.MinimumAuthenticationContext { daga.Members, R, H } that was previously relied upon to implement the interface
+	X, Y, R, H []kyber.Point
+	Roster *onet.Roster
 }
 
-// NetAuthenticationMessage provides a net compatible representation of the daga.AuthenticationMessage struct
-// (which embeds a context which is an interface)
-type NetAuthenticationMessage struct {
-	Context  Context
-	SCommits []kyber.Point
-	T0       kyber.Point
-	Proof    daga.ClientProof
-}
-
-// NetServerMessage provides a net compatible representation of the daga.ServerMessage struct
-// (which embeds an auth message struct which embeds a context which ..)
-type NetServerMessage struct {
-	Request NetAuthenticationMessage
-	Tags    []kyber.Point
-	Proofs  []daga.ServerProof
-	Indexes []int
-	Sigs    []daga.ServerSignature
+// copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
+type ClientProof struct {
+	Cs PKclientChallenge
+	T  []kyber.Point
+	C  []kyber.Scalar
+	R  []kyber.Scalar
 }

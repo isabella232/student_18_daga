@@ -39,12 +39,18 @@ func init() {
 type Protocol struct {
 	*onet.TreeNodeInstance
 	result              chan daga_login.Context                                        // channel that will receive the result of the protocol, only root/leader read/write to it
-	context             *daga_login.Context                                            // the context being built (used only by leader)
+	context             *ContextFactory                                                // the context being built (used only by leader)
 	indexOf             map[onet.TreeNodeID]int                                        // map treeNodes to their index (used only by leader)
 	dagaServer          daga.Server                                                    // to hold the newly created "daga identity" of the node for the new context/round
 	originalRequest     *daga_login.CreateContext                                      // set by leader/service, from API call and then propagated to other instances as part of the announce message, to allow them to decide to proccess request or not
 	acceptRequest       func(ctx *daga_login.CreateContext) error                      // used by child nodes to verify that a request (forwarded by leader) is valid and accepted by the node, set by service at protocol creation time
 	startServingContext func(context daga_login.Context, dagaServer daga.Server) error // used by child nodes to provide result of protocol to the parent service, set by service at protocol creation time
+}
+
+type ContextFactory struct {
+	ServiceID daga_login.ServiceID
+	daga.MinimumAuthenticationContext
+	Signatures [][]byte
 }
 
 // General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -81,7 +87,7 @@ func (p *Protocol) LeaderSetup(req *daga_login.CreateContext) {
 	p.originalRequest = req
 
 	// create context skeleton/factory
-	p.context = &daga_login.Context{
+	p.context = &ContextFactory{
 		ServiceID: req.ServiceID,
 		MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
 			G: struct {

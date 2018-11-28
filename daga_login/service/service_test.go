@@ -135,7 +135,7 @@ func TestService_PKClient(t *testing.T) {
 		// verify that all servers correctly signed the challenge
 		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
 		members := dummyContext.Members()
-		daga.Challenge(*reply).VerifySignatures(tSuite, members.Y, commitments)
+		reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments)
 	}
 }
 
@@ -159,8 +159,7 @@ func TestService_Auth(t *testing.T) {
 		require.NoError(t, err)
 		require.NotZero(t, reply)
 
-		serverMsg, context, err := daga_login.NetServerMessage(*reply).NetDecode()
-		require.NoError(t, err)
+		serverMsg, context := reply.NetDecode()
 		require.True(t, context.Equals(*dummyContext), "context part of reply different than context of request")
 		// verify / extract tag
 		Tf, err := daga.GetFinalLinkageTag(tSuite, dummyContext, *serverMsg)
@@ -195,7 +194,7 @@ func TestService_CreateContextAndPKClient(t *testing.T) {
 		// verify that all servers correctly signed the challenge
 		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
 		members := context.Members()
-		require.NoError(t, daga.Challenge(*reply).VerifySignatures(tSuite, members.Y, commitments))
+		require.NoError(t, reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments))
 		//time.Sleep(2*time.Second)
 	}
 }
@@ -246,7 +245,7 @@ func TestService_CreateContextAndPKclientAndAuth(t *testing.T) {
 			}
 			reply, err := s.(*Service).PKClient(&request)
 			require.NoError(t, err)
-			return daga.Challenge(*reply), nil
+			return *reply.NetDecode(), nil
 		})
 
 		// calls Auth
@@ -255,7 +254,7 @@ func TestService_CreateContextAndPKclientAndAuth(t *testing.T) {
 		require.NoError(t, err)
 		require.NotZero(t, authReply)
 
-		serverMsg, context, err := daga_login.NetServerMessage(*authReply).NetDecode()
+		serverMsg, context := authReply.NetDecode()
 		require.NoError(t, err)
 		require.True(t, context.Equals(context), "context part of reply different than context of request")
 
@@ -275,12 +274,12 @@ func TestValidateAuthReqShouldErrorOnNilReq(t *testing.T) {
 
 func TestValidateAuthReqShouldErrorOnEmptyReq(t *testing.T) {
 	service := &Service{}
-	context, err := service.validateAuthReq((*daga_login.Auth)(&daga_login.NetAuthenticationMessage{
+	context, err := service.validateAuthReq(&daga_login.Auth{
 		Context:  daga_login.Context{},
 		T0:       nil,
 		SCommits: nil,
-		Proof:    daga.ClientProof{},
-	}))
+		Proof:    daga_login.ClientProof{},
+	})
 	require.Error(t, err, "should return error on empty req")
 	require.Zero(t, context)
 }
@@ -294,14 +293,12 @@ func TestValidateContextShouldErrorOnInvalidContext(t *testing.T) {
 
 	badContext := daga_login.Context{
 		Roster: roster,
-		MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
-			G: struct {
-				X []kyber.Point
-				Y []kyber.Point
-			}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
-			H: testing2.RandomPointSlice(3), // len != 5 => invalid
-			R: testing2.RandomPointSlice(8), // len != 9 => invalid
-		},
+
+		X: testing2.RandomPointSlice(5),
+		Y: testing2.RandomPointSlice(9),
+		H: testing2.RandomPointSlice(3), // len != 5 => invalid
+		R: testing2.RandomPointSlice(8), // len != 9 => invalid
+
 		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
 		ContextID: daga_login.ContextID(uuid.Must(uuid.NewV4())),
 	}
@@ -315,14 +312,12 @@ func TestValidateContextShouldErrorOnEmptyRoster(t *testing.T) {
 	service := &Service{}
 	badContext := daga_login.Context{
 		Roster: &onet.Roster{},
-		MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
-			G: struct {
-				X []kyber.Point
-				Y []kyber.Point
-			}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
-			H: testing2.RandomPointSlice(5),
-			R: testing2.RandomPointSlice(9),
-		},
+
+		X: testing2.RandomPointSlice(5),
+		Y: testing2.RandomPointSlice(9),
+		H: testing2.RandomPointSlice(5),
+		R: testing2.RandomPointSlice(9),
+
 		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
 		ContextID: daga_login.ContextID(uuid.Must(uuid.NewV4())),
 	}
@@ -351,14 +346,12 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 	// same roster but bullshit in daga.Context
 	badNetContext := daga_login.Context{
 		Roster: roster,
-		MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
-			G: struct {
-				X []kyber.Point
-				Y []kyber.Point
-			}{X: testing2.RandomPointSlice(5), Y: testing2.RandomPointSlice(9)},
-			H: testing2.RandomPointSlice(5),
-			R: testing2.RandomPointSlice(9),
-		},
+
+		X: testing2.RandomPointSlice(5),
+		Y: testing2.RandomPointSlice(9),
+		H: testing2.RandomPointSlice(5),
+		R: testing2.RandomPointSlice(9),
+
 		ServiceID: daga_login.ServiceID(uuid.Must(uuid.NewV4())),
 		ContextID: daga_login.ContextID(uuid.Must(uuid.NewV4())),
 	}
@@ -386,9 +379,7 @@ func TestValidatePKClientReqShouldErrorOnEmptyOrBadlySizedCommitments(t *testing
 
 	context, err = service.ValidatePKClientReq(&daga_login.PKclientCommitments{
 		Context: daga_login.Context{
-			MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
-				H: testing2.RandomPointSlice(8),
-			},
+			H: testing2.RandomPointSlice(8),
 		},
 		Commitments: testing2.RandomPointSlice(12), // != 3*8
 	})
@@ -403,9 +394,7 @@ func TestPKClientShouldErrorOnFailedSetup(t *testing.T) {
 	}
 	reply, err := service.PKClient(&daga_login.PKclientCommitments{
 		Context: daga_login.Context{
-			MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
-				H: testing2.RandomPointSlice(8),
-			},
+			H: testing2.RandomPointSlice(8),
 		},
 		Commitments: testing2.RandomPointSlice(3 * 8),
 	})

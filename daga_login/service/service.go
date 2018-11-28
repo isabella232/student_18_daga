@@ -247,7 +247,7 @@ func (s *Service) PKClient(req *daga_login.PKclientCommitments) (*daga_login.PKc
 		return nil, errors.New("PKClient: " + err.Error())
 	} else {
 		challenge, err := challengeGeneration.WaitForResult()
-		return (*daga_login.PKclientChallenge)(&challenge), err
+		return daga_login.NetEncodeChallenge(challenge), err
 	}
 }
 
@@ -268,7 +268,7 @@ func (s *Service) newDAGAServerProtocol(req *daga_login.Auth, dagaServer daga.Se
 		return nil, errors.New("failed to create " + DAGA.Name + " protocol: " + err.Error())
 	}
 	dagaProtocol := pi.(*DAGA.Protocol)
-	dagaProtocol.LeaderSetup(*(*daga_login.NetAuthenticationMessage)(req), dagaServer)
+	dagaProtocol.LeaderSetup(*req, dagaServer)
 
 	// start
 	if err = dagaProtocol.Start(); err != nil {

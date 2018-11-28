@@ -75,7 +75,7 @@ func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req daga_
 
 // function called to initialize and start a new DAGA server protocol where current node takes a Leader role
 // "dummy" counterpart of daga_login.service.newDAGAServerProtocol() keep them more or less in sync
-func (s DummyService) NewDAGAServerProtocol(t *testing.T, req daga_login.NetAuthenticationMessage) *DAGA.Protocol {
+func (s DummyService) NewDAGAServerProtocol(t *testing.T, req daga_login.Auth) *DAGA.Protocol {
 	// build tree with leader as root
 	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!

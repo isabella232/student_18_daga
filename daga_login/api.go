@@ -59,7 +59,7 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 	// TODO FIXME QUESTION think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
 	// abstraction of remote servers/verifiers for PKclient, it is a function that wrap an API call to PKclient
-	PKclientVerifier := c.newPKclientVerifier(context, context.RandomServerIdentity())
+	PKclientVerifier := c.newPKclientVerifier(context, context.Roster.RandomServerIdentity())
 
 	// build daga auth. message
 	if M0, err := daga.NewAuthenticationMessage(suite, context, c, PKclientVerifier); err != nil {
@@ -68,12 +68,12 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 		// send it to random server (API call to Auth)
 		request := Auth(*NetEncodeAuthenticationMessage(context, *M0))
 		reply := AuthReply{}
-		dst := context.RandomServerIdentity()
+		dst := context.Roster.RandomServerIdentity()
 		if err := c.Onet.SendProtobuf(dst, &request, &reply); err != nil {
 			return nil, fmt.Errorf("error sending auth. request to %s : %s", dst, err)
 		}
 		// decode reply
-		serverMsg, context, err := NetServerMessage(reply).NetDecode()
+		serverMsg, context := reply.NetDecode()
 		if err != nil {
 			return nil, fmt.Errorf("error decoding auth. reply from %s : %s", dst, err)
 		}
@@ -100,5 +100,5 @@ func (c Client) pKClient(dst *network.ServerIdentity, context Context, commitmen
 		return daga.Challenge{}, fmt.Errorf("pKClient, error sending commitments to %s : %s", dst, err)
 	}
 	log.Lvl3("pKClient, received master challenge from: ", dst)
-	return daga.Challenge(reply), nil
+	return *reply.NetDecode(), nil
 }

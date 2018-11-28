@@ -44,7 +44,7 @@ type Protocol struct {
 	result chan daga.ServerMessage // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
 
 	dagaServer    daga.Server                                   // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
-	request       daga_login.NetAuthenticationMessage           // the client's request (set by service using LeaderSetup)
+	request       daga_login.Auth           // the client's request (set by service using LeaderSetup)
 	acceptContext func(daga_login.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
@@ -69,7 +69,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 }
 
 // setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
-func (p *Protocol) LeaderSetup(req daga_login.NetAuthenticationMessage, dagaServer daga.Server) {
+func (p *Protocol) LeaderSetup(req daga_login.Auth, dagaServer daga.Server) {
 	if p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
@@ -102,7 +102,7 @@ func (p *Protocol) setDagaServer(dagaServer daga.Server) {
 }
 
 // setter used to provide the client request to the root protocol instance
-func (p *Protocol) setRequest(request daga_login.NetAuthenticationMessage) {
+func (p *Protocol) setRequest(request daga_login.Auth) {
 	p.request = request
 }
 
@@ -123,7 +123,7 @@ func (p *Protocol) Start() (err error) {
 	p.result = make(chan daga.ServerMessage)
 
 	// leader initialize the server message with the request from the client
-	request, context, _ := p.request.NetDecode()
+	request, context := p.request.NetDecode()
 	serverMsg, err := daga.InitializeServerMessage(request)
 	if err != nil {
 		return fmt.Errorf("%s: %s", Name, err)
@@ -134,9 +134,7 @@ func (p *Protocol) Start() (err error) {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
 
-	return p.sendToNextServer(&ServerMsg{
-		NetServerMessage: *daga_login.NetEncodeServerMessage(context, serverMsg),
-	})
+	return p.sendToNextServer(&ServerMsg{*daga_login.NetEncodeServerMessage(context, serverMsg)})
 }
 
 // Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
@@ -170,7 +168,7 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 	log.Lvlf3("%s: Received ServerMsg", Name)
 
 	// decode
-	serverMsg, context, err := msg.NetDecode() //NetServerMsg.NetDecode()
+	serverMsg, context := msg.NetDecode()
 	if err != nil {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
@@ -195,18 +193,15 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 
 	netServerMsg := *daga_login.NetEncodeServerMessage(context, serverMsg)
 	if weAreLastServer {
-		msg := FinishedServerMsg{
-			NetServerMessage: netServerMsg,
-		}
+		// broadcast to everyone (including us)
+		msg := FinishedServerMsg{netServerMsg}
 		errs := p.Broadcast(&msg)
 		if len(errs) != 0 {
 			return fmt.Errorf(Name+": failed to terminate: broadcast of FinishedServerMsg failed with error(s): %v", errs)
 		}
 		return p.SendTo(p.TreeNode(), &msg) // send to self
 	} else {
-		return p.sendToNextServer(&ServerMsg{
-			NetServerMessage: netServerMsg,
-		})
+		return p.sendToNextServer(&ServerMsg{netServerMsg})
 	}
 }
 
@@ -216,19 +211,17 @@ func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
 
 	weAreLeader := p.acceptContext == nil // TODO FIXME what could be a better way ??.. don't like using things for multiple non obvious purposes => maybe decide that leader is at root of tree (and bye bye the potential "ring-tree")
 
-	serverMsg, context, err := msg.NetDecode()
-	if err != nil {
-		return fmt.Errorf("%s: %s", Name, err)
-	}
+	serverMsg, context := msg.NetDecode()
 
 	// verify and extract tag
-	_, err = daga.GetFinalLinkageTag(suite, context, *serverMsg)
+	_, err := daga.GetFinalLinkageTag(suite, context, *serverMsg)
 	if err != nil {
 		return fmt.Errorf("%s: cannot verify server message: %s", Name, err)
 	}
 
 	if !weAreLeader {
-		// TODO/FIXME do something.. don't know now..keep somewhere tag for later usage in login service
+		// TODO can do something.. don't know now..keep somewhere tag for later usage in login service
+		//  or to keep stats in context etc..and offer a new endpoint in service
 	} else {
 		// make resulting message (and hence final linkage tag available to service => send back to client
 		p.result <- *serverMsg // TODO maybe send netServerMsg instead => save one encoding to the service
@@ -244,12 +237,10 @@ func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
 	// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
 	// like described in DAGA paper (nothing changed fundamentally).
-	// since nodes can (and probably have) multiple daga server identities (per context),
+	// this is because nodes can (and probably have) multiple daga server identities (one per context),
 	// if we prefer keeping the indices in context for the "ring order",
 	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
 	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
-	// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
-	// TODO and if not and we keep current solution, combine indexOf and nextnode in a cleverer algo to use a single loop
 	ownIndex, _ := daga_login.IndexOf(p.request.Context.Roster.Publics(), p.Public())
 	if nextServerTreeNode, err := protocols.NextNode(ownIndex, p.request.Context.Roster.Publics(), p.Tree().List()); err != nil {
 		return fmt.Errorf("sendToNextServer: %s", err)

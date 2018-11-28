@@ -67,7 +67,7 @@ type Members struct {
 }
 
 // minimum DAGA context, containing nothing but what DAGA needs to work internally
-// used for the test suite and/or to build other more complete contexts !
+// used for the test suite and in context factories (or later in concrete contexts..if you don't need to generate proto files in your new project...as a way to implement for you the interface)
 //
 // G contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (G.X) and the servers (G.Y)
 //
