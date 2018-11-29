@@ -1,0 +1,2 @@
+why bundling cothority-protobuf instead of making it a dependency ? etc..
+why not bundling protobuf ?(vs bundling cothority-protobuf?)

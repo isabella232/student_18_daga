@@ -52,24 +52,24 @@ class DagaMessages extends CothorityProtobuf {
     //     return this.decodeMessage('CountResponse', response);
     // }
     //
-    // /**
-    //  * Create an encoded message to make a StatusRequest to a cothority node
-    //  * @returns {*|Buffer|Uint8Array}
-    //  */
-    // createStatusRequest() {
-    //     return this.encodeMessage('StatusRequest', {});
-    // }
-    //
-    // /**
-    //  * Return the decoded response of a StatusRequest
-    //  * @param {*|Buffer|Uint8Array} response - Response of the Cothority
-    //  * @returns {*}
-    //  */
-    // decodeStatusResponse(response) {
-    //     response = new Uint8Array(response);
-    //
-    //     return this.decodeMessage('StatusResponse', response);
-    // }
+
+    /**
+     * Create an encoded message to make a StatusRequest to a cothority node
+     * @returns {*|Buffer|Uint8Array}
+     */
+    createStatusRequest() {
+        return this.encodeMessage('StatusRequest', {});
+    }
+
+    /**
+     * Return the decoded response of a StatusRequest
+     * @param {*|Buffer|Uint8Array} response - Response of the Cothority
+     * @returns {*}
+     */
+    decodeStatusResponse(response) {
+        response = new Uint8Array(response);
+        return this.decodeMessage('StatusResponse', response);
+    }
 
     /**
      * Use the existing socket or create a new one if required
@@ -130,11 +130,13 @@ class DagaMessages extends CothorityProtobuf {
      * @param {string} toml of public.toml
      * @returns {object} Roster-object
      */
-    toml_to_roster(toml){
+    toml_to_roster(toml) {
         var parsed = {};
         var b2h = this.buf2hex;
         try {
-            parsed = topl.parse(toml)
+            console.log("almost parsing..");
+            parsed = topl.parse(toml);
+            console.log(parsed);
             parsed.servers.forEach(function (el) {
                 var pubstr = Uint8Array.from(atob(el.Public), c => c.charCodeAt(0));
                 var url = "https://dedis.epfl.ch/id/" + b2h(pubstr);
@@ -152,7 +154,8 @@ class DagaMessages extends CothorityProtobuf {
      * @returns {string} the url
      */
     si_to_ws(si, path){
-        var ip_port = si.Address.replace("tcp://", "").split(":");
+        // TODO signal this to the lab or make pull request to cothority template
+        var ip_port = si.Address.replace("tls://", "").split(":");
         ip_port[1] = parseInt(ip_port[1]) + 1;
         return "ws://" + ip_port.join(":") + path;
     }

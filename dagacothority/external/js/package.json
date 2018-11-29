@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "bytebuffer": "^5.0.1",
-    "file": "^0.2.2",
+//    "file": "^0.2.2",
     "protobufjs": "~6.8.8"
   },
   "devDependencies": {

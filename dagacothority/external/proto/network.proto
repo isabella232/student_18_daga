@@ -6,6 +6,6 @@ message ServerIdentity {
   required bytes id = 2;
   required string address = 3;
   required string description = 4;
-  required string url = 5;
+  optional string url = 5;  //TODO see WTF
 }
 
