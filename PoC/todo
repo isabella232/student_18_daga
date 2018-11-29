@@ -2,6 +2,7 @@ create node app / or reuse existing node app maybe even better to demonstrate pr
 create connector + web client + serve it (or inject it using greasemonkey or create a web extension etc..)
 create docker image for node app (RP)
 create OP/IdP using dex + connector
+create patch for dex (or not, use my fork url, think of the best way to build the thing in docker)
 create docker image for OP
 docker compose + setup full system
 use https

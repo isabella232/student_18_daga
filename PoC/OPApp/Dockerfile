@@ -5,7 +5,7 @@ WORKDIR /opt/poc-op-app
 
 # grab and build dex
 RUN apk add --no-cache --update alpine-sdk 
-RUN go get -d github.com/dexidp/dex
+RUN go get -d github.com/sarkortrantor/dex
 
 WORKDIR /go/src/github.com/sarkortrantor/dex 
 RUN make release-binary 
