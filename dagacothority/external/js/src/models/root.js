@@ -1,5 +1,5 @@
 import protobuf from "protobufjs"
-import skeleton from './skeleton.json'
+import skeleton from './skeleton'
 
 const {Root} = protobuf;
 

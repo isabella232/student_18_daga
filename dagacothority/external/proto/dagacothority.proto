@@ -1,8 +1,8 @@
 syntax = "proto2";
-package daga_login;
+package dagacothority;
 import "onet.proto";
 
-// CreateContext will initiate the context generation protocol that will result in a CreateContextReply
+// CreateContext initiates the context generation protocol that will result in a CreateContextReply
 message CreateContext {
   // used to identify 3rd-party service making the request (maybe we don't need to strictly identify but easier for now, later can rely on other schemes)
   required bytes serviceid = 1;
@@ -12,25 +12,26 @@ message CreateContext {
   optional onet.Roster daganodes = 4;
 }
 
+// CreateContextReply is the reply to a CreateContext request ... (yes looks like I'll stop trying to satisfy golint quickly..)
 message CreateContextReply {
   required Context context = 1;
 }
 
-// PKclientCommitments will initiate the challenge generation protocol that will result (on success) in a PKclientChallenge
+// PKclientCommitments initiates the challenge generation protocol that will result (on success) in a PKclientChallenge
 message PKclientCommitments {
   // to early reject auth requests part of context that the server doesn't care about
   required Context context = 1;
   repeated bytes commitments = 2;
 }
 
-// copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
+// PKclientChallenge is a copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga + awk doesn't like type aliases)
 // TODO(/never): (find better solution) or why not using same proto.go generation procedure in sign/daga etc..
 message PKclientChallenge {
   required bytes cs = 1;
   repeated ServerSignature sigs = 2;
 }
 
-// copy of daga.ServerSignature to make awk proto generation happy (don't have proto generation in sign/daga)
+// ServerSignature is a copy of daga.ServerSignature to make awk proto generation happy (don't have proto generation in sign/daga)
 message ServerSignature {
   required sint32 index = 1;
   required bytes sig = 2;
@@ -57,7 +58,7 @@ message AuthReply {
   repeated ServerSignature sigs = 5;
 }
 
-// copy of daga.ServerProof to make awk proto generation happy (don't have proto generation in sign/daga)
+// ServerProof is a copy of daga.ServerProof to make awk proto generation happy (don't have proto generation in sign/daga)
 // TODO see FIXME above
 message ServerProof {
   required bytes t1 = 1;
@@ -84,7 +85,7 @@ message Context {
   optional onet.Roster roster = 8;
 }
 
-// copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
+// ClientProof is a copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga)
 message ClientProof {
   required PKclientChallenge cs = 1;
   repeated bytes t = 2;

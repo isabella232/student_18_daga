@@ -1,4 +1,4 @@
-// bundle everything in
+// bundle everything under bundle.js
 var rollup = require('rollup');
 var babel = require('rollup-plugin-babel');
 
@@ -18,7 +18,7 @@ rollup.rollup({
     bundle.write({
       format: 'iife',
       moduleName: 'DagaProtobuf',
-      dest: 'js/bundle.js'
+      dest: 'bundle.js'
     });
   },
   (e) => console.log('error', e)

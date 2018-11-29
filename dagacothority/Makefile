@@ -36,3 +36,4 @@ test: test_fmt test_lint test_go
 
 proto:
 	./proto.sh
+	make -C external
