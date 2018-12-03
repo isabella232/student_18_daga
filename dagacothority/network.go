@@ -33,7 +33,7 @@ func netEncodeClient(c daga.Client) *NetClient {
 	}
 }
 
-func (nc NetClient) netDecode() (*Client, error) {
+func (nc NetClient) NetDecode() (*Client, error) {
 	return NewClient(nc.Index, nc.PrivateKey)
 }
 
@@ -55,7 +55,7 @@ func NetEncodeClients(clients []daga.Client) ([]NetClient, error) {
 //	}
 //	var clients []*Client
 //	for i, nc := range netClients {
-//		if c, err := nc.netDecode(); err != nil {
+//		if c, err := nc.NetDecode(); err != nil {
 //			return nil, fmt.Errorf("Decode error at index %d\n%s", i, err)
 //		} else {
 //			clients = append(clients, c)

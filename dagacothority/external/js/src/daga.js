@@ -1,4 +1,5 @@
 import CothorityProtobuf from './cothority-protobuf'
+//import * as topl from './topl.min.js'
 
 /**
  * Helpers to encode and decode messages of the daga Cothority service
@@ -134,7 +135,6 @@ class DagaMessages extends CothorityProtobuf {
         var parsed = {};
         var b2h = this.buf2hex;
         try {
-            console.log("almost parsing..");
             parsed = topl.parse(toml);
             console.log(parsed);
             parsed.servers.forEach(function (el) {
@@ -144,6 +144,7 @@ class DagaMessages extends CothorityProtobuf {
             })
         }
         catch(err){
+            console.log(err);
         }
         return parsed;
     }

@@ -50,7 +50,7 @@ func ReadClient(path string) (*Client, error) {
 		if netClient, ok := msg.(*NetClient); !ok {
 			return nil, errors.New("readClient: type assertion error, expected NetClient")
 		} else {
-			return netClient.netDecode()
+			return netClient.NetDecode()
 		}
 	}
 }

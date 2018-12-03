@@ -1,5 +1,4 @@
-var DagaProtobuf = (function (protobuf) {
-'use strict';
+define(['protobufjs'], function (protobuf) { 'use strict';
 
 protobuf = 'default' in protobuf ? protobuf['default'] : protobuf;
 
@@ -145,6 +144,8 @@ var CothorityProtobuf = function () {
   }]);
   return CothorityProtobuf;
 }();
+
+//import * as topl from './topl.min.js'
 
 /**
  * Helpers to encode and decode messages of the daga Cothority service
@@ -305,7 +306,6 @@ var DagaMessages = function (_CothorityProtobuf) {
             var parsed = {};
             var b2h = this.buf2hex;
             try {
-                console.log("almost parsing..");
                 parsed = topl.parse(toml);
                 console.log(parsed);
                 parsed.servers.forEach(function (el) {
@@ -315,7 +315,9 @@ var DagaMessages = function (_CothorityProtobuf) {
                     var url = "https://dedis.epfl.ch/id/" + b2h(pubstr);
                     el.Id = new UUID(5, "ns:URL", url).export();
                 });
-            } catch (err) {}
+            } catch (err) {
+                console.log(err);
+            }
             return parsed;
         }
 
@@ -346,4 +348,4 @@ var daga = new DagaMessages();
 
 return daga;
 
-}(protobuf));
+});

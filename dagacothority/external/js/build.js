@@ -4,7 +4,7 @@ var babel = require('rollup-plugin-babel');
 
 rollup.rollup({
   entry: 'src/daga.js',
-  external: ['protobufjs'],
+  external: ['protobufjs'],//, 'topl'],
   plugins: [
     babel({
       babelrc: false,
@@ -16,7 +16,7 @@ rollup.rollup({
     console.log('write file');
 
     bundle.write({
-      format: 'iife',
+      format: 'amd',
       moduleName: 'DagaProtobuf',
       dest: 'bundle.js'
     });

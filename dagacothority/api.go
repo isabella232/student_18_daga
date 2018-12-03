@@ -45,7 +45,7 @@ func (ac AdminCLient) CreateContext(subscribers []kyber.Point, roster *onet.Rost
 // newPKclientVerifier return a function that wraps a PKClient API call to `dst` under `context`.
 // the returned function accept PKClient commitments as parameter
 // and returns the master challenge.
-func (c Client) newPKclientVerifier(context Context, dst *network.ServerIdentity) daga.PKclientVerifier {
+func (c Client) NewPKclientVerifier(context Context, dst *network.ServerIdentity) daga.PKclientVerifier {
 	// poor man's curry
 	sendCommitsReceiveChallenge := func(proverCommitments []kyber.Point) (daga.Challenge, error) {
 		return c.pKClient(dst, context, proverCommitments)
@@ -61,7 +61,7 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 	// TODO FIXME QUESTION think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
 	// abstraction of remote servers/verifiers for PKclient, it is a function that wrap an API call to PKclient
-	PKclientVerifier := c.newPKclientVerifier(context, context.Roster.RandomServerIdentity())
+	PKclientVerifier := c.NewPKclientVerifier(context, context.Roster.RandomServerIdentity())
 
 	// build daga auth. message
 	if M0, err := daga.NewAuthenticationMessage(suite, context, c, PKclientVerifier); err != nil {
