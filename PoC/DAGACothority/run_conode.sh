@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env ash
 set -e
 
 # This will allow you to put the servers on a different range if you want.
