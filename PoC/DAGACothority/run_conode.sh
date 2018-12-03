@@ -5,7 +5,8 @@ set -e
 #   $ export PORTBASE=18000
 #   $ ./run_conode.sh 3
 # Results in the servers being on 18002-18007.
-[ -z "$PORTBASE" ] && PORTBASE=7000
+[ -z "$PORTBASE" ] && PORTBASE=12000
+[ -z "$IP" ] && IP="127.0.0.1"
 
 main(){
 	if [ ! "$1" ]; then
@@ -50,7 +51,7 @@ runLocal(){
 		co=co$n
 		# if not present, setup
 		if [ ! -d $co ]; then
-			echo -e "localhost:$(($PORTBASE + 2 * $n))\nConode_$n\n$co" | conode setup
+			echo -e "$IP:$(($PORTBASE + 2 * $n))\nConode_$n\n$co" | conode setup
 		fi
 		# start
 		conode -d $DEBUG -c $co/private.toml server &
