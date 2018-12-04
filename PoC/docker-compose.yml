@@ -20,6 +20,7 @@ services:
       context: ./OPApp
       args:
         PORT: ${OPPORT}
+        RPPORT: ${RPPORT}
     extra_hosts:
      - rpapp.poc:${DOCKER_HOST_IP}
     ports:

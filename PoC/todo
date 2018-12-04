@@ -11,5 +11,5 @@ use https
 ok -create web folder and specify it in config
 
 daemonize dagadaemon ?
-generate config.yaml from setup variables
+ok -generate config.yaml from setup variables
 nice way to resolve names automatically from all actors (now I have to add lines in /etc/hosts)

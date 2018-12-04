@@ -24,12 +24,13 @@ RUN make release-binary
 WORKDIR /opt/poc-op-app
 COPY poc-op-app .
 
-# app listen port 
+# apps listen ports 
 ARG PORT 
-ENV PORT=$PORT
+ARG RPPORT
 EXPOSE $PORT
 
-# TODO modify config.yaml with env vars
+# update dex's config.yaml
+RUN sed -i "s/%OPPORT%/$PORT/g;s/%RPPORT%/$RPPORT/g" ./config.yaml 
 
 ENTRYPOINT ["dex"]
 CMD ["serve", "./config.yaml"]

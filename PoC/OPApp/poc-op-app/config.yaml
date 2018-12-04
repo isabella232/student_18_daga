@@ -1,8 +1,7 @@
 # The base path of dex and the external name of the OpenID Connect service.
 # This is the canonical URL that all clients MUST use to refer to dex. If a
 # path is provided, dex's HTTP service will listen at a non-root URL.
-# TODO automatically set to DOCKER_HOST_IP
-issuer: http://opapp.poc:5556/dex
+issuer: http://opapp.poc:%OPPORT%/dex
 
 # The storage configuration determines where dex stores its state. Supported
 # options include SQL flavors and Kubernetes third party resources.
@@ -15,7 +14,7 @@ storage:
 
 # Configuration for the HTTP endpoints.
 web:
-  http: 0.0.0.0:5556
+  http: 0.0.0.0:%OPPORT%
 # Uncomment for HTTPS options.
 #  https: 0.0.0.0:5554
 #  tlsCert: ./tls.crt
@@ -60,7 +59,7 @@ oauth2:
 staticClients:
 - id: poc-rp-app 
   redirectURIs: #TODO parametrize for docker compose later
-  - 'http://rpapp.poc:8080/authorization-code/callback'
+  - 'http://rpapp.poc:%RPPORT%/authorization-code/callback'
   name: 'PoC RP App'
   secret: 37C2F6159B63D3DD25C3F9AE5C7190EE 
 
