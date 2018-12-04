@@ -1,13 +1,6 @@
 #!/usr/bin/env ash
 set -e
 
-# This will allow you to put the servers on a different range if you want.
-#   $ export PORTBASE=18000
-#   $ ./run_conode.sh 3
-# Results in the servers being on 18002-18007.
-[ -z "$PORTBASE" ] && PORTBASE=12000
-[ -z "$IP" ] && IP="127.0.0.1"
-
 main(){
 	if [ ! "$1" ]; then
 		showHelp
@@ -27,6 +20,16 @@ main(){
 		export PATH
 	fi
 
+	if [ ! "$IP" ]; then
+		echo "Please set the IP env variable."
+		exit 1
+	fi
+
+	if [ ! "$PORTBASE" ]; then
+		echo "Please set the PORTBASE env variable."
+		exit 1
+	fi
+	
 	runLocal $@
 }
 
@@ -39,7 +42,7 @@ EOF
 
 runLocal(){
 	NBR=$1
-	WAIT=""
+	WAIT="yes"
 	DEBUG=3
 	if [ "$2" ]; then
 		DEBUG=$2

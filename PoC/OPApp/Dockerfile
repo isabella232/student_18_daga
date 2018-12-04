@@ -5,20 +5,31 @@ WORKDIR /opt/poc-op-app
 
 # grab and build dex
 RUN apk add --no-cache --update alpine-sdk 
+
+#.only temp! TODO remove
+WORKDIR /go/src/github.com/dexidp
 RUN go get -d github.com/sarkortrantor/dex
+RUN cp -r ../sarkortrantor/dex/ dex
+WORKDIR dex 
+RUN git checkout daga_connector
+WORKDIR ../../dedis
+RUN git clone -b PoC https://github.com/dedis/student_18_daga.git
+WORKDIR ../dexidp/dex/cmd/dex
+RUN go get -u
+WORKDIR ../..
+RUN make release-binary
 
-WORKDIR /go/src/github.com/sarkortrantor/dex 
-RUN make release-binary 
-RUN cp -rv web /opt/poc-op-app/
+
+# add app sources (dex config.yaml + web dir + tls cert/key)
 WORKDIR /opt/poc-op-app
-
-# add app sources (dex config)
 COPY poc-op-app .
 
-# app listen port
-#ARG PORT 
-#ENV PORT=$PORT
-#EXPOSE $PORT
+# app listen port 
+ARG PORT 
+ENV PORT=$PORT
+EXPOSE $PORT
+
+# TODO modify config.yaml with env vars
 
 ENTRYPOINT ["dex"]
 CMD ["serve", "./config.yaml"]

@@ -43,10 +43,10 @@ app.use(passport.session());
 
 // set up passport
 passport.use('daga_oidc', new OidcStrategy({
-  issuer: 'http://' + process.env.DOCKER_HOST_IP + ':5556/dex',  // TODO TLS + PORT from env
-  sessionKey: 'http://' + process.env.DOCKER_HOST_IP + ':5556/dex',
-  authorizationURL: 'http://' + process.env.DOCKER_HOST_IP + ':5556/dex/auth',
-  tokenURL: 'http://' + process.env.DOCKER_HOST_IP + ':5556/dex/token',
+  issuer: 'http://opapp.poc:' + process.env.OPPORT + '/dex',  // TODO TLS
+  sessionKey: 'http://opapp.poc:' + process.env.OPPORT + '/dex',
+  authorizationURL: 'http://opapp.poc:' + process.env.OPPORT + '/dex/auth',
+  tokenURL: 'http://opapp.poc:' + process.env.OPPORT + '/dex/token',
   // TODO would be nice to use discovery but don't get how it works with this passport module..
   // getClientCallback: function(issuer, cb) {
   //   cb(null, {
@@ -57,7 +57,7 @@ passport.use('daga_oidc', new OidcStrategy({
   // },
   clientID: 'poc-rp-app',
   clientSecret: '37C2F6159B63D3DD25C3F9AE5C7190EE',
-  callbackURL: 'http://' + process.env.DOCKER_HOST_IP + ':' + process.env.PORT + '/authorization-code/callback',
+  callbackURL: 'http://rpapp.poc:' + process.env.PORT + '/authorization-code/callback',
   skipUserProfile: true
 }, (issuer, sub, done) => {
   return done(null, sub);

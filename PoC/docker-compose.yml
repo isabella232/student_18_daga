@@ -1,14 +1,38 @@
+# TODO clean/uniformize how parameters are passed down the chain (via cmd arg, via env etc..) for the things that are in our control
 version: '3'
 services:
+  # Relying Party, OpenID connect client
   rp:
     build:
       context: ./RPApp
       args:
-        PORT: ${PORT}
+        PORT: ${RPPORT}
+        OPPORT: ${OPPORT}
+    extra_hosts:
+     - opapp.poc:${DOCKER_HOST_IP}
     ports:
-     - ${PORT}:${PORT}
+     # publish port to allow communication with host user_agent/browser, second port = where node listen for inspector debugger
+     - ${RPPORT}:${RPPORT}
      - 9229:9229
+  # OpenID connect Provider (Identity provider), coreos's dex with a new daga connector
   op:
-    build: ./OPApp
+    build: 
+      context: ./OPApp
+      args:
+        PORT: ${OPPORT}
+    extra_hosts:
+     - rpapp.poc:${DOCKER_HOST_IP}
     ports:
-     - 5556:5556
+     - ${OPPORT}:${OPPORT}
+  # DAGA cothority, authentication service, used by op's daga connector to provide daga authentication
+  daga:
+    build:
+      context: ./DAGACothority
+    ports:
+     - ${DAGA_PORTRANGE}:${DAGA_PORTRANGE}
+    environment:
+     - IP=${DOCKER_HOST_IP} 
+     - PORTBASE=${DAGA_PORTBASE}
+    command: [$DAGA_NBNODES, $DAGA_LOGLVL]
+    volumes:
+      - ./DAGACothority/poc-dagacothority:/opt/poc-dagacothority

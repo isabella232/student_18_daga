@@ -2,7 +2,7 @@
 # This is the canonical URL that all clients MUST use to refer to dex. If a
 # path is provided, dex's HTTP service will listen at a non-root URL.
 # TODO automatically set to DOCKER_HOST_IP
-issuer: http://172.17.0.1:5556/dex
+issuer: http://opapp.poc:5556/dex
 
 # The storage configuration determines where dex stores its state. Supported
 # options include SQL flavors and Kubernetes third party resources.
@@ -16,15 +16,14 @@ storage:
 # Configuration for the HTTP endpoints.
 web:
   http: 0.0.0.0:5556
-  #TODO
-  # Uncomment for HTTPS options.
-  # https: 127.0.0.1:5554
-  # tlsCert: /etc/dex/tls.crt
-  # tlsKey: /etc/dex/tls.key
+# Uncomment for HTTPS options.
+#  https: 0.0.0.0:5554
+#  tlsCert: ./tls.crt
+#  tlsKey: ./tls.key
 
 # Configuration for telemetry
-telemetry:
-  http: 0.0.0.0:5558
+#telemetry:
+#  http: 0.0.0.0:5558
 
 # Uncomment this block to enable the gRPC API. This values MUST be different
 # from the HTTP endpoints.
@@ -61,15 +60,14 @@ oauth2:
 staticClients:
 - id: poc-rp-app 
   redirectURIs: #TODO parametrize for docker compose later
-  - 'http://172.17.0.1:8080/authorization-code/callback'
+  - 'http://rpapp.poc:8080/authorization-code/callback'
   name: 'PoC RP App'
   secret: 37C2F6159B63D3DD25C3F9AE5C7190EE 
 
 connectors:
-- type: mockCallback
-  id: mock
-  name: mock
-
+#- type: mockCallback
+#  id: mock
+#  name: mock
 - type: daga 
   id: daga
   name: DeDis' Deniable Anonymous Group Authentication

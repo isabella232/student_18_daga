@@ -1,9 +1,10 @@
 PORT=8080
+OPPORT=5556
 
 all: build run
 
 build:
-	docker build --build-arg PORT=$(PORT) --rm -t rpapp .
+	docker build --build-arg PORT=$(PORT) --build-arg OPPORT=$(OPPORT) --rm -t rpapp .
 clean: 
 	docker rmi rpapp
 run:
