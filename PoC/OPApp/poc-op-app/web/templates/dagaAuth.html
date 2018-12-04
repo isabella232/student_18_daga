@@ -1,0 +1,63 @@
+{{ template "header.html" . }}
+
+<div class="theme-panel">
+    <h2 class="theme-heading">Deniable Anonymous Group Authentication</h2>
+
+    <hr class="dex-separator">
+    <div>
+        <div>Choose daga auth. context:</div>
+        <table>
+            <tr>
+                <td align="right">context : </td>
+                <td>
+                    <input type="file" id="contextSelector" name="context" enctype="multipart/form-data" />
+                </td>
+            </tr>
+            <tr>
+                <td align="right">client  : </td>
+                <td>
+                    <input type="file" id="clientSelector" name="client" enctype="multipart/form-data" />
+                </td>
+            </tr>
+            {{/*<tr>*/}}
+                {{/*<td align="right">roster/public.toml  : </td>*/}}
+                {{/*<td>*/}}
+                    {{/*<input type="file" id="rosterSelector" name="roster" enctype="multipart/form-data" />*/}}
+                {{/*</td>*/}}
+            {{/*</tr>*/}}
+        </table>
+        {{/*TODO list of contexts IDs or paste contextid and/or/then fetch from byzcoin etc..
+            can communicate with a new endpoint of daga service that do the work for us etc..here only presentation layer + can grab them serverside before render and pass them to template*/}}
+        {{/*<select class="dex-list">*/}}
+            {{/*{{ range $context := .Contexts }}*/}}
+                {{/*<option value="$context">{{ $context }}</option>*/}}
+            {{/*{{ end }}*/}}
+        {{/*</select>*/}}
+    </div>
+    <hr class="dex-separator">
+
+    <div>
+        <div class="theme-form-row">
+            {{/*<button id="testbtn">test btn</button>*/}}
+            <form id="authForm" method="post">
+                <input type="hidden" name="req" value="{{ .AuthReqID }}"/>
+                {{/*<input type="hidden" name="authMsg"/>*/}}
+                <button type="button" class="dex-btn theme-btn--success">
+                    <span class="dex-btn-text">Go !</span>
+                </button>
+            </form>
+        </div>
+    </div>
+    {{ if .BackLink }}
+        <div class="theme-link-back">
+            <a class="dex-subtle-text" href="javascript:history.back()">Select another login method.</a>
+        </div>
+    {{ end }}
+</div>
+
+{{/*TODO Id like to get rid of those imports and keep only the requirejs entrypoint but seems those modules are not well compatible*/}}
+<script src="dex/static/scripts/topl.min.js"></script>
+<script src="dex/static/scripts/uuid.min.js"></script>
+<script data-main="dex/static/scripts/main" src="dex/static/scripts/require.js"></script>
+
+{{ template "footer.html" . }}
