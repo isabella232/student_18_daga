@@ -6,7 +6,7 @@ import (
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/student_18_daga/dagacothority"
-	"github.com/dedis/student_18_daga/dagacothority/protocols/DAGA"
+	"github.com/dedis/student_18_daga/dagacothority/protocols/dagaauth"
 	"github.com/dedis/student_18_daga/dagacothority/protocols/dagachallengegeneration"
 	"github.com/dedis/student_18_daga/dagacothority/protocols/dagacontextgeneration"
 	"github.com/dedis/student_18_daga/sign/daga"
@@ -75,7 +75,7 @@ func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req dagac
 
 // NewDAGAServerProtocol is called to initialize and start a new DAGA server protocol where current node takes a Leader role
 // "dummy" counterpart of dagacothority.service.newDAGAServerProtocol() keep them more or less in sync
-func (s DummyService) NewDAGAServerProtocol(t *testing.T, req dagacothority.Auth) *DAGA.Protocol {
+func (s DummyService) NewDAGAServerProtocol(t *testing.T, req dagacothority.Auth) *dagaauth.Protocol {
 	// build tree with leader as root
 	roster := req.Context.Roster
 	// pay attention to the fact that for the protocol to work the tree needs to be correctly shaped !!
@@ -83,18 +83,18 @@ func (s DummyService) NewDAGAServerProtocol(t *testing.T, req dagacothority.Auth
 	tree := roster.GenerateNaryTreeWithRoot(len(roster.List)-1, s.ServerIdentity())
 
 	// create and setup protocol instance (additionally ~test p.NewProtocol)
-	pi, err := s.CreateProtocol(DAGA.Name, tree)
-	require.NoError(t, err, "failed to create "+DAGA.Name+" protocol")
+	pi, err := s.CreateProtocol(dagaauth.Name, tree)
+	require.NoError(t, err, "failed to create "+dagaauth.Name+" protocol")
 	require.NotNil(t, pi, "nil protocol instance but no error")
 
-	dagaProtocol := pi.(*DAGA.Protocol)
+	dagaProtocol := pi.(*dagaauth.Protocol)
 	dagaProtocol.LeaderSetup(req, s.DagaServer)
 
 	// start
 	err = dagaProtocol.Start()
-	require.NoError(t, err, "failed to start %s protocol: %s", DAGA.Name, err)
+	require.NoError(t, err, "failed to start %s protocol: %s", dagaauth.Name, err)
 
-	log.Lvlf3("service started %s protocol, waiting for completion", DAGA.Name)
+	log.Lvlf3("service started %s protocol, waiting for completion", dagaauth.Name)
 	return dagaProtocol
 }
 
@@ -116,7 +116,7 @@ func (s DummyService) NewDAGAContextGenerationProtocol(t *testing.T, req *dagaco
 
 	// start
 	err = contextGeneration.Start()
-	require.NoError(t, err, "failed to start %s protocol: %s", DAGA.Name, err)
+	require.NoError(t, err, "failed to start %s protocol: %s", dagaauth.Name, err)
 
 	log.Lvlf3("service started %s protocol, waiting for completion", dagacontextgeneration.Name)
 	return contextGeneration
@@ -136,12 +136,12 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 			return s.AcceptContext(req.Context)
 		})
 		return challengeGeneration, nil
-	case DAGA.Name:
-		pi, err := DAGA.NewProtocol(tn)
+	case dagaauth.Name:
+		pi, err := dagaauth.NewProtocol(tn)
 		if err != nil {
 			return nil, err
 		}
-		dagaProtocol := pi.(*DAGA.Protocol)
+		dagaProtocol := pi.(*dagaauth.Protocol)
 		dagaProtocol.ChildSetup(s.AcceptContext)
 		return dagaProtocol, nil
 	case dagacontextgeneration.Name:

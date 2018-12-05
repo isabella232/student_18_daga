@@ -56,8 +56,8 @@ runLocal(){
 		if [ ! -d $co ]; then
 			echo -e "$IP:$(($PORTBASE + 2 * $n))\nConode_$n\n$co" | conode setup
 		fi
-		# start
-		conode -d $DEBUG -c $co/private.toml server &
+		# start with CONODE_SERVICE_PATH (the path to write the db) set
+		CONODE_SERVICE_PATH=$co/state.db conode -d $DEBUG -c $co/private.toml server &
 		cat $co/public.toml >> public.toml
 	done
 	sleep 1

@@ -1,4 +1,4 @@
-package DAGA
+package dagaauth
 
 // QUESTION not sure if each protocol deserve its own package + what would be a sound organization
 // QUESTION (if I put them all in same package (say protocol or DAGA) will need to change a little the template conventions

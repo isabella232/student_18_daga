@@ -66,8 +66,8 @@ func main() {
 		}
 
 		// pipe result into websocket connection
-		authMsg := dagacothority.NetEncodeAuthenticationMessage(*context, *M0) // to protobuf friendly type
-		authMsgProto, err := network.Marshal(authMsg)                          // proto msg
+		authMsg := dagacothority.NetEncodeAuthenticationMessage(*context, *M0) // convert to protobuf friendly type
+		authMsgProto, err := network.Marshal(authMsg)                          // encode, to proto msg
 		if err != nil {
 			log.Error(err)
 		}

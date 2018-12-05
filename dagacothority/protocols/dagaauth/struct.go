@@ -1,4 +1,4 @@
-package DAGA
+package dagaauth
 
 import (
 	"github.com/dedis/onet"

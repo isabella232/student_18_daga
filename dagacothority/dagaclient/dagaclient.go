@@ -74,7 +74,7 @@ func cmdSetup(c *cli.Context) error {
 	// create daga clients and collect their public keys
 	clients := make([]daga.Client, numClients)
 	subscribers := make([]kyber.Point, 0, len(clients))
-	for i, _ := range clients {
+	for i := range clients {
 		if client, err := daga.NewClient(suite, i, nil); err != nil {
 			return err
 		} else {

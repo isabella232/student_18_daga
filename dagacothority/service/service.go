@@ -15,7 +15,7 @@ import (
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/dagacothority"
-	"github.com/dedis/student_18_daga/dagacothority/protocols/DAGA"
+	"github.com/dedis/student_18_daga/dagacothority/protocols/dagaauth"
 	"github.com/dedis/student_18_daga/dagacothority/protocols/dagachallengegeneration"
 	"github.com/dedis/student_18_daga/dagacothority/protocols/dagacontextgeneration"
 	"github.com/dedis/student_18_daga/sign/daga"
@@ -244,7 +244,7 @@ func (s *Service) PKClient(req *dagacothority.PKclientCommitments) (*dagacothori
 }
 
 // function called to initialize and start a new DAGA (Server's) protocol where current node takes a "Leader" role
-func (s *Service) newDAGAServerProtocol(req *dagacothority.Auth, dagaServer daga.Server) (*DAGA.Protocol, error) {
+func (s *Service) newDAGAServerProtocol(req *dagacothority.Auth, dagaServer daga.Server) (*dagaauth.Protocol, error) {
 	// TODO/FIXME see if always ok to use user provided roster... (we already check auth. context)
 	// FIXME probably want to add roster to signed/authenticated data at context creation time
 
@@ -255,18 +255,18 @@ func (s *Service) newDAGAServerProtocol(req *dagacothority.Auth, dagaServer daga
 	// => what can go wrong if I do that ? (would solve the "multiple daga server and context issues") while being nice and readable (simplify protocol code, see sendToNextNode)
 
 	// create and setup protocol instance
-	pi, err := s.CreateProtocol(DAGA.Name, tree)
+	pi, err := s.CreateProtocol(dagaauth.Name, tree)
 	if err != nil {
-		return nil, errors.New("failed to create " + DAGA.Name + " protocol: " + err.Error())
+		return nil, errors.New("failed to create " + dagaauth.Name + " protocol: " + err.Error())
 	}
-	dagaProtocol := pi.(*DAGA.Protocol)
+	dagaProtocol := pi.(*dagaauth.Protocol)
 	dagaProtocol.LeaderSetup(*req, dagaServer)
 
 	// start
 	if err = dagaProtocol.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start %s protocol: %s", DAGA.Name, err)
+		return nil, fmt.Errorf("failed to start %s protocol: %s", dagaauth.Name, err)
 	}
-	log.Lvlf3("service started %s protocol, waiting for completion", DAGA.Name)
+	log.Lvlf3("service started %s protocol, waiting for completion", dagaauth.Name)
 	return dagaProtocol, nil
 }
 
@@ -342,12 +342,12 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		challengeGeneration := pi.(*dagachallengegeneration.Protocol)
 		challengeGeneration.ChildSetup(s.ValidatePKClientReq)
 		return challengeGeneration, nil
-	case DAGA.Name:
-		pi, err := DAGA.NewProtocol(tn)
+	case dagaauth.Name:
+		pi, err := dagaauth.NewProtocol(tn)
 		if err != nil {
 			return nil, err
 		}
-		dagaServerProtocol := pi.(*DAGA.Protocol)
+		dagaServerProtocol := pi.(*dagaauth.Protocol)
 		dagaServerProtocol.ChildSetup(s.validateContext) // TODO same as above/below validate full request vs only context
 		return dagaServerProtocol, nil
 	case dagacontextgeneration.Name:
@@ -364,8 +364,11 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 	return nil, errors.New("should not be reached")
 }
 
-// saves all data/state.
+// saves all data/state. in permanent storage (bbolt db)
 func (s *Service) save() {
+	s.Storage.State.RLock()
+	defer s.Storage.State.RUnlock()
+
 	err := s.Save(storageID, s.Storage)
 	if err != nil {
 		log.Error("Couldn't save service data: ", err)
@@ -374,24 +377,21 @@ func (s *Service) save() {
 
 // Tries to load the configuration and updates the data in the service
 // if it finds a valid config-file
-//
-// TODO FIXME see if can redesign this mess later when we have a bootstrap method
-// rationale for not being a method anymore: to do testing more easily need ways to swap the function with a stub
+// TODO not sure to understand how to persist state..accross failure
+// !rationale for not being a method anymore: to do testing (at all or more easily) need ways to swap the function with a stub
 // + since it was called in newService previously => called from init (even in the test => crash) => "solution" don't call it at newService time
-// but when endpoints called and no-op if already setup
+// but when endpoints called and no-op if already setup!
 func setupState(s *Service) error {
 	if s.Storage == nil {
-		s.Storage = &Storage{
-			State: NewState(),
-		}
 		msg, err := s.Load(storageID)
 		if err != nil {
 			return err
 		}
 		if msg == nil {
-			// first time or nothing, load from permanent storage files maybe..FIXME from byzcoin ? later..
-			// TODO/FIXME/QUESTION if makes sense
-
+			// key does not exists, first time
+			s.Storage = &Storage{
+				State: NewState(),
+			}
 			return nil
 		} else {
 			var ok bool
@@ -433,8 +433,8 @@ func (s *Service) setServiceState(key dagacothority.ServiceID, value *ServiceSta
 // starts serving (accepting requests related to) `context` using `dagaServer`
 func (s *Service) startServingContext(context dagacothority.Context, dagaServer daga.Server) error {
 
-	// FIXME here publish to byzcoin etc.. (and decide what should be done by who.., IMO it's to the 3rd party service responsibility to publish the context)
-	// FIXME and if no matter my opinion still want to publish from here, do it only from Leader (currently this is called at all nodes at the end of context generation protocol)
+	// FIXME here publish to byzcoin etc.. (and decide what should be done by who.., IMO it's to the 3rd party service responsibility to publish (or trigger the publishing) the context and to chose where)
+	// FIXME and if no matter my opinion still want to publish from here, do it only from Leader (currently the following function is called at all nodes at the end of context generation protocol)
 	// FIXME and if we decide (why ? "convenience" ?) to store the dagaServer in byzcoin too => need to encrypt it (using which key ? => node's key from private.toml)
 	// (if that makes sense, if cannot already be protected by other features of byzcoin)
 
@@ -450,6 +450,8 @@ func (s *Service) startServingContext(context dagacothority.Context, dagaServer 
 		Context:    context,
 		DagaServer: *dagacothority.NetEncodeServer(dagaServer),
 	}
+	// save all state in bbolt
+	s.save()
 	return nil
 }
 

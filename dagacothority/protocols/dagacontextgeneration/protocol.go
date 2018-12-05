@@ -250,7 +250,7 @@ func (p *Protocol) handleAnnounceReply(msg []StructAnnounceReply) (err error) {
 	}
 
 	// create client generators
-	for i, _ := range p.context.G.X {
+	for i := range p.context.G.X {
 		if p.context.H[i], err = daga.GenerateClientGenerator(suite, i, p.context.R); err != nil {
 			return fmt.Errorf("%s: failed to handle AnnounceReply: %s", Name, err.Error())
 		}
