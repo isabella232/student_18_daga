@@ -48,7 +48,7 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, c
 				}
 				return nil
 			}
-		}(i)  // iife since we don't want our Setup functions all reference the last dagaServer..
+		}(i) // iife since we don't want our Setup functions all reference the last dagaServer..
 	}
 }
 

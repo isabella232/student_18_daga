@@ -21,7 +21,7 @@ func main() {
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
 				log.Infof("Origin: %s", origin)
-				whiteList := []string{"http://opapp.poc:5556", "http://172.17.0.1:5556", "http://172.18.0.1:5556" }
+				whiteList := []string{"http://opapp.poc:5556", "http://172.17.0.1:5556", "http://172.18.0.1:5556"}
 				for _, allowed := range whiteList {
 					if origin == allowed {
 						return true
@@ -36,7 +36,7 @@ func main() {
 			return
 		}
 		defer func() {
-			if err := conn.Close(); err != nil{
+			if err := conn.Close(); err != nil {
 				log.Error(err)
 			}
 		}()
@@ -66,8 +66,8 @@ func main() {
 		}
 
 		// pipe result into websocket connection
-		authMsg := dagacothority.NetEncodeAuthenticationMessage(*context, *M0)  // to protobuf friendly type
-		authMsgProto, err := network.Marshal(authMsg)  // proto msg
+		authMsg := dagacothority.NetEncodeAuthenticationMessage(*context, *M0) // to protobuf friendly type
+		authMsgProto, err := network.Marshal(authMsg)                          // proto msg
 		if err != nil {
 			log.Error(err)
 		}
@@ -84,7 +84,7 @@ func main() {
 }
 
 func readClient(conn *websocket.Conn) (*dagacothority.Client, error) {
-	if contextPtr, err := readProto(conn); err !=nil {
+	if contextPtr, err := readProto(conn); err != nil {
 		return nil, errors.New("readClient: " + err.Error())
 	} else if netClient, ok := contextPtr.(*dagacothority.NetClient); !ok {
 		return nil, errors.New("readClient: type assertion error, expected NetClient")
@@ -94,7 +94,7 @@ func readClient(conn *websocket.Conn) (*dagacothority.Client, error) {
 }
 
 func readContext(conn *websocket.Conn) (*dagacothority.Context, error) {
-	if contextPtr, err := readProto(conn); err !=nil {
+	if contextPtr, err := readProto(conn); err != nil {
 		return nil, errors.New("readContext: " + err.Error())
 	} else if ctx, ok := contextPtr.(*dagacothority.Context); !ok {
 		return nil, errors.New("readContext: type assertion error, expected Context")

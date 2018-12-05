@@ -69,7 +69,7 @@ func TestClient_pKCLient(t *testing.T) {
 	c, _ := dagacothority.NewClient(0, nil)
 	pkClientVerifier := c.NewPKclientVerifier(*dummyContext, dummyContext.Roster.RandomServerIdentity())
 
-	commitments := testing2.RandomPointSlice(3*len(dummyContext.ClientsGenerators()))
+	commitments := testing2.RandomPointSlice(3 * len(dummyContext.ClientsGenerators()))
 	challenge, err := pkClientVerifier(commitments)
 	require.NoError(t, err)
 	require.NotZero(t, challenge)

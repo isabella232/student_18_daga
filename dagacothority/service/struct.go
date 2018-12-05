@@ -26,7 +26,7 @@ type State struct {
 	// TODO or another ready key value store...
 
 	sync.RWMutex
-	data map[dagacothority.ServiceID]*ServiceState  // per 3rd party service state (admin. infos, contexts etc..)
+	data map[dagacothority.ServiceID]*ServiceState // per 3rd party service state (admin. infos, contexts etc..)
 }
 
 func NewState() State {
