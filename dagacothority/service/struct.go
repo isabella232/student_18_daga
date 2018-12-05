@@ -6,12 +6,73 @@ import (
 	"github.com/dedis/kyber"
 	"github.com/dedis/student_18_daga/dagacothority"
 	"gopkg.in/satori/go.uuid.v1"
+	"sync"
 )
 
 /* holds the data structures/types needed by the DAGA service */
 // TODO QUESTION: for now export everything to be able to "store" it using onet (not safe + i'm not ok with it but what to do ? don't use onet storage ? or what ??)
 
-type State map[dagacothority.ServiceID]*ServiceState // per 3rd party service state (admin. infos, contexts etc..)
+type State struct {
+	// Mutex: since state can be/is accessed from multiple go rountines at a time
+	// (some protocol instances obtain such ability, see dagacontextgeneration.protocol.ChildSetup)
+	// and that concurrent write/read access are not ok.
+
+	// TODO/optimization consider using a sync.Map instead since our usage seems to fit its purposes
+	// The sync.Map type is optimized for two common use cases: (1) when the entry for a given
+	// key is only ever written once but read many times, as in caches that only grow,
+	// or (2) when multiple goroutines read, write, and overwrite entries for disjoint
+	// sets of keys. In these two cases, use of a Map may significantly reduce lock
+	// contention compared to a Go map paired with a separate Mutex or RWMutex.
+	// TODO or another ready key value store...
+
+	sync.RWMutex
+	data map[dagacothority.ServiceID]*ServiceState  // per 3rd party service state (admin. infos, contexts etc..)
+}
+
+func NewState() State {
+	// FIXME exported since used in api_test but would be better to find another solution than exporting things only to setup tests
+	//  maybe move the "service related setup test boilerplate" in service package...this would help resolve the duplicated code in api_test and service tests too
+	return State{
+		data: map[dagacothority.ServiceID]*ServiceState{},
+	}
+}
+
+func (s *State) createIfNotExisting(sid dagacothority.ServiceID) {
+	s.Lock()
+	defer s.Unlock()
+	if _, present := s.data[sid]; !present {
+		s.data[sid] = &ServiceState{
+			ID:            sid,
+			ContextStates: make(map[dagacothority.ContextID]*ContextState),
+			adminKey:      nil, // TODO, openPGP, fetch key from keyserver
+		}
+	}
+}
+
+// get returns the 3rd-party related state or an error if 3rd-party service unknown.
+// !always use it to read service's state, (direct access to the state map can lead to race conditions
+// since the storage can be accessed/updated from multiple goroutines (protocol instances))!
+func (s *State) get(sid dagacothority.ServiceID) (*ServiceState, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	if serviceState, ok := s.data[sid]; !ok {
+		return nil, fmt.Errorf("unknown service ID: %v", sid)
+	} else {
+		return serviceState, nil
+	}
+}
+
+// Set updates the 3rd-party related state, safe wrapper for write access to the Storage.State "map"
+// !always use it to write service's state (add a ServiceState), (direct access to the storage's state map can lead to race conditions
+// since the storage can be accessed/updated from multiple goroutines (protocol instances))!
+func (s *State) Set(key dagacothority.ServiceID, value *ServiceState) {
+	// FIXME exported since used in api_test but would be better to find another solution than exporting things only to setup tests
+	s.Lock()
+	defer s.Unlock()
+	s.data[key] = value
+}
+
 type LinkageTag kyber.Point
 
 type SubscriberState struct {

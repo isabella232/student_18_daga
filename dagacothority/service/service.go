@@ -38,7 +38,7 @@ type Service struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
 	*onet.ServiceProcessor
-	Storage *Storage               // TODO exported, needed by the tests ... but ... no other mean ? (I only see writing a dummy service that "embed"(cannot embed) service and override everything related to Storage but pffff)
+	Storage *Storage               // QUESTION exported, needed by the tests ... but ... no other mean ? (I only see writing a dummy service that "embed"(cannot embed) service and override everything related to Storage but ...)
 	Setup   func(s *Service) error // see rationale described under `setupState`
 }
 
@@ -47,8 +47,7 @@ type Service struct {
 var storageID = []byte("dagaStorage")
 
 // Storage is used to save our data/state.
-// always access Storage through the helpers/getters !
-// QUESTION : separate storage from state or set "storage = state" ? (in my mind storage store backup of state but...)
+// always access Storage's State through the helpers/getters !
 type Storage struct { // exported.. needed by the tests..
 	State
 }
@@ -56,6 +55,7 @@ type Storage struct { // exported.. needed by the tests..
 // helper to quickly validate CreateContext requests before proceeding further
 func (s *Service) ValidateCreateContextReq(req *dagacothority.CreateContext) error {
 	// check that request is well formed
+	// TODO check we are part of roster...
 	if req.ServiceID == dagacothority.ServiceID(uuid.Nil) || len(req.Signature) == 0 || len(req.SubscribersKeys) == 0 {
 		return errors.New("validateCreateContextReq: malformed request")
 	}
@@ -70,27 +70,19 @@ func (s *Service) ValidateCreateContextReq(req *dagacothority.CreateContext) err
 		return errors.New("validateCreateContextReq: request not accepted by this server")
 	}
 
+	// if 3rd-party related state not present/first time, create/setup it
+	s.Storage.State.createIfNotExisting(req.ServiceID)
+
 	return nil
 }
 
 func (s *Service) acceptCreateContextRequest(req *dagacothority.CreateContext) bool {
-	// TODO check we are part of roster...
-
 	if _, err := s.serviceState(req.ServiceID); err != nil { // unknown service/1st time
 		// for now open access DAGA node, accept everything
-		// TODO/FIXME for later check existing partnership/agreement,
-		// TODO => probably move this elsewhere, e.g at request authentication time in authenticateRequest or in caller
-
-		// create/setup service state
-		s.Storage.State[req.ServiceID] = &ServiceState{
-			ID:            req.ServiceID,
-			ContextStates: make(map[dagacothority.ContextID]*ContextState),
-			adminKey:      nil, // TODO, openPGP, fetch key from keyserver
-		}
+		// TODO for later search for existing partnership/agreement,
 	} else {
-		// TODO FIXME check context not already existing
+		// FIXME check context not already existing
 	}
-
 	return true
 }
 
@@ -390,7 +382,7 @@ func (s *Service) save() {
 func setupState(s *Service) error {
 	if s.Storage == nil {
 		s.Storage = &Storage{
-			State: State(map[dagacothority.ServiceID]*ServiceState{}),
+			State: NewState(),
 		}
 		msg, err := s.Load(storageID)
 		if err != nil {
@@ -413,19 +405,32 @@ func setupState(s *Service) error {
 	return nil
 }
 
-// returns the 3rd-party related state or an error if 3rd-party service unknown
+// returns the 3rd-party related state or an error if 3rd-party service unknown.
+// !always use it to read service's state, (direct access to the storage's state map can lead to race conditions
+// since the storage can be accessed/updated from multiple goroutines (protocol instances))!
 func (s *Service) serviceState(sid dagacothority.ServiceID) (*ServiceState, error) {
 	if sid == dagacothority.ServiceID(uuid.Nil) {
 		return nil, errors.New("serviceState: Nil/Zero ID")
 	}
-	if serviceState, ok := s.Storage.State[sid]; !ok {
-		return nil, fmt.Errorf("serviceState: unknown service ID: %v", sid)
-	} else {
-		return serviceState, nil
+	serviceState, err := s.Storage.State.get(sid)
+	if err != nil {
+		return nil, errors.New("serviceState: " + err.Error())
 	}
+	return serviceState, nil
 }
 
-// start serving (accepting requests related to) `context` using `dagaServer`
+// updates the 3rd-party related state, safe wrapper for write access to the Storage.State "map"
+// !always use it to write service's state (add a ServiceState), (direct access to the storage's state map can lead to race conditions
+// since the storage can be accessed/updated from multiple goroutines (protocol instances))!
+func (s *Service) setServiceState(key dagacothority.ServiceID, value *ServiceState) error {
+	if key == dagacothority.ServiceID(uuid.Nil) || value == nil {
+		return errors.New("serviceState: Nil/Zero ID/key or value")
+	}
+	s.Storage.State.Set(key, value)
+	return nil
+}
+
+// starts serving (accepting requests related to) `context` using `dagaServer`
 func (s *Service) startServingContext(context dagacothority.Context, dagaServer daga.Server) error {
 
 	// FIXME here publish to byzcoin etc.. (and decide what should be done by who.., IMO it's to the 3rd party service responsibility to publish the context)
@@ -450,7 +455,7 @@ func (s *Service) startServingContext(context dagacothority.Context, dagaServer 
 
 // newService receives the context that holds information about the node it's
 // running on. Saving and loading can be done using the context. The data will
-// be stored in memory for tests and simulations, and on disk for real deployments.
+// be stored in memory for tests and simulations, and on disk for real deployments (QUESTION how ?? I'd like to..).
 func newService(c *onet.Context) (onet.Service, error) {
 	s := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),

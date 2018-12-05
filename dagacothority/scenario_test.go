@@ -9,9 +9,10 @@ import (
 	"testing"
 )
 
-// TODO move it again in sign/daga.. nothing to do in dagacothority
-// TODO when done, maybe update test to use same marshalling methods than in the api/service instead of removing those ops
-// for now I'm convinced that the thing is "working" don't lose time make this run again until useful..I'm not testing the codecs nor the network
+// TODO move it again in sign/daga.. nothing to do in dagacothority and maybe nothing to do there neither (except kind of documentation but need to be maintained...)
+// TODO when done, maybe update test to use same marshalling methods than in the api/service instead of removing those ops but don't see the point of this fake 1 process test now we can do real tests
+// TODO rewrite.. + again lots of redundant tests that add nothing except bullshitting the repo
+// TODO use reuqire..
 var suite = daga.NewSuiteEC()
 
 func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, servers []daga.Server) daga.PKclientVerifier {
@@ -128,9 +129,6 @@ func testServerProtocolsOnClientRequests(context daga.AuthenticationContext, ser
 	return sendCommitsReceiveChallenge
 }
 
-// FIXME rewrite.. + again lots of redundant tests that add nothing except bullshitting the repo
-// TODO use assert..
-// FIXME move again in kyber/sign/daga nothing to do here
 func TestScenario(t *testing.T) {
 	//Number of clients
 	c := 20

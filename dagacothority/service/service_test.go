@@ -27,29 +27,28 @@ func TestMain(m *testing.M) {
 // the dagaServers and context provided
 func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, context dagacothority.Context) {
 	for i, s := range services {
-		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
+		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState TODO update)
 		service := s.(*Service)
 		service.Setup = func(index int) func(s *Service) error {
 			return func(s *Service) error {
 				if s.Storage == nil {
 					dagaServer := dagaServers[index]
 					s.Storage = &Storage{
-						State: State(map[dagacothority.ServiceID]*ServiceState{
-							context.ServiceID: {
-								ID: context.ServiceID,
-								ContextStates: map[dagacothority.ContextID]*ContextState{
-									context.ContextID: {
-										DagaServer: *dagacothority.NetEncodeServer(dagaServer),
-										Context:    context,
-									},
-								},
-							},
-						}),
+						State: NewState(),
 					}
+					s.Storage.State.Set(context.ServiceID, &ServiceState{
+						ID: context.ServiceID,
+						ContextStates: map[dagacothority.ContextID]*ContextState{
+							context.ContextID: {
+								DagaServer: *dagacothority.NetEncodeServer(dagaServer),
+								Context:    context,
+							},
+						},
+					})
 				}
 				return nil
 			}
-		}(i)
+		}(i)  // iife since we don't want our Setup functions all reference the last dagaServer..
 	}
 }
 
@@ -74,13 +73,14 @@ func TestService_CreateContext(t *testing.T) {
 		log.Lvl2("Sending request to", s)
 
 		// create valid request
+		subscriberKeys := testing2.RandomPointSlice(32)
 		request := dagacothority.CreateContext{
 			ServiceID:       dagacothority.ServiceID(uuid.Must(uuid.NewV4())),
 			DagaNodes:       roster,
-			SubscribersKeys: testing2.RandomPointSlice(32),
+			SubscribersKeys: subscriberKeys,
 		}
 
-		// TODO use openPGP (now there is no verification at all)
+		// TODO use openPGP or whatever (now there is no verification at all, here only to documente what I had in mind)
 		keyPair := key.NewKeyPair(tSuite)
 		hasher := tSuite.Hash()
 		hasher.Write(uuid.UUID(request.ServiceID).Bytes())
@@ -104,6 +104,7 @@ func TestService_CreateContext(t *testing.T) {
 		for i, pubKey := range members.Y {
 			require.NoError(t, daga.SchnorrVerify(tSuite, pubKey, contextBytes, context.Signatures[i]))
 		}
+		require.True(t, dagacothority.ContainsSameElems(subscriberKeys, context.Members().X))
 	}
 }
 
