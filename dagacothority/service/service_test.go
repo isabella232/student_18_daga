@@ -62,7 +62,7 @@ func TestService_CreateContext(t *testing.T) {
 
 	// override Setup
 	unusedServers := make([]daga.Server, 0, len(services))
-	for _, _ = range services {
+	for range services {
 		dagaServer, _ := daga.NewServer(tSuite, 0, nil)
 		unusedServers = append(unusedServers, dagaServer)
 	}
@@ -136,7 +136,7 @@ func TestService_PKClient(t *testing.T) {
 		// verify that all servers correctly signed the challenge
 		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
 		members := dummyContext.Members()
-		reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments)
+		require.NoError(t, reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments))
 	}
 }
 
@@ -170,7 +170,8 @@ func TestService_Auth(t *testing.T) {
 }
 
 // verify that PKClient works for context created with CreateContext
-// TODO test other pairs of interactions
+// TODO understand why this one is fine on my machine but "FAIL still have things lingering in travis"
+//  seems that in travis the test is stopped prematurely .. some timeout ?
 func TestService_CreateContextAndPKClient(t *testing.T) {
 	local := onet.NewTCPTest(tSuite)
 	hosts, roster, _ := local.GenTree(5, true)
@@ -193,7 +194,6 @@ func TestService_CreateContextAndPKClient(t *testing.T) {
 		require.NotZero(t, reply)
 
 		// verify that all servers correctly signed the challenge
-		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
 		members := context.Members()
 		require.NoError(t, reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments))
 		//time.Sleep(2*time.Second)
@@ -205,7 +205,7 @@ func getTestContext(t *testing.T, s *Service, roster *onet.Roster, numClients in
 
 	clients := make([]daga.Client, numClients)
 	keys := make([]kyber.Point, 0, numClients)
-	for i, _ := range clients {
+	for i := range clients {
 		client, err := daga.NewClient(tSuite, i, nil)
 		require.NoError(t, err)
 		clients[i] = client
@@ -342,7 +342,7 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 	// provide initial state to the service (instead of fetching it from FS)
 	overrideServicesSetup(services[0:0], dagaServers, *dummyContext)
 	service := services[0].(*Service)
-	service.Setup(service)
+	require.NoError(t, service.Setup(service))
 
 	// same roster but bullshit in daga.Context
 	badNetContext := dagacothority.Context{
