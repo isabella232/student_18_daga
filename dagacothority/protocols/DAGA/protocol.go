@@ -28,7 +28,8 @@ import (
 
 var suite = daga.NewSuiteEC()
 
-// QUESTION TODO educated timeout formula that scale with number of nodes etc..
+// Timeout represents the max duration/amount of time to wait for result in WaitForResult
+// TODO educated timeout formula that scale with number of nodes etc..
 const Timeout = 10 * time.Second
 
 func init() {
@@ -48,7 +49,7 @@ type Protocol struct {
 	acceptContext func(dagacothority.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
 }
 
-// General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
+// NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
 // and used to instantiate protocol instances, on the Leader/root done by onet.CreateProtocol and on other nodes upon reception of
 // first protocol message, by the serviceManager that will call service.NewProtocol.
 // if service.NewProtocol returns nil, nil this one will be called on children too.
@@ -60,7 +61,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	t := &Protocol{
 		TreeNodeInstance: n,
 	}
-	for _, handler := range []interface{}{t.HandleServerMsg, t.HandleFinishedServerMsg} {
+	for _, handler := range []interface{}{t.handleServerMsg, t.handleFinishedServerMsg} {
 		if err := t.RegisterHandler(handler); err != nil {
 			return nil, errors.New("couldn't register handler: " + err.Error())
 		}
@@ -68,7 +69,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	return t, nil
 }
 
-// setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
+// LeaderSetup is a setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
 func (p *Protocol) LeaderSetup(req dagacothority.Auth, dagaServer daga.Server) {
 	if p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
@@ -77,7 +78,7 @@ func (p *Protocol) LeaderSetup(req dagacothority.Auth, dagaServer daga.Server) {
 	p.setDagaServer(dagaServer)
 }
 
-// setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
+// ChildSetup is a setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
 func (p *Protocol) ChildSetup(acceptContext func(ctx dagacothority.Context) (daga.Server, error)) {
 	if p.dagaServer != nil || p.result != nil || p.acceptContext != nil {
 		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
@@ -116,7 +117,7 @@ func (p *Protocol) Start() (err error) {
 		}
 	}()
 
-	// TODO check tree shape
+	// TODO check legal tree shape
 	log.Lvlf3("leader (%s) started %s", p.ServerIdentity(), Name)
 
 	// initialize the channel used to grab results / synchronize with WaitForResult
@@ -137,7 +138,7 @@ func (p *Protocol) Start() (err error) {
 	return p.sendToNextServer(&ServerMsg{*dagacothority.NetEncodeServerMessage(context, serverMsg)})
 }
 
-// Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
+// WaitForResult waits for protocol result (and return it) or timeout, must be called on root instance only (meant to be called by the service, after Start)
 func (p *Protocol) WaitForResult() (daga.ServerMessage, error) {
 	if p.result == nil {
 		log.Panic("WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance")
@@ -159,7 +160,7 @@ func (p *Protocol) WaitForResult() (daga.ServerMessage, error) {
 // if current node is last node
 //
 // Step 1-4 of of daga server's protocol described in Syta - 4.3.6
-func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
+func (p *Protocol) handleServerMsg(msg StructServerMsg) (err error) {
 	defer func() {
 		if err != nil {
 			p.Done()
@@ -205,7 +206,7 @@ func (p *Protocol) HandleServerMsg(msg StructServerMsg) (err error) {
 	}
 }
 
-func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
+func (p *Protocol) handleFinishedServerMsg(msg StructFinishedServerMsg) error {
 	defer p.Done()
 	log.Lvlf3("%s: Received FinishedServerMsg", Name)
 
@@ -222,6 +223,7 @@ func (p *Protocol) HandleFinishedServerMsg(msg StructFinishedServerMsg) error {
 	if !weAreLeader {
 		// TODO can do something.. don't know now..keep somewhere tag for later usage in login service
 		//  or to keep stats in context etc..and offer a new endpoint in service
+		//  because it is a "feature" of daga, can revoke context or auth from user based on some policies
 	} else {
 		// make resulting message (and hence final linkage tag available to service => send back to client
 		p.result <- *serverMsg // TODO maybe send netServerMsg instead => save one encoding to the service

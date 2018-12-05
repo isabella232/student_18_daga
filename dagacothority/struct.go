@@ -28,9 +28,10 @@ const (
 	ErrorParse = iota + 4000
 )
 
-// FIXME investigate if satori is still the package to use, saw claims that it should be deprecated in favor of newer forks
-// ID of 3rd party service (that use DAGA as its auth. mechanism, don't confuse with Onet.ServiceID)
-type ServiceID uuid.UUID
+// ServiceID represents the ID of 3rd party service (that use DAGA as its auth. mechanism, don't confuse with Onet.ServiceID)
+type ServiceID uuid.UUID // FIXME investigate if satori is still the package to use, saw claims that it should be deprecated in favor of newer forks
+
+// ContextID represents the ID of a Context
 type ContextID uuid.UUID
 
 // NewContext returns a pointer to newly allocated Context struct initialized with the provided daga.AuthenticationContext and roster

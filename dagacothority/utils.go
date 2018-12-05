@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 )
 
-// check if two slices of points are containing the same elements
+// ContainsSameElems checks if two slices of points are containing the same elements
 func ContainsSameElems(a, b []kyber.Point) bool {
 	// use maps to mimic set, first traverse first slice and populate map
 	// then traverse second slice checking if value present in map and indeed equal (stringEq ==> eq)
@@ -29,7 +29,7 @@ func ContainsSameElems(a, b []kyber.Point) bool {
 	return true
 }
 
-//helper I use in stead of having a proper bootstrap method for now
+//ReadContext read a Context from a binary file on FS (that was encoded using network.Marshal)
 func ReadContext(path string) (*Context, error) {
 	if msg, err := read(path); err != nil {
 		return nil, errors.New("readContext:" + err.Error())
@@ -42,7 +42,7 @@ func ReadContext(path string) (*Context, error) {
 	}
 }
 
-//helper I use in stead of having a proper bootstrap method for now
+//ReadClient read a Client from a binary file on FS (that was encoded using network.Marshal)
 func ReadClient(path string) (*Client, error) {
 	if msg, err := read(path); err != nil {
 		return nil, errors.New("readClient:" + err.Error())
@@ -67,6 +67,7 @@ func read(path string) (interface{}, error) {
 	}
 }
 
+// IndexOf returns the (0 based) index of the point in the slice or -1 if not present
 func IndexOf(keys []kyber.Point, publicKey kyber.Point) (int, error) {
 	for i, k := range keys {
 		if k.Equal(publicKey) {

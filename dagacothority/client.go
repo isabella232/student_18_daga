@@ -32,8 +32,8 @@ func NewClient(i int, s kyber.Scalar) (*Client, error) {
 	}
 }
 
-// TODO FIXME move elsewhere later or remove completely (used to test api/cli)
 // AdminCLient is the client side struct used by 3rd-party services admins to call context management endpoints
+// TODO FIXME move elsewhere later or remove completely (used to test api/cli)
 type AdminCLient struct {
 	// TODO PGP identity or whatever etc..
 	ServiceID ServiceID

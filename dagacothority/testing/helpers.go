@@ -18,18 +18,18 @@ import (
 
 var tSuite = daga.NewSuiteEC()
 
-// Used for tests
+// TestServiceID ID of the test service in onet, exported because needed by the tests
 var TestServiceID onet.ServiceID
 
-const TestServiceName = "dummyDagaService"
+const testServiceName = "dummyDagaService"
 
 func init() {
 	var err error
-	TestServiceID, err = onet.RegisterNewService(TestServiceName, NewDummyService)
+	TestServiceID, err = onet.RegisterNewService(testServiceName, NewDummyService)
 	log.ErrFatal(err)
 }
 
-// dummyService to provide state to the protocol instances/play role of parent service when testing the *protocols*
+// DummyService a fake service to provide state to the protocol instances/play role of parent service when testing the *protocols*
 type DummyService struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
@@ -40,7 +40,7 @@ type DummyService struct {
 	AcceptContext func(dagacothority.Context) (daga.Server, error)
 }
 
-// returns a new dummyService
+// NewDummyService returns a new DummyService
 func NewDummyService(c *onet.Context) (onet.Service, error) {
 	s := &DummyService{
 		ServiceProcessor: onet.NewServiceProcessor(c),
@@ -73,7 +73,7 @@ func (s DummyService) NewDAGAChallengeGenerationProtocol(t *testing.T, req dagac
 	return challengeGeneration
 }
 
-// function called to initialize and start a new DAGA server protocol where current node takes a Leader role
+// NewDAGAServerProtocol is called to initialize and start a new DAGA server protocol where current node takes a Leader role
 // "dummy" counterpart of dagacothority.service.newDAGAServerProtocol() keep them more or less in sync
 func (s DummyService) NewDAGAServerProtocol(t *testing.T, req dagacothority.Auth) *DAGA.Protocol {
 	// build tree with leader as root
@@ -98,7 +98,7 @@ func (s DummyService) NewDAGAServerProtocol(t *testing.T, req dagacothority.Auth
 	return dagaProtocol
 }
 
-// function called to initialize and start a new DAGA server protocol where current node takes a Leader role
+// NewDAGAContextGenerationProtocol is called to initialize and start a new DAGA server protocol where current node takes a Leader role
 // "dummy" counterpart of dagacothority.service.newDAGAServerProtocol() keep them more or less in sync
 func (s DummyService) NewDAGAContextGenerationProtocol(t *testing.T, req *dagacothority.CreateContext) *dagacontextgeneration.Protocol {
 	// build tree with leader as root
@@ -122,7 +122,7 @@ func (s DummyService) NewDAGAContextGenerationProtocol(t *testing.T, req *dagaco
 	return contextGeneration
 }
 
-// "dummy" counterpart of dagacothority.service.NewProtocol() keep them more or less in sync
+// NewProtocol "dummy" counterpart of dagacothority.service.NewProtocol() keep them more or less in sync
 func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl3("received protocol msg, instantiating new protocol instance of " + tn.ProtocolName())
 	switch tn.ProtocolName() {
@@ -162,6 +162,7 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 	return nil, errors.New("should not be reached")
 }
 
+// DummyDagaSetup is used to provide initial state for the testing of the protocols, dummy daga clients, servers, authRequests and context
 // TODO add possibility to return bad challenge channel
 func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []daga.Client, dagaServers []daga.Server,
 	dummyAuthRequest *daga.AuthenticationMessage, dummyContext *dagacothority.Context) {
@@ -172,9 +173,8 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []d
 	}
 	dummyContext, _ = dagacothority.NewContext(minDagaContext, roster, dagacothority.ServiceID(uuid.Must(uuid.NewV4())), nil)
 
-	// TODO QUESTION what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package with all helper ?
+	// TODO what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package exported under sign/daga with all helper ?
 	dummyChallengeChannel := func(commitments []kyber.Point) (daga.Challenge, error) {
-		// TODO share helper with kyber daga tests ?? (~same helper used)
 		challenge := daga.Challenge{
 			Cs: tSuite.Scalar().Pick(tSuite.RandomStream()),
 		}
@@ -199,15 +199,7 @@ func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []d
 	return
 }
 
-func DagaServerFromKey(dagaServers []daga.Server) map[string]daga.Server {
-	dagaServerFromKey := make(map[string]daga.Server)
-	for _, dagaServer := range dagaServers {
-		dagaServerFromKey[dagaServer.PublicKey().String()] = dagaServer
-	}
-	return dagaServerFromKey
-}
-
-// used to test the protocols, dummy test service
+// ValidServiceSetup is used to test the protocols, returns dummy test service (correctly initialized) and dummy context and request
 func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *daga.AuthenticationMessage, *dagacothority.Context) {
 	// local test environment
 	servers, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
@@ -233,6 +225,7 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	return services, dummyRequest, dummyContext
 }
 
+// RandomPointSlice returns a ...tadam .. random point slice of the given len
 func RandomPointSlice(len int) []kyber.Point {
 	points := make([]kyber.Point, 0, len)
 	for i := 0; i < len; i++ {

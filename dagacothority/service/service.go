@@ -22,7 +22,7 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-// Used for tests
+// DagaID ID of the daga service in onet, exported because needed by the tests
 var DagaID onet.ServiceID
 
 func init() {
@@ -47,12 +47,12 @@ type Service struct {
 var storageID = []byte("dagaStorage")
 
 // Storage is used to save our data/state.
-// always access Storage's State through the helpers/getters !
+// always access Storage's state through the helpers/getters !
 type Storage struct { // exported.. needed by the tests..
 	State
 }
 
-// helper to quickly validate CreateContext requests before proceeding further
+// ValidateCreateContextReq is an helper to quickly validate CreateContext requests before proceeding further
 func (s *Service) ValidateCreateContextReq(req *dagacothority.CreateContext) error {
 	// check that request is well formed
 	// TODO check we are part of roster...
@@ -101,7 +101,7 @@ func authenticateRequest(req *dagacothority.CreateContext) error {
 	return nil
 }
 
-// API endpoint CreateContext, upon reception of a valid request,
+// CreateContext is an API endpoint, upon reception of a valid request,
 // starts the context generation protocol, the current server/node will take the role of Leader
 func (s *Service) CreateContext(req *dagacothority.CreateContext) (*dagacothority.CreateContextReply, error) {
 	// setup if not already done
@@ -142,8 +142,8 @@ func (s Service) validateAuthReq(req *dagacothority.Auth) (daga.Server, error) {
 	return s.validateContext(req.Context)
 }
 
-// API endpoint Auth,
-// starts the server's protocol (daga 4.3.6)
+// Auth is an API endpoint,
+// starts the server's protocol (daga 4.3.6) to authenticate an user with the help of its auth. request
 func (s *Service) Auth(req *dagacothority.Auth) (*dagacothority.AuthReply, error) {
 	// setup if not already done
 	if err := s.Setup(s); err != nil {
@@ -204,7 +204,7 @@ func (s Service) acceptContext(reqContext dagacothority.Context) (daga.Server, e
 	}
 }
 
-// helper to validate PKClient requests before proceeding further
+// ValidatePKClientReq is an helper used to validate PKClient requests before proceeding further
 func (s Service) ValidatePKClientReq(req *dagacothority.PKclientCommitments) (daga.Server, error) {
 
 	// validate PKClient commitments
@@ -219,7 +219,7 @@ func (s Service) ValidatePKClientReq(req *dagacothority.PKclientCommitments) (da
 	return s.validateContext(req.Context)
 }
 
-// API endpoint PKClient, upon reception of a valid request,
+// PKClient is an API endpoint, upon reception of a valid request,
 // starts the challenge generation protocol, the current server/node will take the role of Leader
 func (s *Service) PKClient(req *dagacothority.PKclientCommitments) (*dagacothority.PKclientChallenge, error) {
 	// setup service state if not already done
@@ -232,7 +232,7 @@ func (s *Service) PKClient(req *dagacothority.PKclientCommitments) (*dagacothori
 		return nil, errors.New("PKClient: " + err.Error())
 	}
 
-	// FIXME always use context picked by our own mean or / and check that context in req is the exact same !! => see remarks in acceptContext
+	// TODO remember for later, always use context picked by our own mean or / and check that context in req is the exact same !! => see remarks in acceptContext
 
 	// start challenge generation protocol
 	if challengeGeneration, err := s.newDAGAChallengeGenerationProtocol(req, dagaServer); err != nil {
@@ -419,7 +419,7 @@ func (s *Service) serviceState(sid dagacothority.ServiceID) (*ServiceState, erro
 	return serviceState, nil
 }
 
-// updates the 3rd-party related state, safe wrapper for write access to the Storage.State "map"
+// updates the 3rd-party related state, safe wrapper for write access to the Storage.state "map"
 // !always use it to write service's state (add a ServiceState), (direct access to the storage's state map can lead to race conditions
 // since the storage can be accessed/updated from multiple goroutines (protocol instances))!
 func (s *Service) setServiceState(key dagacothority.ServiceID, value *ServiceState) error {

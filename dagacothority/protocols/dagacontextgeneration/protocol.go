@@ -25,7 +25,8 @@ import (
 // the DAGA crypto suite
 var suite = daga.NewSuiteEC()
 
-// QUESTION TODO educated timeout formula that scale with number of nodes etc..
+// Timeout represents the max duration/amount of time to wait for result in WaitForResult
+// TODO educated timeout formula that scale with number of nodes etc..
 const Timeout = 5 * time.Second
 
 // TODO when something wrong (see below/search dishonest) flag leader as dishonest (how ? new protocol with proofs etc.. )
@@ -39,7 +40,7 @@ func init() {
 type Protocol struct {
 	*onet.TreeNodeInstance
 	result              chan dagacothority.Context                                        // channel that will receive the result of the protocol, only root/leader read/write to it
-	context             *ContextFactory                                                   // the context being built (used only by leader)
+	context             *contextFactory                                                   // the context being built (used only by leader)
 	indexOf             map[onet.TreeNodeID]int                                           // map treeNodes to their index (used only by leader)
 	dagaServer          daga.Server                                                       // to hold the newly created "daga identity" of the node for the new context/round
 	originalRequest     *dagacothority.CreateContext                                      // set by leader/service, from API call and then propagated to other instances as part of the announce message, to allow them to decide to proccess request or not
@@ -47,13 +48,13 @@ type Protocol struct {
 	startServingContext func(context dagacothority.Context, dagaServer daga.Server) error // used by child nodes to provide result of protocol to the parent service, set by service at protocol creation time
 }
 
-type ContextFactory struct {
+type contextFactory struct {
 	ServiceID dagacothority.ServiceID
 	daga.MinimumAuthenticationContext
 	Signatures [][]byte
 }
 
-// General infos: NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
+// NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
 // and used to instantiate protocol instances, on the Leader/root (done by onet.CreateProtocol) and on other nodes upon reception of
 // first protocol message, by the serviceManager that will call service.NewProtocol.
 // if service.NewProtocol returns nil, nil this one will be called on children too.
@@ -65,9 +66,9 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	t := &Protocol{
 		TreeNodeInstance: n,
 	}
-	for _, handler := range []interface{}{t.HandleAnnounce, t.HandleAnnounceReply,
-		t.HandleSign, t.HandleSignReply,
-		t.HandleDone} {
+	for _, handler := range []interface{}{t.handleAnnounce, t.handleAnnounceReply,
+		t.handleSign, t.handleSignReply,
+		t.handleDone} {
 		if err := t.RegisterHandler(handler); err != nil {
 			return nil, errors.New("couldn't register handler: " + err.Error())
 		}
@@ -75,7 +76,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	return t, nil
 }
 
-// setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
+// LeaderSetup is a setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
 func (p *Protocol) LeaderSetup(req *dagacothority.CreateContext) {
 	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil { // TODO
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
@@ -87,7 +88,7 @@ func (p *Protocol) LeaderSetup(req *dagacothority.CreateContext) {
 	p.originalRequest = req
 
 	// create context skeleton/factory
-	p.context = &ContextFactory{
+	p.context = &contextFactory{
 		ServiceID: req.ServiceID,
 		MinimumAuthenticationContext: daga.MinimumAuthenticationContext{
 			G: struct {
@@ -103,7 +104,7 @@ func (p *Protocol) LeaderSetup(req *dagacothority.CreateContext) {
 	p.indexOf = make(map[onet.TreeNodeID]int)
 }
 
-// setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
+// ChildSetup is a setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
 func (p *Protocol) ChildSetup(acceptRequest func(*dagacothority.CreateContext) error,
 	startServingContext func(context dagacothority.Context, dagaServer daga.Server) error) {
 	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil { // TODO
@@ -181,7 +182,7 @@ func (p *Protocol) Start() (err error) {
 	return nil
 }
 
-// Wait for protocol result or timeout, must be called on root instance only (meant to be called by the service, after Start)
+// WaitForResult waits for protocol result (and returns it) or timeout, must be called on root instance only (meant to be called by the service, after Start)
 func (p *Protocol) WaitForResult() (dagacothority.Context, daga.Server, error) {
 	if p.result == nil {
 		log.Panicf("%s: WaitForResult called on an uninitialized protocol instance or non root/Leader protocol instance or before Start", Name)
@@ -197,7 +198,7 @@ func (p *Protocol) WaitForResult() (dagacothority.Context, daga.Server, error) {
 }
 
 // handler that is called on "slaves" upon reception of Leader's Announce message
-func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
+func (p *Protocol) handleAnnounce(msg StructAnnounce) (err error) {
 	defer func() {
 		if err != nil {
 			p.Done()
@@ -234,7 +235,7 @@ func (p *Protocol) HandleAnnounce(msg StructAnnounce) (err error) {
 }
 
 // handler that will be called by framework when Leader node has received an AnnounceReply from all other nodes (its children)
-func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) (err error) {
+func (p *Protocol) handleAnnounceReply(msg []StructAnnounceReply) (err error) {
 	defer func() {
 		if err != nil {
 			p.Done()
@@ -266,7 +267,7 @@ func (p *Protocol) HandleAnnounceReply(msg []StructAnnounceReply) (err error) {
 }
 
 // handler that is called on "slaves" upon reception of Leader's Sign message
-func (p *Protocol) HandleSign(msg StructSign) (err error) {
+func (p *Protocol) handleSign(msg StructSign) (err error) {
 	defer func() {
 		if err != nil {
 			p.Done()
@@ -300,7 +301,8 @@ func (p *Protocol) HandleSign(msg StructSign) (err error) {
 		return fmt.Errorf("%s: failed to handle (dishonest)Leader's Sign: wrong group members in context", Name)
 	}
 
-	// sign context // TODO include roster and other metadata in signature
+	// sign context
+	// TODO include roster and other metadata in signature
 	contextBytes, err := daga.AuthenticationContextToBytes(msg.Context)
 	if err != nil {
 		return fmt.Errorf("%s: failed to handle Leader's Sign: %s", Name, err)
@@ -317,7 +319,7 @@ func (p *Protocol) HandleSign(msg StructSign) (err error) {
 }
 
 // handler that will be called by framework when Leader node has received a SignReply from all other nodes (its children)
-func (p *Protocol) HandleSignReply(msg []StructSignReply) (err error) {
+func (p *Protocol) handleSignReply(msg []StructSignReply) (err error) {
 	defer p.Done()
 	log.Lvlf3("%s: Leader received all Sign replies", Name)
 
@@ -361,11 +363,12 @@ func (p *Protocol) HandleSignReply(msg []StructSignReply) (err error) {
 }
 
 // handler that will be called by framework when node received a Done msg from Leader
-func (p *Protocol) HandleDone(msg StructDone) error {
+func (p *Protocol) handleDone(msg StructDone) error {
 	defer p.Done()
 	log.Lvlf3("%s: Received Done", Name)
 
-	// verify signatures // TODO/FIXME use keys from the context at the HandleSign step to prevent leader replacing the keys (if useful, see remark at HandleSign step)
+	// verify signatures
+	// TODO/FIXME use keys from the context at the handleSign step to prevent leader replacing the keys (if useful, see remark at handleSign step)
 	members := msg.FinalContext.Members()
 	if contextBytes, err := daga.AuthenticationContextToBytes(msg.FinalContext); err != nil { // TODO see to include other things (roster, Ids etc..)
 		return fmt.Errorf("%s: failed to handle Done: %s", Name, err)

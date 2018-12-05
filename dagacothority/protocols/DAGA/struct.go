@@ -15,7 +15,7 @@ so that it can find out who sent the message.
 // Name can be used from other packages to refer to this protocols.
 const Name = "DAGA_Server_protocol"
 
-// represents a daga.ServerMessage that is not yet completed by all servers
+// ServerMsg represents a daga.ServerMessage that is not yet completed by all servers, a factory
 type ServerMsg struct {
 	dagacothority.AuthReply
 }
@@ -27,12 +27,12 @@ type StructServerMsg struct {
 	ServerMsg
 }
 
-// represents a daga.ServerMessage that is completed by all servers and ready to be sent to client
+// FinishedServerMsg represents a daga.ServerMessage that is completed by all servers and ready to be sent to client
 type FinishedServerMsg struct {
 	dagacothority.AuthReply
 }
 
-// StructServerMsg just contains FinishedServerMsg and the data necessary to identify and
+// StructFinishedServerMsg just contains FinishedServerMsg and the data necessary to identify and
 // process the message in the framework.
 type StructFinishedServerMsg struct {
 	*onet.TreeNode // sender

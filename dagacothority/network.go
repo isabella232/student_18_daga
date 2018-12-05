@@ -13,6 +13,7 @@ import (
 
 // NetClient is used to represent a daga.Client (which is an interface) in a net friendly way
 // used only to dump client to disk while developing for now
+// ! dont send those around, contains sensitive informations !
 type NetClient struct {
 	PrivateKey kyber.Scalar
 	Index      int
@@ -33,10 +34,12 @@ func netEncodeClient(c daga.Client) *NetClient {
 	}
 }
 
+// NetDecode is used to translate back the net friendly version of Client
 func (nc NetClient) NetDecode() (*Client, error) {
 	return NewClient(nc.Index, nc.PrivateKey)
 }
 
+// NetEncodeClients transform a slice of Client into a slice of NetClient (the "net friendly" version of it"
 func NetEncodeClients(clients []daga.Client) ([]NetClient, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("empty array")

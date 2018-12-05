@@ -77,7 +77,7 @@ type Done struct {
 	FinalContext dagacothority.Context
 }
 
-// StructFinalize just contains Finalize and the data necessary to identify and
+// StructDone just contains Done and the data necessary to identify and
 // process the message in the framework.
 type StructDone struct {
 	*onet.TreeNode

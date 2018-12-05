@@ -42,7 +42,7 @@ func (ac AdminCLient) CreateContext(subscribers []kyber.Point, roster *onet.Rost
 	return &reply.Context, nil
 }
 
-// newPKclientVerifier return a function that wraps a PKClient API call to `dst` under `context`.
+// NewPKclientVerifier returns a function that wraps a PKClient API call to `dst` under `context`.
 // the returned function accept PKClient commitments as parameter
 // and returns the master challenge.
 func (c Client) NewPKclientVerifier(context Context, dst *network.ServerIdentity) daga.PKclientVerifier {

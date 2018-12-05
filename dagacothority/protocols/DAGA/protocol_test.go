@@ -42,7 +42,7 @@ func runProtocol(t *testing.T, nbrNodes int) {
 
 	// verify / extract tag
 	Tf, err := daga.GetFinalLinkageTag(tSuite, dummyContext, serverMsg)
-	require.NoError(t, err, "failed to extract tag from the resulting serverMsg")
+	require.NoError(t, err, "failed to extract tag from the resulting ServerMsg")
 	require.NotZero(t, Tf)
 }
 

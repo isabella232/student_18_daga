@@ -10,7 +10,7 @@ type Server struct {
 	daga.Server
 }
 
-//CreateServer is used to initialize a new server with a given index
+//NewServer is used to initialize a new server with a given index.
 //If no private key is given, a random one is chosen
 func NewServer(i int, s kyber.Scalar) (server *Server, err error) {
 	if dagaServer, err := daga.NewServer(suite, i, s); err != nil {

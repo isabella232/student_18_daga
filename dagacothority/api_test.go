@@ -31,7 +31,7 @@ func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, d
 					s.Storage = &service.Storage{
 						State: service.NewState(),
 					}
-					s.Storage.State.Set(dummyContext.ServiceID, &service.ServiceState{
+					s.Storage.Set(dummyContext.ServiceID, &service.ServiceState{
 						ID: dummyContext.ServiceID,
 						ContextStates: map[dagacothority.ContextID]*service.ContextState{
 							dummyContext.ContextID: {
