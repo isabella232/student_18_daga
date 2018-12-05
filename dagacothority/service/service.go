@@ -77,12 +77,8 @@ func (s *Service) ValidateCreateContextReq(req *dagacothority.CreateContext) err
 }
 
 func (s *Service) acceptCreateContextRequest(req *dagacothority.CreateContext) bool {
-	if _, err := s.serviceState(req.ServiceID); err != nil { // unknown service/1st time
-		// for now open access DAGA node, accept everything
-		// TODO for later search for existing partnership/agreement,
-	} else {
-		// FIXME check context not already existing
-	}
+	// for now open access DAGA node, accept everything
+	// TODO for later offer the option to search somewhere/somehow for existing partnership/agreement or input from nodes' admin
 	return true
 }
 
@@ -90,14 +86,11 @@ func (s *Service) acceptCreateContextRequest(req *dagacothority.CreateContext) b
 // should be able to trigger the creation of new contexts.
 func authenticateRequest(req *dagacothority.CreateContext) error {
 	// FIXME use OpenPGP (or whatever.. or don't ...) + move elsewhere (maybe utils)
-
 	// fetch public key from keyserver / trusted 3rd party
-
 	// verify signature
 
 	// TODO seems that Linus is working on a an authentication/authorization service/framework => why not using it when done
 	// https://github.com/dedis/cothority/pull/1050/commits/770631ca43a5e02a43825a7837b9f8132d8798ad
-
 	return nil
 }
 
@@ -137,7 +130,7 @@ func (s Service) validateAuthReq(req *dagacothority.Auth) (daga.Server, error) {
 	if req == nil || len(req.SCommits) == 0 || req.T0 == nil {
 		return nil, errors.New("validateAuthReq: nil or empty request")
 	}
-	// TODO idea/optimisation (for when I'll rewrite DAGA API...) validate proof here to avoid spawning a protocol for nothing
+	// TODO idea/"optimisation" (for when I'll rewrite DAGA API...) maybe validate proof here to avoid spawning a protocol for nothing
 	// validate context
 	return s.validateContext(req.Context)
 }
@@ -157,12 +150,12 @@ func (s *Service) Auth(req *dagacothority.Auth) (*dagacothority.AuthReply, error
 	}
 
 	// start daga server's protocol
-	if daga, err := s.newDAGAServerProtocol(req, dagaServer); err != nil {
+	if dagaProtocol, err := s.newDAGAServerProtocol(req, dagaServer); err != nil {
 		return nil, errors.New("Auth: " + err.Error())
 	} else {
-		serverMsg, err := daga.WaitForResult()
+		serverMsg, err := dagaProtocol.WaitForResult()
 		netServerMsg := dagacothority.NetEncodeServerMessage(req.Context, &serverMsg)
-		// FIXME : return Tag + sigs instead of final servermsg (another legacy of previous code...rhaaa => need to refactor things again => min 2 days..probably more)
+		// FIXME : return Tag + sigs instead of final servermsg (another legacy of previous code...TODO when sign/daga server code updated (never or ?...)
 		return (*dagacothority.AuthReply)(netServerMsg), err
 	}
 }
@@ -450,6 +443,7 @@ func (s *Service) startServingContext(context dagacothority.Context, dagaServer 
 		Context:    context,
 		DagaServer: *dagacothority.NetEncodeServer(dagaServer),
 	}
+
 	// save all state in bbolt
 	s.save()
 	return nil
@@ -457,7 +451,7 @@ func (s *Service) startServingContext(context dagacothority.Context, dagaServer 
 
 // newService receives the context that holds information about the node it's
 // running on. Saving and loading can be done using the context. The data will
-// be stored in memory for tests and simulations, and on disk for real deployments (QUESTION how ?? I'd like to..).
+// be stored in memory for tests and simulations, and on disk for real deployments
 func newService(c *onet.Context) (onet.Service, error) {
 	s := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),

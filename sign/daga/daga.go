@@ -166,30 +166,30 @@ func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error)
 	return err
 }
 
-//ToBytes is a utility function to convert an AuthenticationContext into []byte, used in signatures
+//AuthenticationContextToBytes is a utility function to convert an AuthenticationContext into []byte
 func AuthenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
 	members := ac.Members()
 	temp, e := PointArrayToBytes(members.X)
 	if e != nil {
-		return nil, fmt.Errorf("Error in X: %s", e)
+		return nil, fmt.Errorf("AuthenticationContextToBytes: error marshaling X: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = PointArrayToBytes(members.Y)
 	if e != nil {
-		return nil, fmt.Errorf("Error in Y: %s", e)
+		return nil, fmt.Errorf("AuthenticationContextToBytes: error marshaling Y: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = PointArrayToBytes(ac.ClientsGenerators())
 	if e != nil {
-		return nil, fmt.Errorf("Error in H: %s", e)
+		return nil, fmt.Errorf("AuthenticationContextToBytes: error marshaling H: %s", e)
 	}
 	data = append(data, temp...)
 
 	temp, e = PointArrayToBytes(ac.ServersSecretsCommitments())
 	if e != nil {
-		return nil, fmt.Errorf("Error in R: %s", e)
+		return nil, fmt.Errorf("AuthenticationContextToBytes: error marshaling R: %s", e)
 	}
 	data = append(data, temp...)
 

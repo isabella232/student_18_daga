@@ -7,6 +7,8 @@ FIXME in fact no... they are in proto.go ... not sure how to keep kind of cohere
 */
 
 import (
+	"encoding/ascii85"
+	"errors"
 	"github.com/dedis/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/network"
@@ -34,16 +36,38 @@ type ServiceID uuid.UUID // FIXME investigate if satori is still the package to 
 // ContextID represents the ID of a Context
 type ContextID uuid.UUID
 
+// DeriveContextID builds an UUIDv5 as a function of the context's hash
+func DeriveContextID(dagaContext daga.AuthenticationContext) (ContextID, error) {
+	// compute hash
+	bytes, err := daga.AuthenticationContextToBytes(dagaContext)
+	if err != nil {
+		return ContextID(uuid.Nil), err
+	}
+	hasher := suite.Hash()
+	hasher.Write(bytes)
+	hash := hasher.Sum(nil)
+
+	// encode hash in base85/ascii85
+	base85 := make([]byte, ascii85.MaxEncodedLen(len(hash)))
+	_ = ascii85.Encode(base85, hash)
+
+	uuid := uuid.NewV5(uuid.NamespaceOID, string(base85))
+	return ContextID(uuid), nil
+}
+
 // NewContext returns a pointer to newly allocated Context struct initialized with the provided daga.AuthenticationContext and roster
 // (the returned context implement daga.AuthenticationContext interface too)
 func NewContext(dagaContext daga.AuthenticationContext, roster *onet.Roster, serviceID ServiceID, signatures [][]byte) (*Context, error) {
-
 	if err := daga.ValidateContext(dagaContext); err != nil {
 		return nil, err
 	} else {
+		contextID, err := DeriveContextID(dagaContext)
+		if err != nil {
+			return nil, errors.New("NewContext: failed to derive context's ID: " + err.Error())
+		}
 		members := dagaContext.Members()
 		return &Context{
-			ContextID:  ContextID(uuid.Must(uuid.NewV4())),
+			ContextID:  contextID,
 			ServiceID:  serviceID,
 			Signatures: signatures,
 			X:          members.X,
