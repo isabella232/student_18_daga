@@ -38,8 +38,7 @@ type Service struct {
 	// We need to embed the ServiceProcessor, so that incoming messages
 	// are correctly handled.
 	*onet.ServiceProcessor
-	Storage *Storage               // QUESTION exported, needed by the tests ... but ... no other mean ? (I only see writing a dummy service that "embed"(cannot embed) service and override everything related to Storage but ...)
-	Setup   func(s *Service) error // see rationale described under `setupState`
+	Storage *Storage         // exported, needed by the tests, TODO other option is to offer exported testing method to set/populate state
 }
 
 // storageID reflects the data we're storing - we could store more
@@ -78,7 +77,14 @@ func (s *Service) ValidateCreateContextReq(req *dagacothority.CreateContext) err
 
 func (s *Service) acceptCreateContextRequest(req *dagacothority.CreateContext) bool {
 	// for now open access DAGA node, accept everything
-	// TODO for later offer the option to search somewhere/somehow for existing partnership/agreement or input from nodes' admin
+	// TODO for later offer the option to search somewhere/somehow for existing partnership/agreement or input from nodes' admin (via email sms code etc..)
+	//  can even be backed in the authentication step, e.g. if we use "~recursively" DAGA, we can define administratively/offline a
+	//  context whose members are the people that have a partnership/agreement with the daga conode admin that allow them to create contexts,
+	//  then a running cothority (serving the context) and containing the conode authenticate the request
+	//  => the node is convinced that the "remote now anon 3rd-party service admin" has the right to create new contexts
+	//  => KISS, can use only DAGA, no need to use alien protocols and things like openPGP or DARC management etc...
+	//  => we now move the TODO as offering ways to manage the partnerships and setup those partnership contexts ...
+	//   chicken and egg problem but now we can decide to bootsrap them diffenrently using whatever means we want, it is our business (we no longer force the users/RP to use our technologies)
 	return true
 }
 
@@ -91,16 +97,17 @@ func authenticateRequest(req *dagacothority.CreateContext) error {
 
 	// TODO seems that Linus is working on a an authentication/authorization service/framework => why not using it when done
 	// https://github.com/dedis/cothority/pull/1050/commits/770631ca43a5e02a43825a7837b9f8132d8798ad
+	// + what about darc..... (now that I see this is not always a byzcoin/onmiledger thing (cannot think if the words don't have any meaning or change of meaning every semesters..), seriously onet/cothority need far more "centralized" up-to-date documentation/wiki
+	// + why the new authentication service if darc exists ? (or phrased differently why DARC stands for distributed ACCESS CONTROL if there are no authentication ???? curiously always thought that access control = authentication + authorization or that authorization needs authentication..)
+
+	// TODO and this is a bit a chicken and egg problem but DAGA is exactly that, a distributed authentication service => why not use it to anonymously authenticate remote admin as being member of a context containing the keys of the admins that have a partnership with the node admin !! => full access control strategy, auth^2
+
 	return nil
 }
 
 // CreateContext is an API endpoint, upon reception of a valid request,
 // starts the context generation protocol, the current server/node will take the role of Leader
 func (s *Service) CreateContext(req *dagacothority.CreateContext) (*dagacothority.CreateContextReply, error) {
-	// setup if not already done
-	if err := s.Setup(s); err != nil {
-		return nil, errors.New("CreateContext: " + err.Error())
-	}
 
 	// verify that submitted request is valid and accepted by our node
 	if err := s.ValidateCreateContextReq(req); err != nil {
@@ -136,12 +143,8 @@ func (s Service) validateAuthReq(req *dagacothority.Auth) (daga.Server, error) {
 }
 
 // Auth is an API endpoint,
-// starts the server's protocol (daga 4.3.6) to authenticate an user with the help of its auth. request
+// starts the server's protocol (daga paper 4.3.6) to authenticate an user with the help of its auth. request
 func (s *Service) Auth(req *dagacothority.Auth) (*dagacothority.AuthReply, error) {
-	// setup if not already done
-	if err := s.Setup(s); err != nil {
-		return nil, errors.New("Auth: " + err.Error())
-	}
 
 	// verify that submitted request is valid and accepted by our node
 	dagaServer, err := s.validateAuthReq(req)
@@ -215,10 +218,7 @@ func (s Service) ValidatePKClientReq(req *dagacothority.PKclientCommitments) (da
 // PKClient is an API endpoint, upon reception of a valid request,
 // starts the challenge generation protocol, the current server/node will take the role of Leader
 func (s *Service) PKClient(req *dagacothority.PKclientCommitments) (*dagacothority.PKclientChallenge, error) {
-	// setup service state if not already done
-	if err := s.Setup(s); err != nil {
-		return nil, errors.New("PKClient: " + err.Error())
-	}
+
 	// verify that submitted request is valid and accepted by our node
 	dagaServer, err := s.ValidatePKClientReq(req)
 	if err != nil {
@@ -318,14 +318,11 @@ func (s *Service) newDAGAContextGenerationProtocol(req *dagacothority.CreateCont
 // the one starting the protocols) to generate the PI on those other nodes.
 // if it returns nil, nil then the default NewProtocol is called (the one defined in protocol)
 // FIXME outdated documentation in cothority_template => propose replacement
-// TODO share code between protocols (same structure, cast to new interface and call ChildSetup on it ?)
+// TODO if possible share code between protocols (same structure, cast to new interface and call ChildSetup on it ?)
 // TODO and if like now the setup becomes more and more similar to the one for Leader, consider making small modifications to get rid of this NewProtocol, return nil, nil and have everything in protocol if possible
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl3("received protocol msg, instantiating new protocol instance of " + tn.ProtocolName())
-	// setup if not already done
-	if err := s.Setup(s); err != nil {
-		return nil, errors.New("NewProtocol: " + err.Error())
-	}
+
 	switch tn.ProtocolName() {
 	case dagachallengegeneration.Name:
 		pi, err := dagachallengegeneration.NewProtocol(tn)
@@ -368,13 +365,8 @@ func (s *Service) save() {
 	}
 }
 
-// Tries to load the configuration and updates the data in the service
-// if it finds a valid config-file
-// TODO not sure to understand how to persist state..accross failure
-// !rationale for not being a method anymore: to do testing (at all or more easily) need ways to swap the function with a stub
-// + since it was called in newService previously => called from init (even in the test => crash) => "solution" don't call it at newService time
-// but when endpoints called and no-op if already setup!
-func setupState(s *Service) error {
+// Tries to load a previously saved state from the permanent storage (bbolt db), if not found setup a new one.
+func (s *Service) setupState() error {
 	if s.Storage == nil {
 		msg, err := s.Load(storageID)
 		if err != nil {
@@ -382,8 +374,10 @@ func setupState(s *Service) error {
 		}
 		if msg == nil {
 			// key does not exists, first time
+			// TODO if idea to "recursively" use DAGA to authenticate + authorize createcontext requests,
+			//  load "administrative" daga context from somewhere here
 			s.Storage = &Storage{
-				State: NewState(),
+				State: newState(),
 			}
 			return nil
 		} else {
@@ -394,8 +388,10 @@ func setupState(s *Service) error {
 			}
 			return nil
 		}
+	} else {
+		// state is already initialized
+		return nil
 	}
-	return nil
 }
 
 // returns the 3rd-party related state or an error if 3rd-party service unknown.
@@ -412,14 +408,21 @@ func (s *Service) serviceState(sid dagacothority.ServiceID) (*ServiceState, erro
 	return serviceState, nil
 }
 
-// updates the 3rd-party related state, safe wrapper for write access to the Storage.state "map"
-// !always use it to write service's state (add a ServiceState), (direct access to the storage's state map can lead to race conditions
-// since the storage can be accessed/updated from multiple goroutines (protocol instances))!
-func (s *Service) setServiceState(key dagacothority.ServiceID, value *ServiceState) error {
-	if key == dagacothority.ServiceID(uuid.Nil) || value == nil {
-		return errors.New("serviceState: Nil/Zero ID/key or value")
+// PopulateServiceState is used only from testing code, it is ~ the testing counterpart of `startServingContext`,
+// allow the testing code to setup some state.
+func (s *Service) PopulateServiceState(context *dagacothority.Context, dagaServer daga.Server) error {
+	if context == nil || context.ServiceID == dagacothority.ServiceID(uuid.Nil) || dagaServer == nil {
+		return errors.New("PopulateServiceState: illegal args")
 	}
-	s.Storage.State.Set(key, value)
+	s.Storage.State.set(context.ServiceID, &ServiceState{
+		ID: context.ServiceID,
+		ContextStates: map[dagacothority.ContextID]*ContextState{
+			context.ContextID: {
+				DagaServer: *dagacothority.NetEncodeServer(dagaServer),
+				Context:    *context,
+			},
+		},
+	})
 	return nil
 }
 
@@ -459,6 +462,8 @@ func newService(c *onet.Context) (onet.Service, error) {
 	if err := s.RegisterHandlers(s.Auth, s.PKClient, s.CreateContext); err != nil {
 		return nil, errors.New("Couldn't register service's API handlers/messages: " + err.Error())
 	}
-	s.Setup = setupState
+	if err := s.setupState(); err != nil {
+		return nil, err
+	}
 	return s, nil
 }

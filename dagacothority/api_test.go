@@ -17,33 +17,14 @@ func TestMain(m *testing.M) {
 	log.MainTest(m)
 }
 
-// override/replace the Setup function of the Service(s) with a function that populate their state/storage with
-// the dagaServer and context provided
+// populate services state/storage with the dagaServers and context provided
 // TODO helper used to test service too => better to move to testing helpers => but KO import cycles.. => find better solution/organization than copy pasta
-func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, dummyContext *dagacothority.Context) {
+func populateServicesStates(services []onet.Service, dagaServers []daga.Server, dummyContext *dagacothority.Context) {
 	for i, s := range services {
-		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState)
+		// plug some initial test state: (in real life those are (for now) fetched from FS during setupState)
 		svc := s.(*service.Service)
-		svc.Setup = func(index int) func(s *service.Service) error {
-			return func(s *service.Service) error {
-				if s.Storage == nil {
-					dagaServer := dagaServers[index]
-					s.Storage = &service.Storage{
-						State: service.NewState(),
-					}
-					s.Storage.Set(dummyContext.ServiceID, &service.ServiceState{
-						ID: dummyContext.ServiceID,
-						ContextStates: map[dagacothority.ContextID]*service.ContextState{
-							dummyContext.ContextID: {
-								DagaServer: *dagacothority.NetEncodeServer(dagaServer),
-								Context:    *dummyContext,
-							},
-						},
-					})
-				}
-				return nil
-			}
-		}(i)
+		dagaServer := dagaServers[i]
+		svc.PopulateServiceState(dummyContext, dagaServer)
 	}
 }
 
@@ -57,7 +38,7 @@ func authSetup() (*onet.LocalTest, daga.Client, *dagacothority.Context) {
 
 	dagaClients, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
 
-	overrideServicesSetup(services, dagaServers, dummyContext)
+	populateServicesStates(services, dagaServers, dummyContext)
 	return local, dagaClients[0], dummyContext
 }
 

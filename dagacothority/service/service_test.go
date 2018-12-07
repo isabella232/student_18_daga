@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/util/key"
 	"github.com/dedis/onet"
@@ -23,32 +22,13 @@ func TestMain(m *testing.M) {
 	log.MainTest(m, 4)
 }
 
-// override/replace the Setup function of the Service(s) with a function that populate their state/storage with
-// the dagaServers and context provided
-func overrideServicesSetup(services []onet.Service, dagaServers []daga.Server, context dagacothority.Context) {
+// populate services state/storage with the dagaServers and context provided
+func populateServicesStates(services []onet.Service, dagaServers []daga.Server, context *dagacothority.Context) {
 	for i, s := range services {
-		// override setup to plug some test state: (in real life those are (for now) fetched from FS during setupState TODO update)
-		service := s.(*Service)
-		service.Setup = func(index int) func(s *Service) error {
-			return func(s *Service) error {
-				if s.Storage == nil {
-					dagaServer := dagaServers[index]
-					s.Storage = &Storage{
-						State: NewState(),
-					}
-					s.Storage.State.Set(context.ServiceID, &ServiceState{
-						ID: context.ServiceID,
-						ContextStates: map[dagacothority.ContextID]*ContextState{
-							context.ContextID: {
-								DagaServer: *dagacothority.NetEncodeServer(dagaServer),
-								Context:    context,
-							},
-						},
-					})
-				}
-				return nil
-			}
-		}(i) // iife since we don't want our Setup functions all reference the last dagaServer..
+		// plug some initial test state: (in real life those are (for now) fetched from FS during setupState)
+		svc := s.(*Service)
+		dagaServer := dagaServers[i]
+		svc.PopulateServiceState(context, dagaServer)
 	}
 }
 
@@ -67,7 +47,7 @@ func TestService_CreateContext(t *testing.T) {
 		unusedServers = append(unusedServers, dagaServer)
 	}
 	unusedContext := dagacothority.Context{}
-	overrideServicesSetup(services, unusedServers, unusedContext)
+	populateServicesStates(services, unusedServers, &unusedContext)
 
 	for _, s := range services {
 		log.Lvl2("Sending request to", s)
@@ -118,9 +98,9 @@ func TestService_PKClient(t *testing.T) {
 	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
 
 	// provide initial state to the service (instead of fetching it from FS)
-	overrideServicesSetup(services, dagaServers, *dummyContext)
+	populateServicesStates(services, dagaServers, dummyContext)
 
-	for _, s := range services { // QUESTION purpose/point of running test on multiple same service ??
+	for _, s := range services { // QUESTION purpose/point of running test on multiple "same" service ??
 		log.Lvl2("Sending request to", s)
 
 		commitments := testing2.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3)
@@ -134,7 +114,6 @@ func TestService_PKClient(t *testing.T) {
 		require.NotZero(t, reply)
 
 		// verify that all servers correctly signed the challenge
-		// QUESTION: not sure if I should test theses here.. IMO the sut is the service, not the daga code or protocol it uses
 		members := dummyContext.Members()
 		require.NoError(t, reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments))
 	}
@@ -150,9 +129,9 @@ func TestService_Auth(t *testing.T) {
 	_, dagaServers, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
 
 	// provide initial state to the service (instead of fetching it from FS)
-	overrideServicesSetup(services, dagaServers, *dummyContext)
+	populateServicesStates(services, dagaServers, dummyContext)
 
-	for _, s := range services { // QUESTION purpose/point of running test on multiple same service ??
+	for _, s := range services {
 		log.Lvl2("Sending request to", s)
 
 		request := dagacothority.Auth(*dagacothority.NetEncodeAuthenticationMessage(*dummyContext, *dummyAuthRequest))
@@ -170,7 +149,7 @@ func TestService_Auth(t *testing.T) {
 }
 
 // verify that PKClient works for context created with CreateContext
-// TODO understand why this one is fine on my machine but "FAIL still have things lingering in travis"
+// TODO understand why this one is fine on my machine (with race flag too) but "FAIL still have things lingering in travis"
 //  seems that in travis the test is stopped prematurely .. some timeout ?
 func TestService_CreateContextAndPKClient(t *testing.T) {
 	local := onet.NewTCPTest(tSuite)
@@ -196,7 +175,6 @@ func TestService_CreateContextAndPKClient(t *testing.T) {
 		// verify that all servers correctly signed the challenge
 		members := context.Members()
 		require.NoError(t, reply.NetDecode().VerifySignatures(tSuite, members.Y, commitments))
-		//time.Sleep(2*time.Second)
 	}
 }
 
@@ -213,7 +191,7 @@ func getTestContext(t *testing.T, s *Service, roster *onet.Roster, numClients in
 	}
 
 	createContextRequest := dagacothority.CreateContext{
-		Signature:       make([]byte, 32), // TODO openPGP etc..
+		Signature:       make([]byte, 32),
 		DagaNodes:       roster,
 		SubscribersKeys: keys,
 		ServiceID:       dagacothority.ServiceID(uuid.Must(uuid.NewV4())),
@@ -238,7 +216,7 @@ func TestService_CreateContextAndPKclientAndAuth(t *testing.T) {
 		// calls CreateContext
 		context, clients := getTestContext(t, s.(*Service), roster, 5)
 
-		// calls PKClient
+		// calls PKClient to build the auth. message
 		authMsg, err := daga.NewAuthenticationMessage(tSuite, context, clients[0], func(commits []kyber.Point) (daga.Challenge, error) {
 			request := dagacothority.PKclientCommitments{
 				Commitments: commits,
@@ -340,9 +318,8 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 	services := local.GetServices(hosts, DagaID)
 	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
 	// provide initial state to the service (instead of fetching it from FS)
-	overrideServicesSetup(services[0:0], dagaServers, *dummyContext)
+	populateServicesStates(services[0:0], dagaServers, dummyContext)
 	service := services[0].(*Service)
-	require.NoError(t, service.Setup(service))
 
 	// same roster but bullshit in daga.Context
 	badNetContext := dagacothority.Context{
@@ -386,36 +363,4 @@ func TestValidatePKClientReqShouldErrorOnEmptyOrBadlySizedCommitments(t *testing
 	})
 	require.Error(t, err, "should return error on bad commitments size")
 	require.Zero(t, context)
-}
-
-func TestPKClientShouldErrorOnFailedSetup(t *testing.T) {
-	service := &Service{}
-	service.Setup = func(s *Service) error {
-		return errors.New("not inspired")
-	}
-	reply, err := service.PKClient(&dagacothority.PKclientCommitments{
-		Context: dagacothority.Context{
-			H: testing2.RandomPointSlice(8),
-		},
-		Commitments: testing2.RandomPointSlice(3 * 8),
-	})
-	require.Error(t, err, "should return error on failed setup")
-	require.Zero(t, reply)
-}
-
-func TestAuthShouldErrorOnFailedSetup(t *testing.T) {
-	service := &Service{}
-	service.Setup = func(s *Service) error {
-		return errors.New("not inspired")
-	}
-
-	local := onet.NewTCPTest(tSuite)
-	_, roster, _ := local.GenTree(5, true)
-	defer local.CloseAll()
-	_, _, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
-
-	request := dagacothority.Auth(*dagacothority.NetEncodeAuthenticationMessage(*dummyContext, *dummyAuthRequest))
-	reply, err := service.Auth(&request)
-	require.Error(t, err, "should return error on failed setup")
-	require.Zero(t, reply)
 }
