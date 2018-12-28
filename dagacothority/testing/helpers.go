@@ -162,18 +162,18 @@ func (s *DummyService) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.Generic
 	return nil, errors.New("should not be reached")
 }
 
-// DummyDagaSetup is used to provide initial state for the testing of the protocols, dummy daga clients, servers, authRequests and context
+// DummyDagaSetup is used to build initial state for the testing of the protocols, dummy daga clients, servers, authRequests and context
 // TODO add possibility to return bad challenge channel
-func DummyDagaSetup(local *onet.LocalTest, roster *onet.Roster) (dagaClients []daga.Client, dagaServers []daga.Server,
+func DummyDagaSetup(numClients, numServers int, roster *onet.Roster) (dagaClients []daga.Client, dagaServers []daga.Server,
 	dummyAuthRequest *daga.AuthenticationMessage, dummyContext *dagacothority.Context) {
 
-	dagaClients, dagaServers, minDagaContext, err := daga.GenerateTestContext(tSuite, rand.Intn(10)+2, len(local.Servers))
+	dagaClients, dagaServers, minDagaContext, err := daga.GenerateTestContext(tSuite, numClients, numServers)
 	if err != nil {
 		log.Panic(err.Error())
 	}
 	dummyContext, _ = dagacothority.NewContext(minDagaContext, roster, dagacothority.ServiceID(uuid.Must(uuid.NewV4())), nil)
 
-	// TODO what would be the best way to share test helpers with sign/daga (have the ~same) new daga testing package exported under sign/daga with all helper ?
+	// TODO what would be the best way to share test helpers with sign/daga (have the ~same) ? new daga testing package exported under sign/daga with all helper ?
 	dummyChallengeChannel := func(commitments []kyber.Point) (daga.Challenge, error) {
 		challenge := daga.Challenge{
 			Cs: tSuite.Scalar().Pick(tSuite.RandomStream()),
@@ -207,7 +207,7 @@ func ValidServiceSetup(local *onet.LocalTest, nbrNodes int) ([]onet.Service, *da
 	log.Lvl3("Tree is:", tree.Dump())
 
 	// setup dummy request
-	_, dagaServers, dummyRequest, dummyContext := DummyDagaSetup(local, roster)
+	_, dagaServers, dummyRequest, dummyContext := DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 
 	// populate dummy service states (real life we will need a setup protocol/procedure)
 	for i, service := range services {

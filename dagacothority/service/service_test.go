@@ -11,6 +11,7 @@ import (
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
 )
 
@@ -95,7 +96,7 @@ func TestService_PKClient(t *testing.T) {
 	defer local.CloseAll()
 
 	services := local.GetServices(hosts, DagaID)
-	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 
 	// provide initial state to the service (instead of fetching it from FS)
 	populateServicesStates(services, dagaServers, dummyContext)
@@ -126,7 +127,7 @@ func TestService_Auth(t *testing.T) {
 	defer local.CloseAll()
 
 	services := local.GetServices(hosts, DagaID)
-	_, dagaServers, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(local, roster)
+	_, dagaServers, dummyAuthRequest, dummyContext := testing2.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 
 	// provide initial state to the service (instead of fetching it from FS)
 	populateServicesStates(services, dagaServers, dummyContext)
@@ -150,7 +151,7 @@ func TestService_Auth(t *testing.T) {
 
 // verify that PKClient works for context created with CreateContext
 // TODO understand why this one is fine on my machine (with race flag too) but "FAIL still have things lingering in travis"
-//  seems that in travis the test is stopped prematurely .. some timeout ?
+//  seems that in travis the test is stopped prematurely .. some timeout ? => no, context not found in state but that's not possible..context is obtained/returned by service only after succesfull storage in state...
 func TestService_CreateContextAndPKClient(t *testing.T) {
 	local := onet.NewTCPTest(tSuite)
 	hosts, roster, _ := local.GenTree(5, true)
@@ -162,7 +163,7 @@ func TestService_CreateContextAndPKClient(t *testing.T) {
 
 		// calls CreateContext
 		context, _ := getTestContext(t, s.(*Service), roster, 5)
-
+		
 		commitments := testing2.RandomPointSlice(len(context.ClientsGenerators()) * 3)
 		reply, err := s.(*Service).PKClient(
 			&dagacothority.PKclientCommitments{
@@ -316,7 +317,7 @@ func TestValidateContextShouldErrorOnUnacceptedContext(t *testing.T) {
 	defer local.CloseAll()
 
 	services := local.GetServices(hosts, DagaID)
-	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := testing2.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	// provide initial state to the service (instead of fetching it from FS)
 	populateServicesStates(services[0:0], dagaServers, dummyContext)
 	service := services[0].(*Service)

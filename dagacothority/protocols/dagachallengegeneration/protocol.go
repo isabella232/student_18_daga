@@ -31,7 +31,7 @@ var suite = daga.NewSuiteEC()
 
 // Timeout represents the max duration/amount of time to wait for result in WaitForResult
 // TODO educated timeout formula that scale with number of nodes etc..
-const Timeout = 5 * time.Second
+const Timeout = 2500 * time.Second
 
 func init() {
 	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
@@ -185,7 +185,7 @@ func (p *Protocol) Start() (err error) {
 	}()
 
 	// quick check that give hint that every other node is indeed a direct child of root.
-	if len(p.Children()) != len(p.context.ServersSecretsCommitments())-1 {
+	if len(p.Children()) != len(p.context.Members().Y)-1 {
 		return errors.New(Name + ": failed to start: tree has invalid shape")
 	}
 	log.Lvlf3("leader (%s) started %s protocol", p.ServerIdentity(), Name)
@@ -429,8 +429,7 @@ func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// if we prefer keeping the indices in context for the "ring order", (no particular reason to do so..)
 	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
 	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
-	// (TODO for later, maybe cleaner to indeed enforce same order in a non error prone way)
-	// TODO and if not and we keep current solution, combine indexOf and nextnode in a cleverer algo to use a single loop
+	// TODO if we keep current solution, combine indexOf and nextnode in a cleverer algo to use a single loop
 	ownIndex, _ := dagacothority.IndexOf(p.context.Roster.Publics(), p.Public())
 	if nextServerTreeNode, err := protocols.NextNode(ownIndex, p.context.Roster.Publics(), p.Tree().List()); err != nil {
 		return fmt.Errorf("sendToNextServer: %s", err)

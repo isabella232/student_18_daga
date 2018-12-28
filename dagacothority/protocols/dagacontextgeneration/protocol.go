@@ -1,12 +1,12 @@
 package dagacontextgeneration
 
-/*
-This file provides a Onet-protocol implementing the context generation protocol described in
-Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.3
-
-The protocol is meant to be launched upon reception of a CreateContext request by the DAGA service using the
-`newDAGAContextGenerationProtocol`-method of the service (that will take care of doing things right.)
-*/
+//
+//This file provides a Onet-protocol implementing the context generation protocol described in
+//Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.3
+//
+//The protocol is meant to be launched upon reception of a CreateContext request by the DAGA service using the
+//`newDAGAContextGenerationProtocol`-method of the service (that will take care of doing things right.)
+//
 
 import (
 	"errors"
@@ -26,10 +26,11 @@ import (
 var suite = daga.NewSuiteEC()
 
 // Timeout represents the max duration/amount of time to wait for result in WaitForResult
-// TODO educated timeout formula that scale with number of nodes etc..
-const Timeout = 5 * time.Second
+// TODO educated timeout formula that scale with number of nodes etc.. => forget about it there are countless other timeouts everywhere (tcp, tree cache etc..)
+const Timeout = 2500 * time.Second
+// 5 second was ok up to 4096/{2,4} and 2048/8 clients/servers
 
-// TODO when something wrong (see below/search dishonest) flag leader as dishonest (how ? new protocol with proofs etc.. )
+// TODO when something wrong (see below/search dishonest) flag leader as dishonest and do something to evince it (how ? new protocol with proofs etc.. )
 
 func init() {
 	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
@@ -78,7 +79,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 // LeaderSetup is a setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
 func (p *Protocol) LeaderSetup(req *dagacothority.CreateContext) {
-	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil { // TODO
+	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
 	// store original request (to be able to forward it to other nodes)
@@ -107,7 +108,7 @@ func (p *Protocol) LeaderSetup(req *dagacothority.CreateContext) {
 // ChildSetup is a setup function that needs to be called after protocol creation on other (non root/Leader) tree nodes
 func (p *Protocol) ChildSetup(acceptRequest func(*dagacothority.CreateContext) error,
 	startServingContext func(context dagacothority.Context, dagaServer daga.Server) error) {
-	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil { // TODO
+	if p.result != nil || p.context != nil || p.indexOf != nil || p.dagaServer != nil {
 		log.Panic("protocol setup: ChildSetup called on an already initialized node.")
 	}
 	p.setAcceptRequest(acceptRequest)
@@ -140,7 +141,7 @@ func (p *Protocol) Start() (err error) {
 	}()
 
 	// quick check that give hint that every other node is indeed a direct child of root.
-	if len(p.Children()) != len(p.context.ServersSecretsCommitments())-1 {
+	if len(p.Children()) != len(p.context.Members().Y)-1 {
 		return errors.New(Name + ": failed to start: tree has invalid shape")
 	}
 	log.Lvlf3("leader (%s) started %s protocol", p.ServerIdentity(), Name)
@@ -154,7 +155,7 @@ func (p *Protocol) Start() (err error) {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	}
 	// pick new random per-round secret r and its commitment R
-	R := daga.GenerateNewRoundSecret(suite, dagaServer) // TODO remember the refactor note in GenerateNewRoundSecret
+	R := daga.GenerateNewRoundSecret(suite, dagaServer)
 
 	// save in state
 	p.dagaServer = dagaServer
@@ -216,13 +217,13 @@ func (p *Protocol) handleAnnounce(msg StructAnnounce) (err error) {
 
 	leaderTreeNode := msg.TreeNode
 
-	// create new daga.Server identity for this context (personal choice can decide to reuse one existing Y key...)
+	// create new daga.Server identity for this context (TODO: personal choice can decide to reuse one existing long-term public key (the one in roster ? => needs to be compatible with the daga suite..)
 	dagaServer, err := daga.NewServer(suite, msg.AssignedIndex, nil)
 	if err != nil {
 		return errors.New(Name + ": failed to handle Leader's Announce: " + err.Error())
 	}
 	// pick new random per-round secret r and its commitment R
-	R := daga.GenerateNewRoundSecret(suite, dagaServer) // TODO remember the refactor note in GenerateNewRoundSecret
+	R := daga.GenerateNewRoundSecret(suite, dagaServer)
 
 	// save in own state
 	p.dagaServer = dagaServer
@@ -276,16 +277,13 @@ func (p *Protocol) handleSign(msg StructSign) (err error) {
 	log.Lvlf3("%s: Received Leader's Sign", Name)
 
 	// verify that our Y,R is correct in context
-	R := suite.Point().Mul(p.dagaServer.RoundSecret(), nil) // TODO remove this nonsense and add a new keypair in daga.Server
+	R := suite.Point().Mul(p.dagaServer.RoundSecret(), nil)
 	Y := p.dagaServer.PublicKey()
 	if !R.Equal(msg.Context.R[p.dagaServer.Index()]) {
 		return fmt.Errorf("%s: failed to handle (dishonest)Leader's Sign: wrong node commitment", Name)
 	} else if !Y.Equal(msg.Context.G.Y[p.dagaServer.Index()]) {
 		return fmt.Errorf("%s: failed to handle (dishonest)Leader's Sign: wrong node public key", Name)
 	}
-
-	// TODO FIXME how can the nodes verify that the other keys are not sybil keys of leader ?
-	// TODO (and if the case what can go wrong, since can assume we are honest and daga works in anytrust => nothing can go wrong or ?)
 
 	// verify that the generators are correctly computed (do it again)
 	for i, leaderGenerator := range msg.Context.H {
@@ -368,7 +366,7 @@ func (p *Protocol) handleDone(msg StructDone) error {
 	log.Lvlf3("%s: Received Done", Name)
 
 	// verify signatures
-	// TODO/FIXME use keys from the context at the handleSign step to prevent leader replacing the keys (if useful, see remark at handleSign step)
+	// TODO use keys from the context at the handleSign step to prevent leader replacing the keys (if useful, since we can assume we are honest + we cannot ensure leader is not sybil from the start..)
 	members := msg.FinalContext.Members()
 	if contextBytes, err := daga.AuthenticationContextToBytes(msg.FinalContext); err != nil { // TODO see to include other things (roster, Ids etc..)
 		return fmt.Errorf("%s: failed to handle Done: %s", Name, err)

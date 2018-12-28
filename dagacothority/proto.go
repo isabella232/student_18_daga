@@ -5,19 +5,19 @@ This holds the messages used to communicate with the daga service over the netwo
 this file has 2 purposes,
 	- provide the go data-structures used in the daga cothority API
 	- provide their description: => the file can be used as input to proto.awk that
-									can transpile it into a proto file (protobuf) for interoperability.
+									can transpile it into a proto file (protobuf) for interoperability with other languages/frameworks.
 
 this means that the content of the file need to stay proto.awk friendly:
 	- only struct types, no type aliases,
 	- no anonymous fields and types
-	- no same line declaration of fields
+	- no same line declaration of multiple fields
     - no functions/methods,
 	- no "same line comments"
 	- no blank lines/"holes inside the struct definitions
 
 additionally this means that the data-structures need to stay onet/protobuf friendly:
 	- only public/exported fields
-	- no interface fields (in general.., kyber.Point/Scalar ok, see how onet package handle encoding/decoding etc.)
+	- no interface fields (in general.., kyber.Point/Scalar ok, see how onet package handle encoding/decoding of interfaces etc.)
 */
 
 import (
@@ -68,7 +68,7 @@ type ServerSignature struct {
 
 // Auth will start the authentication of client that will result (on success) in an AuthReply
 // it provides a net (and awk friendly) compatible representation of the daga.AuthenticationMessage struct
-// (which embeds a context which is an interface)
+// (which embeds a context which is an interface) // TODO keep an eye on the new features, interface marshaller etc.. probably oportunities to simplify those structs later
 type Auth struct {
 	Context  Context
 	SCommits []kyber.Point
@@ -120,4 +120,12 @@ type ClientProof struct {
 	T  []kyber.Point
 	C  []kyber.Scalar
 	R  []kyber.Scalar
+}
+
+type Traffic struct {
+}
+
+type TrafficReply struct {
+	Rx uint64
+	Tx uint64
 }

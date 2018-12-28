@@ -2,16 +2,13 @@ package dagaauth
 
 // QUESTION not sure if each protocol deserve its own package + what would be a sound organization
 // QUESTION (if I put them all in same package (say protocol or DAGA) will need to change a little the template conventions
-// IMO better: DAGA.PKCLientChallengeGenerationProtocol, DAGA.ServerProtocol, DAGA.Service etc..
-// FIXME rename everything to follow conventions when decided
+// IMO maybe better: DAGA.PKCLientChallengeGenerationProtocol, DAGA.ServerProtocol, DAGA.Service etc..
 
-/*
-This file provides a Onet-protocol implementing the "DAGA Server's protocol" described in
-Syta - Identity Management Through Privacy Preserving Aut Chapter 4.3.6
-
-The protocol is meant to be launched upon reception of an Auth request by the DAGA service using the
-`newDAGAServerProtocol`-method of the service (that will take care of doing things right.)
-*/
+// This file provides a Onet-protocol implementing the "DAGA Server's protocol" described in
+// Syta - Identity Management Through Privacy Preserving Aut Chapter 4.3.6
+//
+// The protocol is meant to be launched upon reception of an Auth request by the DAGA service using the
+// `newDAGAServerProtocol`-method of the service (that will take care of doing things right.)
 
 import (
 	"errors"
@@ -30,23 +27,23 @@ var suite = daga.NewSuiteEC()
 
 // Timeout represents the max duration/amount of time to wait for result in WaitForResult
 // TODO educated timeout formula that scale with number of nodes etc..
-const Timeout = 10 * time.Second
+const Timeout = 2500 * time.Second
 
 func init() {
 	network.RegisterMessage(ServerMsg{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
 	// QUESTION protocol is tied to service => according to documentation I need to call Server.ProtocolRegisterName
 	// QUESTION Where ?
-	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove or ?? see question above
+	onet.GlobalProtocolRegister(Name, NewProtocol)
 }
 
 // Protocol holds the state of the protocol instance.
 type Protocol struct {
 	*onet.TreeNodeInstance
-	result chan daga.ServerMessage // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
+	result chan daga.ServerMessage // channel that will receive the result of the protocol, only root/leader read/write to it
 
 	dagaServer    daga.Server                                      // the daga server of this protocol instance, should be populated from infos taken from Service at protocol creation time (see LeaderSetup and ChildSetup)
 	request       dagacothority.Auth                               // the client's request (set by service using LeaderSetup)
-	acceptContext func(dagacothority.Context) (daga.Server, error) // a function to call to verify that context is accepted by our node (set by service at protocol creation time)
+	acceptContext func(dagacothority.Context) (daga.Server, error) // a function to call to verify that context is valid and accepted by our node (set by service at protocol creation time)
 }
 
 // NewProtocol initialises the structure for use in one round, callback passed to onet upon protocol registration
@@ -117,7 +114,11 @@ func (p *Protocol) Start() (err error) {
 		}
 	}()
 
-	// TODO check legal tree shape
+	// quick check that give hint that every other node is indeed a direct child of root.
+	if len(p.Children()) != len(p.request.Context.Members().Y)-1 {
+		return errors.New(Name + ": failed to start: tree has invalid shape")
+	}
+
 	log.Lvlf3("leader (%s) started %s", p.ServerIdentity(), Name)
 
 	// initialize the channel used to grab results / synchronize with WaitForResult
@@ -174,13 +175,12 @@ func (p *Protocol) handleServerMsg(msg StructServerMsg) (err error) {
 		return fmt.Errorf("%s: %s", Name, err)
 	}
 
-	// check if context accepted by our node  // FIXME validate entire request like was done for other protocols
+	// check if context accepted by our node
 	if dagaServer, err := p.acceptContext(context); err != nil {
 		return fmt.Errorf("%s: context not accepted by node: %s", Name, err)
 	} else {
 		p.setDagaServer(dagaServer)
 		p.request.Context = context
-		//p.setRequest(msg.NetServerMessage.Request)  // TODO maybe for consistency
 	}
 
 	// run "protocol"
@@ -234,7 +234,6 @@ func (p *Protocol) handleFinishedServerMsg(msg StructFinishedServerMsg) error {
 // TODO see remark in protocols/utils, would be nice to share more code between daga protocols
 func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// figure out the node of the next-server in "ring"
-	// figure out the node of the next-server in "ring"
 
 	// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
 	// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
@@ -244,6 +243,9 @@ func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
 	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
 	ownIndex, _ := dagacothority.IndexOf(p.request.Context.Roster.Publics(), p.Public())
+	if p.Tree() == nil || len(p.Tree().List()) == 0 {
+		log.Fatal("WTF ??  tree cache emptied before end of protocol...")
+	}
 	if nextServerTreeNode, err := protocols.NextNode(ownIndex, p.request.Context.Roster.Publics(), p.Tree().List()); err != nil {
 		return fmt.Errorf("sendToNextServer: %s", err)
 	} else {

@@ -1,10 +1,85 @@
-Simulation = "TemplateService"
-Servers = 8
-Bf = 4
-Rounds = 10
-CloseWait = 6000
+Simulation = "DagaAuthSimulation"
+# only ~"issue" the broadcast messages will be "optimized..." when Hosts > Servers ... some root -> children messages wont go through the 100ms delay, cannot do anything without pain (could ensure that the node we chose at "random" is fixed and that it is on a separated node than the others...but..)
+# problems : read tcp io timeout, out of memory, ssh keepalive, cache clean/timeout while protocol alive .. ...
+Servers = 16 
+Rounds = 4 
+CloseWait = 12000
+RunWait = "4h"
 Suite = "Ed25519"
 
-Depth
-1
-2
+NumClientsInContext,    Hosts
+#2,                      2
+#4,                      2
+#8,                      2
+#16,                     2
+#32,                     2
+#64,                     2
+#128,                    2
+#256,                    2
+#512,                    2
+#1024,                   2
+#2043,                   2
+#4096,                   2
+#8192,                   2
+#16384,                  2
+#32768,                  2
+#2,                      4
+#4,                      4
+#8,                      4
+#16,                     4
+#32,                     4
+#64,                     4
+#128,                    4
+#256,                    4
+#512,                    4
+#1024,                   4
+#2048,                   4
+#4096,                   4
+#8192,                   4
+#16384,                  4
+#32768,                  4
+#2,                      8
+#4,                      8
+#8,                      8
+#16,                     8
+#32,                     8
+#64,                     8
+#128,                    8
+#256,                    8
+#512,                    8
+#1024,                   8
+#2043,                   8
+#4096,                   8
+#8192,                   8
+#16384,                  8
+#32768,                  8
+#2,                      16
+#4,                      16
+#8,                      16
+#16,                     16
+#32,                     16
+#64,                     16
+#128,                    16
+#256,                    16
+#512,                    16
+#1024,                   16
+#2043,                   16
+#4096,                   16
+#8192,                   16
+#16384,                  16
+#32768,                  16
+2,                      32
+4,                      32
+8,                      32
+16,                     32
+32,                     32
+64,                     32
+128,                    32
+256,                    32
+512,                    32
+1024,                   32
+2043,                   32
+4096,                   32
+8192,                   32
+16384,                  32
+#32768,                  32

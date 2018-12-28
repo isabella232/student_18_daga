@@ -18,7 +18,7 @@ type Client interface {
 }
 
 // minimum daga client containing nothing but what DAGA needs to work internally (and implement Client interface)
-// used only for the test suite and/or to build other more complete Clients !
+// used only for the test suite and/or to build other more complete Clients
 type minimumClient struct {
 	key   key.Pair
 	index int
@@ -86,7 +86,7 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 // p0 is the client's proof that he correctly followed the protocols and
 // that he belongs to the authorized clients in the context. (see ClientProof).
 // TODO FIXME consider removing context from daga.authmsg, user code will send a request that will contain daga authmsg AND a context (this way user code can add practical info to context such as addresses etc..)
-// this has been done in daga/cothority
+// this has been done in dagacothority
 type AuthenticationMessage struct {
 	C AuthenticationContext
 	initialTagAndCommitments
@@ -179,8 +179,6 @@ type initialTagAndCommitments struct {
 	T0       kyber.Point
 }
 
-// TODO later add logging where needed/desired
-// TODO decide if better to make this function a method of client that accept context, or better add a method to client that use it internally
 // Returns a pointer to a newly allocated initialTagAndCommitments struct correctly initialized
 // and an opening s (product of all secrets that client shares with the servers) of Sm (that is needed later to build client's proof PKclient)
 // (i.e. performs client protocols Steps 1,2 and 3)
@@ -194,7 +192,7 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 
 	//DAGA client Step 1: generate ephemeral DH key pair
 	ephemeralKey := key.NewKeyPair(suite)
-	z := ephemeralKey.Private // FIXME how to erase ?
+	z := ephemeralKey.Private // QUESTION how to securely erase it ?
 	Z := ephemeralKey.Public
 
 	//DAGA client Step 2: generate shared secret exponents with the servers
@@ -210,12 +208,12 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 		suite.Point().Mul(z, serverKey).MarshalTo(hasher)
 		hash := hasher.Sum(nil)
 		sharedSecret := suite.Scalar().SetBytes(hash)
-		// QUESTION FIXME mask the bits to avoid small subgroup attacks
+		// QUESTION TODO mask the bits to avoid small subgroup attacks ?
 		// (but think how an attacker could obtain sP where P has small order.. maybe this is not possible and hence protection irrelevant,
 		// anyway to my understanding we lose nothing (security-wise) by always performing the bittwiddlings and we might lose security if we don't !
 		// relevant link/explanations https://crypto.stackexchange.com/questions/12425/why-are-the-lower-3-bits-of-curve25519-ed25519-secret-keys-cleared-during-creati
 		sharedSecrets = append(sharedSecrets, sharedSecret)
-	} // QUESTION don't understand why sha3(sha512) was done by previous student instead of sha256 in the first place...? => I use only one hash (sha256 for now)
+	}
 
 	//DAGA client Step 3: computes initial linkage tag and commitments to the shared secrets
 	//	Computes the value of the exponent for the initial linkage tag
@@ -245,9 +243,9 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 // GetFinalLinkageTag checks the server's signatures and proofs
 // and outputs the final linkage tag or an error
 func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMessage) (Tf kyber.Point, err error) {
-	// FIXME QUESTION not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
-	// + not sure that this is how things were intended in the paper, maybe redefine what is sent to the client ! (only the final tag...) but why not... as it is now..
-	// TODO but guess this won't do any harm, will need to decide when building the service
+	// FIXME not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
+	//   + not sure that this is how things were intended in the paper, maybe redefine what is sent to the client ! (only the final tag...) but why not... as it is now..
+	//   => see the remarks in server.go, address those when rewriting the API
 
 	//Input checks
 	if context == nil || len(msg.Tags) == 0 || len(msg.Tags) != len(msg.Proofs) || len(msg.Proofs) != len(msg.Sigs) || len(msg.Sigs) != len(msg.Indexes) {
@@ -260,7 +258,6 @@ func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMe
 	}
 	members := context.Members()
 	for i, p := range msg.Proofs {
-		// FIXME : someone can just remove the proofs from message and no checks....... garbage..
 		//verify signatures
 		temp, err := msg.Tags[i].MarshalBinary()
 		if err != nil {

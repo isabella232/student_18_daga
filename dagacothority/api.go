@@ -76,10 +76,8 @@ func (c Client) Auth(context Context) (kyber.Point, error) {
 		}
 		// decode reply
 		serverMsg, context := reply.NetDecode()
-		if err != nil {
-			return nil, fmt.Errorf("error decoding auth. reply from %s : %s", dst, err)
-		}
-		// TODO FIXME QUESTION check that received context match sent context
+
+		// TODO check that received context match sent context (or don't/avoid by rewriting daga API)
 		// extract final linkage tag
 		if Tf, err := daga.GetFinalLinkageTag(suite, context, *serverMsg); err != nil {
 			return nil, errors.New("failed to extract final linkage tag from server reply: " + err.Error())

@@ -21,17 +21,19 @@ func init() {
 	network.RegisterMessages(
 		PKclientCommitments{}, PKclientChallenge{},
 		Auth{}, AuthReply{},
+		CreateContext{}, CreateContextReply{},
+		Traffic{}, TrafficReply{},
 	)
 }
 
-// QUESTION ?
+// QUESTION remove ??
 const (
 	// ErrorParse indicates an error while parsing the protobuf-file.
 	ErrorParse = iota + 4000
 )
 
 // ServiceID represents the ID of 3rd party service (that use DAGA as its auth. mechanism, don't confuse with Onet.ServiceID)
-type ServiceID uuid.UUID // FIXME investigate if satori is still the package to use, saw claims that it should be deprecated in favor of newer forks
+type ServiceID uuid.UUID // FIXME investigate if satori is still the package to use, saw claims that it should be deprecated in favor of newer forks and see what version of the package to use (vs V1.)
 
 // ContextID represents the ID of a Context
 type ContextID uuid.UUID
@@ -103,27 +105,22 @@ func (c Context) ServersSecretsCommitments() []kyber.Point {
 	return c.R
 }
 
-// Equals is to be used by actors upon reception of request/reply to verify that it is part of same auth.context that was requested/is accepted.
+// Equals is to be used by nodes upon reception of request/reply to verify that it is part of same auth.context that was requested/is accepted.
 // in general for DAGA to work we need to check/enforce same order but this function is only to check that the context is the "same"
-// that one of our accepted context (TODO FIXME maybe not useful but maybe useful .. ).
+// that one of our accepted context (TODO FIXME maybe not useful but maybe useful ..see below ).
 // after the check done, to proceed remember to keep context that is in message/request/reply for all computations.
 // FIXME compare IDs and basta, (maybe enforce strict equality by making context embed an hash of the fields that need to be strictly equal)
 // and drop the idea that it might be useful to have "different-same" contexts (premature optimisation + dumb
 // TODO (unless we consider having ~random group members assigned in unpredictable ways to mitigate the problem of context propagation and anonymity when new subscriber arrive and old leave)
-// (different rosters => legitimate use to balance workload etc.. ??)
+// (different rosters => maybe legitimate use to balance workload etc.. ??)
 func (c Context) Equals(other Context) bool {
 	// TODO consider moving this in kyber daga
-
-	//if reflect.DeepEqual(c, other) {  // TODO check if it is useful... maybe can never work..
-	//	return true
-	//} else {
 	members1 := c.Members()
 	members2 := other.Members()
 	return ContainsSameElems(members1.X, members2.X) &&
 		ContainsSameElems(members1.Y, members2.Y) &&
 		ContainsSameElems(c.ClientsGenerators(), other.ClientsGenerators()) &&
 		ContainsSameElems(c.ServersSecretsCommitments(), other.ServersSecretsCommitments())
-	//}
 }
 
 // NetEncodeChallenge is used to translate a daga.Challenge to the "proto-awk" friendly version of it

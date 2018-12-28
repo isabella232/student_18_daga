@@ -22,8 +22,8 @@ type suiteEC struct {
 }
 
 // Returns a new Suite backed by a suiteEC
-// TODO here add possibility to let user give me a suite that is suitable ^^
-// TODO => make suiteEC embed interfaces instead etc.. decide what I let in the hand of user (probably only Group provider or maybe radnom provider too)
+// TODO maybe here add possibility to let user give me a suite that is suitable ^^ (
+// 	=> make suiteEC embed interfaces instead etc.. decide what I let in the hand of user (probably only Group provider or maybe radnom provider too)
 func NewSuiteEC() Suite {
 	return new(suiteEC)
 }
@@ -31,14 +31,13 @@ func NewSuiteEC() Suite {
 // returns new hash.Hash computing the SHA-256 checksum
 // this hash is used in DAGA to derive valid Scalars of the group used
 func (s suiteEC) Hash() hash.Hash {
-	// FIXME QUESTION are length extension attacks considered to be feasible on sha256 and should we care (we don't use it to build MAC's then...) ?
-	// QUESTION maybe instead use sha512/256 ? (which should be faster on 64 bit architectures)
+	// QUESTION are length extension attacks considered to be feasible on sha256 and should we care (we don't use it to build MAC's then...) ?
+	// TODO maybe instead use sha512/256 ? (which should be faster on 64 bit architectures)
 	// and finally see the Hash related comment on Suite
 	return sha256.New()
 }
 
 func (s suiteEC) hashTwo() hash.Hash {
-	// QUESTION same as above
 	return sha256.New()
 }
 

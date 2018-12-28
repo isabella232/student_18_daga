@@ -60,7 +60,7 @@ func TestLeaderSetup(t *testing.T) {
 	// valid setup, should not panic
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	dummyReq := dagacothority.PKclientCommitments{
 		Context:     *dummyContext,
 		Commitments: protocols_testing.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3),
@@ -79,7 +79,7 @@ func TestLeaderSetupShouldPanicOnEmptyContext(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	pi, _ := local.CreateProtocol(dagachallengegeneration.Name, tree)
 	defer pi.(*dagachallengegeneration.Protocol).Done()
 
@@ -94,7 +94,7 @@ func TestLeaderSetupShouldPanicOnBadCommitmentsLength(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	pi, _ := local.CreateProtocol(dagachallengegeneration.Name, tree)
 	defer pi.(*dagachallengegeneration.Protocol).Done()
 
@@ -112,7 +112,7 @@ func TestLeaderSetupShouldPanicOnNilServer(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, _, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, _, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	dummyReq := dagacothority.PKclientCommitments{
 		Context:     *dummyContext,
 		Commitments: protocols_testing.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3),
@@ -131,7 +131,7 @@ func TestLeaderSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	dummyReq := dagacothority.PKclientCommitments{
 		Context:     *dummyContext,
 		Commitments: protocols_testing.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3),
@@ -162,7 +162,7 @@ func TestChildrenSetup(t *testing.T) {
 	// valid setup, should not panic
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	pi, _ := local.CreateProtocol(dagachallengegeneration.Name, tree)
 	defer pi.(*dagachallengegeneration.Protocol).Done()
 
@@ -193,7 +193,7 @@ func TestChildrenSetupShouldPanicOnInvalidState(t *testing.T) {
 
 	nbrNodes := 1
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, nbrNodes-1, true)
-	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	dummyReq := dagacothority.PKclientCommitments{
 		Context:     *dummyContext,
 		Commitments: protocols_testing.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3),
@@ -227,7 +227,7 @@ func TestStartShouldErrorOnInvalidTreeShape(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	dummyReq := dagacothority.PKclientCommitments{
 		Context:     *dummyContext,
 		Commitments: protocols_testing.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3),
@@ -251,7 +251,7 @@ func TestWaitForResultShouldPanicIfCalledBeforeStart(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, dummyContext := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	dummyReq := dagacothority.PKclientCommitments{
 		Context:     *dummyContext,
 		Commitments: protocols_testing.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3),
@@ -271,7 +271,7 @@ func TestWaitForResultShouldPanicOnNonRootInstance(t *testing.T) {
 
 	nbrNodes := 5
 	_, roster, tree := local.GenBigTree(nbrNodes, nbrNodes, 2, true)
-	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(local, roster)
+	_, dagaServers, _, _ := protocols_testing.DummyDagaSetup(rand.Intn(10)+2, len(local.Servers), roster)
 	pi, _ := local.CreateProtocol(dagachallengegeneration.Name, tree)
 	defer pi.(*dagachallengegeneration.Protocol).Done()
 

@@ -5,7 +5,6 @@ package daga
 // I'd say put DAGA "primitives" as functions and create methods on clients and servers that use those,
 // put the daga primitives into kyber and the rest into a DAGA package somewhere else in cothority
 // TODO QUESTION FIXME how to securely erase secrets ?
-// TODO see what to export and what not, for now mostly everything private
 import (
 	"errors"
 	"fmt"
@@ -29,7 +28,7 @@ type Suite interface {
 	kyber.Random
 	key.Generator     // needed since sometimes/in some groups we need to take care while generating secrets, (e.g in edwards25519, to avoid small subgroup attacks, need to mask some bits)
 	kyber.HashFactory // FIXME remove this hashfactory and defines hash1 hash2 as hash functions that should behaves like RO and that returns scalars and points respectively
-	// FIXME review where Hash2 should be called instead of Hash and how, I might have used Hash everywhere, bad
+	// FIXME review where Hash2 should be called instead of Hash and how, I might have used Hash everywhere, bad (ok for current suite but not for all)
 	hashTwo() hash.Hash // DAGA needs another hash function (that can be of another size depending on the concrete groups used)
 }
 
@@ -130,8 +129,8 @@ func ValidateContext(context AuthenticationContext) error {
 }
 
 // Signs using schnorr signature scheme over the group of the Suite
-// QUESTION to me this is a bad idea ! better to have Sign be a required function listed in the Suite,
-// QUESTION where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..
+// QUESTION IMO this is a bad idea ! better to have Sign be a required function listed in the Suite,
+//  where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..
 func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
 	if private == nil {
