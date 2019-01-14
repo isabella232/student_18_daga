@@ -8,7 +8,10 @@ import (
 	"strconv"
 )
 
-// TODO doc
+// Client represents an entity (see terminology in "Syta - Identity Management Through Privacy Preserving Aut 2.3)".
+// that can authenticate as a member of a group using DAGA.
+// Interface for flexibility and to allow possibly different implementations, ease testing etc.,
+// defines the method that other DAGA primitives expect/need to do their job.
 type Client interface {
 	PublicKey() kyber.Point
 	PrivateKey() kyber.Scalar
@@ -18,7 +21,7 @@ type Client interface {
 }
 
 // minimum daga client containing nothing but what DAGA needs to work internally (and implement Client interface)
-// used only for the test suite and/or to build other more complete Clients
+// used only for the test suite and/or to build other more complete Clients (e.g. done in dagacothority)
 type minimumClient struct {
 	key   key.Pair
 	index int
@@ -39,9 +42,9 @@ func (c minimumClient) Index() int {
 	return c.index
 }
 
-// "philosophical" question
+// TODO "philosophical" question
 //func (c client) NewAuthenticationMessage(suite Suite, context AuthenticationContext,
-//										 sendCommitsReceiveChallenge func([]kyber.Point)Challenge) (*AuthenticationMessage, error) {
+//										 sendCommitsReceiveChallenge PKclientVerifier) (*AuthenticationMessage, error) {
 //	return newAuthenticationMessage(suite, context, c, sendCommitsReceiveChallenge)
 //
 //}
@@ -60,12 +63,16 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 		// FIXME check if s is a proper secret (see small subgroup attacks on some groups/curves).
 		// FIXME .. or remove this option
 		// FIXME .. or make it a proper secret..
+		// FIXME .. or trust user to not shoot itself in the foot
+		// FIXME .. or don't care and see later when usage/contract/etc of edwards25519 clearly defined
+		//  and issue regarding key generator fixed (https://github.com/dedis/kyber/issues/351)
 		kp = &key.Pair{
 			Private: s, // <- could (e.g. edwards25519) be attacked if not in proper form
 			Public:  suite.Point().Mul(s, nil),
 		}
 	}
 
+	// FIXME use something similar to https://github.com/awnumar/memguard to protect the secret key
 	return minimumClient{
 		index: i,
 		key:   *kp,
@@ -85,8 +92,6 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 //
 // p0 is the client's proof that he correctly followed the protocols and
 // that he belongs to the authorized clients in the context. (see ClientProof).
-// TODO FIXME consider removing context from daga.authmsg, user code will send a request that will contain daga authmsg AND a context (this way user code can add practical info to context such as addresses etc..)
-// this has been done in dagacothority
 type AuthenticationMessage struct {
 	C AuthenticationContext
 	initialTagAndCommitments
@@ -188,30 +193,59 @@ type initialTagAndCommitments struct {
 // clientGenerator the client's per-round generator
 //
 func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGenerator kyber.Point) (*initialTagAndCommitments, kyber.Scalar) {
-	// TODO parameter checking, what should we check ? assert that clientGenerator is indeed a generator of the group ?
+
+	// QUESTION here assert that client generator is indeed a generator of the prime order group ?
+	//  (should not be needed if we are only concerned with DH on curve25519
+	//  => because all secrets should be multiple of 8 (not the case in kyber, bug)
+	//  => even if attacker provides a point in 8th order subgroup => cannot learn anything)
+	//  but still this is a valid concern since:
+	//  1) if we change the concrete suite implementation, we would like the code to remain correct
+	//  2) we are not only concerned with DH on 25519 (see also related comment below and in gencontext.go),
+	//  	if we don't check generator in correct subgroup somewhere
+	//  	=> can compromize auth. anonymity via T0 (even with 25519 based group and correct secrets)
+	// 	TL;DR
+	// 	choices:
+	// 	1) rely only on anytrust and assume context (and generators)correctly generated if context validates
+	// 	(properly signed by all servers, checked in ValidateContext) (WHAT WE DO NOW, with cothority implementation)
+	// 	2) or check point before each usage here (or both..need to see how costly it is..could be only g^8 =?= 1)
+	// 	IMHO somewhat 1) > 2) since 2) would probably need to verify different things or in a different way depending on the concrete algebraic group used
+	// 	=> TODO decide what to do when rewriting server part and user-code facing API (notably to ease context generation, fix server.go uglinesses etc..)
 
 	//DAGA client Step 1: generate ephemeral DH key pair
 	ephemeralKey := key.NewKeyPair(suite)
-	z := ephemeralKey.Private // QUESTION how to securely erase it ?
+	z := ephemeralKey.Private // FIXME how to securely erase it ? => maybe use https://github.com/awnumar/memguard !!
 	Z := ephemeralKey.Public
 
 	//DAGA client Step 2: generate shared secret exponents with the servers
 	sharedSecrets := make([]kyber.Scalar, 0, len(serverKeys))
 	for _, serverKey := range serverKeys {
+		// shared secret = suite.Hash(DH(z, Y))
 		hasher := suite.Hash()
-		// QUESTION ask Ewa Syta
-		// can it be a problem if hash size = 256 > log(phi(group order = 2^252 + 27742317777372353535851937790883648493 prime))
-		// because it is currently the case, to me seems that by having a hash size greater than the number of phi(group order)
-		// it means that the resulting "pseudo random keys" will no longer have same uniform distribution since two keys can be = mod phi(group order).
-		// (to my understanding secrets distribution will not be uniform and that kind of violate random oracle model assumption)
-		// but since nothing is said about this concern in Curve25519 paper I'd say this is not an issue finally...
 		suite.Point().Mul(z, serverKey).MarshalTo(hasher)
 		hash := hasher.Sum(nil)
 		sharedSecret := suite.Scalar().SetBytes(hash)
-		// QUESTION TODO mask the bits to avoid small subgroup attacks ?
-		// (but think how an attacker could obtain sP where P has small order.. maybe this is not possible and hence protection irrelevant,
-		// anyway to my understanding we lose nothing (security-wise) by always performing the bittwiddlings and we might lose security if we don't !
-		// relevant link/explanations https://crypto.stackexchange.com/questions/12425/why-are-the-lower-3-bits-of-curve25519-ed25519-secret-keys-cleared-during-creati
+		// QUESTION: do we need to mask the resulting bits (sharedSecret) to avoid small subgroup attacks (e.g. Lim and Lee + pollard kangaroo) ?
+		//  (if we consider them effective..but then becomes tied to edwards25519 group..=> need to use suite.NewKey with a stream built from the hash)
+		// 	e.g. if clientGenerator is not a generator (is not in (cyclic)subgroup of prime order generated by base) and has order 8,
+		// 	then an attacker can know s mod 8 easily (from T0 and brute force) ! => may help him to break anonymity (e.g using Pollard kangaroo/lambda on a smaller set)
+		// 	(or trivially by checking order..!!if attacker can set generator of a target to a point of order 8 I'd say already gameover!! see comment above)
+		// 	anyway to my understanding we lose nothing (security-wise) by always performing the bit-twiddlings
+		// 	(security tied to order of subgroup (~2^252) and discretelog complexity (~O(sqrt(l)) => ~126 bits)
+		// 	and we might lose security if we don't !
+		// 	relevant links/explanations:
+		// 	https://crypto.stackexchange.com/questions/12425/why-are-the-lower-3-bits-of-curve25519-ed25519-secret-keys-cleared-during-creati
+		// 	https://eprint.iacr.org/2016/995.pdf
+		//
+		// 	ANSWER:TL;DR:conclusion:
+		// 	if we are only concerned with DH on 25519, masks the bits => don't need to check order of point/generator
+		// 	however we are not simply using DH, we use the shared secret as exponent to build tags !!,
+		// 	if we don't check the order of the point and hence that generator is a correct daga round generator for client
+		// 	=> can possibly break anonymity of client
+		// 	=> client NEED to check/verify that generator correct (or trust them via anytrust) => in that case we don't need to masks the bits (to my current understanding)
+		// 		-downside is we don't fully benefit from using bernstein's curve and X25519 function (if implemented by kyber..not clear, probably not)
+		//		and RFC and bernstein paper REQUIRES to tweak the bits of the scalar (maybe required by underlying X25519 function don't know)
+		//		and this is probably needed to interface with other crypto library/eventual other implementations (far hypothetical future...)
+		// 	 	-additional benefits (matter of point of view..) is that now checks/concerns are more the same for EC crypto and traditional schnorr group crypto
 		sharedSecrets = append(sharedSecrets, sharedSecret)
 	}
 
@@ -223,15 +257,15 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 	}
 	T0 := suite.Point().Mul(exp, clientGenerator)
 
-	//	Computes the commitments to the shared secrets
+	//	Computes the commitments to the shared secrets, S=(Z, S0, S1, .., Sm)
 	S := make([]kyber.Point, 0, len(serverKeys)+2)
-	S = append(S, Z, suite.Point().Base()) // Z, S0=g
+	S = append(S, Z, suite.Point().Base()) // append Z, S0=g
 	exp = sharedSecrets[0]                 // s1
-	for _, sharedSecret := range sharedSecrets[1:] /*s2..sm*/ {
-		S = append(S, suite.Point().Mul(exp, nil)) // S1..Sm-1
+	for _, sharedSecret := range sharedSecrets[1:] {  // s2..sm
+		S = append(S, suite.Point().Mul(exp, nil))  // append S1..Sm-1
 		exp.Mul(exp, sharedSecret)
 	}
-	S = append(S, suite.Point().Mul(exp, nil) /*Sm*/)
+	S = append(S, suite.Point().Mul(exp, nil))  // append Sm
 	s := exp
 
 	return &initialTagAndCommitments{

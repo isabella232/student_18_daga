@@ -7,7 +7,7 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-// Client implements the daga.Client interface and embeds an onet.Client and TODO whatever I'll need but is not needed by kyber.daga
+// Client implements the daga.Client interface and embeds an onet.Client and whatever needed but is not needed by kyber.daga
 type Client struct {
 	daga.Client
 	// TODO if time, one of the point of embedding anon interface is if you want to override some of the methods
@@ -32,10 +32,10 @@ func NewClient(i int, s kyber.Scalar) (*Client, error) {
 	}
 }
 
-// AdminCLient is the client side struct used by 3rd-party services admins to call context management endpoints
-// TODO FIXME move elsewhere later or remove completely (used to test api/cli)
+// AdminCLient is the client side struct used by 3rd-party services admins (!not daga node admin!) to call context management endpoints.
+// TODO FIXME move elsewhere later or remove completely (used now to test api/cli)
 type AdminCLient struct {
-	// TODO PGP identity or whatever etc..
+	// TODO PGP identity or whatever etc.. when we will authenticate/authorize those partners
 	ServiceID ServiceID
 	*onet.Client
 }

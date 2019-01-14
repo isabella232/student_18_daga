@@ -33,7 +33,7 @@ func (ac AdminCLient) CreateContext(subscribers []kyber.Point, roster *onet.Rost
 	}
 	reply := CreateContextReply{}
 
-	// send to random server in cothority
+	// send to random server in cothority/roster
 	dst := roster.RandomServerIdentity()
 	if err := ac.SendProtobuf(dst, &request, &reply); err != nil {
 		return nil, fmt.Errorf("error sending CreateContext request to %s : %s", dst, err)
@@ -58,7 +58,6 @@ func (c Client) NewPKclientVerifier(context Context, dst *network.ServerIdentity
 // - send it (API call to Auth endpoint of a random server)
 // - finally extract the final linkage tag after completion of the auth. process
 func (c Client) Auth(context Context) (kyber.Point, error) {
-	// TODO FIXME QUESTION think where/when/how check context validity (points/keys don't have small order, generators are generators etc..)
 
 	// abstraction of remote servers/verifiers for PKclient, it is a function that wrap an API call to PKclient
 	PKclientVerifier := c.NewPKclientVerifier(context, context.Roster.RandomServerIdentity())

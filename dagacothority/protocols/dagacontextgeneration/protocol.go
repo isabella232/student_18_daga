@@ -30,7 +30,8 @@ var suite = daga.NewSuiteEC()
 const Timeout = 2500 * time.Second
 // 5 second was ok up to 4096/{2,4} and 2048/8 clients/servers
 
-// TODO when something wrong (see below/search dishonest) flag leader as dishonest and do something to evince it (how ? new protocol with proofs etc.. )
+// TODO when something wrong (see below/search dishonest)
+//  flag leader as dishonest and do something to evince it (how ? new protocol, proofs etc.. where ? extend sign/daga or keep context generation out of daga concerns)
 
 func init() {
 	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
@@ -49,6 +50,7 @@ type Protocol struct {
 	startServingContext func(context dagacothority.Context, dagaServer daga.Server) error // used by child nodes to provide result of protocol to the parent service, set by service at protocol creation time
 }
 
+// TODO move this in sign/daga
 type contextFactory struct {
 	ServiceID dagacothority.ServiceID
 	daga.MinimumAuthenticationContext
@@ -285,7 +287,8 @@ func (p *Protocol) handleSign(msg StructSign) (err error) {
 		return fmt.Errorf("%s: failed to handle (dishonest)Leader's Sign: wrong node public key", Name)
 	}
 
-	// verify that the generators are correctly computed (do it again)
+	// verify that the generators are correctly computed (do it again and compare)
+	// TODO move these things in sign/daga including signature verification etc..
 	for i, leaderGenerator := range msg.Context.H {
 		if generator, err := daga.GenerateClientGenerator(suite, i, msg.Context.R); err != nil {
 			return fmt.Errorf("%s: failed to handle Leader's Sign: %s", Name, err)

@@ -1,16 +1,17 @@
 package dagachallengegeneration
 
-// FIXME better namings
-// QUESTION not sure if each protocol deserve its own package but if I put them all in same package (say protocol) will need to change a little the template conventions
-// FIXME share code with server's protocol (waitresult setDagaServer etc..leadersetup )=> maybe create interface etc..
+// QUESTION not sure if each protocol deserve its own package but if I put them all in same package (say protocol)
+//  will need to change a little the template conventions.
+// TODO DRY/share code/interface with other protocols if possible (waitresult, leadersetup, etc.. )
+//  => maybe create new interface etc..=> can simplify service.go
 
-/*
-This file provides a Onet-protocol implementing the challenge generation protocol described in
-Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.4
+//
+//This file provides a Onet-protocol implementing the challenge generation protocol described in
+//Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.4
+//
+//The protocol is meant to be launched upon reception of a PKClient request by the DAGA service using the
+//`newDAGAChallengeGenerationProtocol`-method of the service (that will take care of doing things right.)
 
-The protocol is meant to be launched upon reception of a PKClient request by the DAGA service using the
-`newDAGAChallengeGenerationProtocol`-method of the service (that will take care of doing things right.)
-*/
 
 import (
 	"errors"
@@ -34,17 +35,19 @@ var suite = daga.NewSuiteEC()
 const Timeout = 2500 * time.Second
 
 func init() {
-	network.RegisterMessage(Announce{}) // register here first message of protocol s.t. every node know how to handle them (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
-	// QUESTION my protocol is tied to service => according to documentation I need to call Server.ProtocolRegisterName
-	// QUESTION Where ?
-	// QUESTION need more info on all of this works and what are the possible scenarios, documentation not clear enough nor up to date
+	// register here first message of protocol s.t. every node know how to handle them
+	// (before NewProtocol has a chance to register all the other, since it won't be called if onet doesnt know what do to with them)
+	network.RegisterMessage(Announce{})
+	// QUESTION my protocol is tied to service => according to documentation (up to date ??) I need to call Server.ProtocolRegisterName
+	// QUESTION Where/Why ?
+	// QUESTION need more info on how all of this works and what are the possible scenarios, documentation not clear enough nor up to date
 	onet.GlobalProtocolRegister(Name, NewProtocol) // FIXME remove ?
 }
 
 // Protocol holds the state of the challenge generation protocol instance.
 type Protocol struct {
 	*onet.TreeNodeInstance
-	result      chan daga.Challenge        // channel that will receive the result of the protocol, only root/leader read/write to it  // TODO since nobody likes channel maybe instead of this, call service provided callback (i.e. move waitForResult in service, have leader call it when protocol done => then need another way to provide timeout
+	result      chan daga.Challenge        // channel that will receive the result of the protocol, only root/leader read/write to it, used to "sync" with waitForResult
 	commitments []daga.ChallengeCommitment // on the leader/root: to store every commitments (to random challenge) at correct index (in auth. context), on the children to store leaderCommitment at 0
 	openings    []kyber.Scalar             // on the leader/root: to store every opening at correct index (in auth. context), on the children store own opening at 0
 
@@ -81,7 +84,7 @@ func NewProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 // LeaderSetup is a setup function that needs to be called after protocol creation on Leader/root (and only at that time !)
 func (p *Protocol) LeaderSetup(req dagacothority.PKclientCommitments, dagaServer daga.Server) {
 	// TODO consider removing the dagaServer parameter and accept a request validator that returns dagaserver (like in ChildSetup)
-	// TODO +: less differences between leader and child -: redundant checks
+	// TODO (+): less differences between leader and child (-): redundant checks for leader
 	if p.commitments != nil || p.openings != nil || p.dagaServer != nil || p.result != nil || p.acceptRequest != nil {
 		log.Panic("protocol setup: LeaderSetup called on an already initialized node.")
 	}
@@ -108,7 +111,7 @@ func (p *Protocol) ChildSetup(acceptRequest func(*dagacothority.PKclientCommitme
 	p.openings = make([]kyber.Scalar, 1)
 }
 
-// TODO see if I keep those setters (if yes maybe add again the one I removed..) or if way too overkill and stupid
+// TODO see if I keep those setters (if yes maybe add again the one I removed..) or if it is way too overkill and stupid
 // setter to let know the protocol instance "what is the request validation strategy"
 func (p *Protocol) setAcceptRequest(acceptRequest func(*dagacothority.PKclientCommitments) (daga.Server, error)) {
 	if acceptRequest == nil {
@@ -203,8 +206,9 @@ func (p *Protocol) Start() (err error) {
 	p.saveCommitment(p.dagaServer.Index(), *leaderChallengeCommit)
 
 	// broadcast Announce requesting that all other nodes do the same and send back their signed commitments.
-	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization) and send in parallel (that's another thing..) as was done in skipchain ?
-	// TODO or add a "BroadcastInParallel" method in onet
+	// QUESTION do work in new goroutine (here don't see the point but maybe an optimization)
+	//  and send in parallel (that's another thing..) as was done in skipchain ?
+	// TODO add a "BroadcastInParallel" method in onet
 	errs := p.Broadcast(&Announce{
 		LeaderCommit:         *leaderChallengeCommit,
 		LeaderIndexInContext: p.dagaServer.Index(),
@@ -257,7 +261,8 @@ func (p *Protocol) handleAnnounce(msg StructAnnounce) (err error) {
 	}
 
 	// verify signature of Leader's commitment
-	// FIXME WHY ??: if we trust the rosters (and the daga context) all these node-node signatures/authentication are useless since it is handled by the DEDIS-tls in Onet..
+	// FIXME WHY ?: if we trust the rosters (and the daga context)
+	//  all these node-node signatures/authentication are useless since authenticity and integrity should be protected by the "DEDIS-tls" channels in Onet..
 	members := p.context.Members()
 	err = daga.VerifyChallengeCommitmentSignature(suite, msg.LeaderCommit, members.Y[msg.LeaderIndexInContext])
 	if err != nil {
@@ -282,9 +287,11 @@ func (p *Protocol) handleAnnounce(msg StructAnnounce) (err error) {
 	})
 }
 
-// QUESTION here by design some handlers are designed to be called only on root when all children responded, what can go wrong if (if possible/makes sense)
-// QUESTION some messages travels in the wrong direction, say we sent to a children (is it possible?) node some reply to trigger the call of handler that is not supposed to be called on children
-// QUESTION current code will panic is that ok ?
+// QUESTION here by design some handlers are to be called only on root when all children responded,
+//  what can go wrong if (if possible/makes sense)
+//  some messages travels in the wrong direction, say we sent to a children (is it possible?) node some reply
+//  to trigger the call of handler that is not supposed to be called on children
+//  current code will panic is that ok ?
 
 // handler that will be called by framework when Leader node has received an AnnounceReply from all other nodes (its children)
 // Step 3 of daga challenge generation protocol described in Syta - 4.7.4
@@ -361,16 +368,17 @@ func (p *Protocol) handleOpenReply(msg []StructOpenReply) (err error) {
 	log.Lvlf3("%s: Leader received all Open replies", Name)
 
 	// to figure out the node of the next-server in "ring"
-	// TODO would like to have a "ring built with tree" topology to just have to sendToChildren
-	// TODO run new "subprotocol" with new tree for the finalize step ? mhhh bof..
-	// TODO or send to everyone including self in a for loop (like was done in wolinsky/dagas), onet will dispatch locally for us..
-	// TODO => (+) DRY a little the code and avoid having to figure out who is next node, (-) by avoiding ... we distance ourselves a little from daga (no longer ring communication but star)
+	// TODO at this step would like to have a "ring built with tree" topology to just have to sendToChildren
+	//  run new "subprotocol" with new tree for the finalize step ? mhhh bof..
+	//  or send to everyone including self in a for loop (like was done in wolinsky/dagas), onet will dispatch locally for us..
+	//  => (+) DRY a little the code and avoid having to figure out who is next node,
+	//  => (-) we distance ourselves from daga paper (no longer ring communication but star)
 
-	//After receiving all the openings, leader verifies them and initializes the challengeCheck structure
 	for _, openReply := range msg {
 		p.saveOpening(openReply.Index, openReply.Opening)
 	}
-	// TODO nicify kyber.daga "API" / previous code if possible => then clean/hide details of protocols here
+	//After receiving all the openings, leader verifies them and initializes the challengeCheck structure
+	// TODO nicify kyber.daga "API" / previous code if possible => then clean/hide details of protocols there
 	challengeCheck, err := daga.InitializeChallenge(suite, p.context, p.commitments, p.openings)
 	if err != nil {
 		return fmt.Errorf("%s: failed to handle OpenReply, : %s", Name, err.Error())
@@ -425,9 +433,9 @@ func (p *Protocol) sendToNextServer(msg interface{}) error {
 	// here we pass the public keys of nodes in roster instead of the ones from auth. context to simplify the
 	// "ring communication", now the "ring order" is based on the indices of the nodes in context's roster instead of in context
 	// like described in DAGA paper (nothing changed fundamentally).
-	// since nodes can (and probably have) multiple daga server identities (per context),
 	// if we prefer keeping the indices in context for the "ring order", (no particular reason to do so..)
 	// we would need ways to map conodes/treenodes to their daga keys in order to select the next node
+	// since nodes can (and probably have) multiple daga server identities (per context).
 	// (see old comments in https://github.com/dedis/student_18_daga/blob/7d32acf216cbdea230d91db6eee633061af58caf/daga_login/protocols/DAGAChallengeGeneration/protocol.go#L411-L417)
 	// TODO if we keep current solution, combine indexOf and nextnode in a cleverer algo to use a single loop
 	ownIndex, _ := dagacothority.IndexOf(p.context.Roster.Publics(), p.Public())

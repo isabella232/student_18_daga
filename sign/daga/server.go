@@ -1,9 +1,16 @@
 package daga
 
 // FIXME audit/verify + rename "everything" + maybe see how to nicify external api (make some functions methods etc..)
-// FIXME rewrite everything..
+// FIXME rewrite everything..mostly unverifiable/maintainable
+// introduce things somewhere to simplify job of implementers
+// 	(e.g. define an interface to allow sending receiving messages to any other node  in context, then concrete implementations
+//	only have to implement the functions/map them to their actual way of communication and everything else handled by kyber daga) (might be challenging for cothority case, with protocols etc but migth benefit everyone else)
+// mhhh maybe here is not the place => new level of abstraction/package
 // FIXME => don't know if I'll have time (need to update tests etc.. that's why I should have started from scratch instead
 // of using it...lost HUGE amount of time refactoring in all directions with not that much benefits in the end)
+
+// see cothority implementation to see how can improve life of user-code
+// 	-introduce context factory and methods etc..
 
 import (
 	"crypto/sha512"
@@ -15,9 +22,12 @@ import (
 	"strconv"
 )
 
-// TODO doc
+// Server represents a DAGA server
+// Interface for flexibility and to allow possibly different implementations,
+// defines the method that other DAGA primitives expect/need to do their job.
+// TODO doc + add new methods that simplify hide daga internals for user-code (newServerMsg, process, etc..)
 type Server interface {
-	Client                     // client interface (a server can be a client.. why not..)
+	Client                     // client interface (a server can be a client, why not) TODO or introduce a new interface/type for "thing with keypair + index"
 	RoundSecret() kyber.Scalar //Per round secret
 	SetRoundSecret(scalar kyber.Scalar)
 	//NewChallengeCommitment(suite Suite) (*ChallengeCommitment, kyber.Scalar, error)
@@ -74,10 +84,7 @@ type ChallengeCommitment struct {
 }
 
 // ServerSignature stores a signature created by a server and the server's index
-// TODO see why index is really needed and if we cannot get rid of it, when receiveing a challengecommit the receiver knows who the sender is
-// > can probably know its public key => can probably verify signature without looking it up in context using index
-// mhh seems that it is only used to check/assert same index when traversing the slice of commitments in verify... maybe remove it..
-// + TODO use different types for different signatures...pffff rhaa
+// + TODO use different types for different signatures (messages)
 type ServerSignature struct {
 	Index int
 	Sig   []byte
@@ -167,8 +174,6 @@ func NewChallengeCommitment(suite Suite, server Server) (commit *ChallengeCommit
 }
 
 func VerifyChallengeCommitmentSignature(suite Suite, commit ChallengeCommitment, pubKey kyber.Point) error {
-	// QUESTION FIXME: How to check that a point is on the curve (and correct subgroup of curve) ? (don't remember why but the answer is you don't need if you use edwards curve25519)
-	// FIXME but still this is a valid concern since if we change the curve/suite_implementation we would like the code to remain correct or ?
 	// Convert the commitment and verify the signature
 	msg, err := commit.Commit.MarshalBinary()
 	if err != nil {
@@ -200,7 +205,7 @@ func CheckOpening(suite Suite, commitment kyber.Point, opening kyber.Scalar) boo
 	return commitment.Equal(suite.Point().Mul(opening, nil))
 }
 
-// CheckOpenings verifies each commitment/opening and returns the computed master challenge
+// checkOpenings verifies each commitment/opening and returns the computed master challenge
 func checkOpenings(suite Suite, context AuthenticationContext, commits []ChallengeCommitment, openings []kyber.Scalar) (cs kyber.Scalar, err error) {
 	// FIXME rename (compute master challenge + verify)
 	if context == nil {
@@ -231,6 +236,7 @@ func InitializeChallenge(suite Suite, context AuthenticationContext, commits []C
 	}
 
 	// FIXME maybe remove completely the function, checkOpening will already be done by CheckUpdateChallenge (RHAAAAA)
+	//  rename challengecheck into something like challengefactory (kind of) + create methods to create, update and finalize it
 	cs, err := checkOpenings(suite, context, commits, openings)
 	if err != nil {
 		return nil, err
@@ -297,7 +303,6 @@ func FinalizeChallenge(context AuthenticationContext, challenge *ChallengeCheck)
 }
 
 //InitializeServerMessage creates a ServerMessage from a ClientMessage to ease further processing
-// FIXME QUESTION rename .. New..
 func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage, err error) {
 	if request == nil {
 		return nil, errors.New("InitializeServerMessage: request is nil")
@@ -312,6 +317,7 @@ func InitializeServerMessage(request *AuthenticationMessage) (msg *ServerMessage
 }
 
 // ServerProtocol runs the server part of DAGA upon receiving a message from either a server or a client
+// It processes the message according to "Syta - Identity Management Through Privacy Preserving Aut 4.3.6"
 // TODO DRY see what can be shared with GetFinalLinkageTag ...+ probably rewrite ..
 func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 
@@ -335,7 +341,8 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
-	// FIXME dafuck is this ? nowhere to be found in DAGA or ?? is it out of scope ?? (to me it should be handled by Onet/TLS...)
+	// FIXME dafuck is this ? nowhere to be found in DAGA or (DAGA assumes authenticated channels if I'm correct)??
+	//  is it out of scope or to hack another thing ? what is the pursued goal ?? (to me it should be handled by Onet/TLS...)
 	data, e := msg.Request.ToBytes()
 	if e != nil {
 		return errors.New("ServerProtocol: failed to marshall client's msg, " + e.Error())
@@ -427,7 +434,11 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	signature := ServerSignature{Sig: sign, Index: server.Index()}
 
 	//Step 4: Form the new message
+	// FIXME why keep all tags ?? need to set tag to T_j or 0, + tags not protected by anything (ok proof) => manipulation or information leak probably possible
 	msg.Tags = append(msg.Tags, T)
+	// FIXME/BUG this one follows daga paper, however by doing so we weaken deniability !!
+	//  (means that deniability as advertised in paper doesn't hold, i.e. if anyone (say a dishonnest server) obtains (which is the case..)
+	//  {auth decision ok + list of the NIZK server proofs}(+anytrust), then someone authenticated for sure.
 	msg.Proofs = append(msg.Proofs, *proof)
 	msg.Indexes = append(msg.Indexes, server.Index())
 	msg.Sigs = append(msg.Sigs, signature)
@@ -576,7 +587,7 @@ func verifyServerProof(suite Suite, context AuthenticationContext, i int, msg *S
 	return true
 }
 
-// generateMisbehavingProof creates the proof of a misbehaving server  // TODO rename...
+// generateMisbehavingProof creates the proof of a misbehaving client  // TODO rename....
 func generateMisbehavingProof(suite Suite, Z kyber.Point, server Server) (proof *ServerProof, err error) {
 	//Input checks
 	if Z == nil {
@@ -621,7 +632,7 @@ func generateMisbehavingProof(suite Suite, Z kyber.Point, server Server) (proof 
 	}, nil
 }
 
-//verifyMisbehavingProof verifies a proof of a misbehaving server TODO rename...
+//verifyMisbehavingProof verifies a proof of a misbehaving client TODO rename...
 func verifyMisbehavingProof(suite Suite, serverPublicKey kyber.Point, proof *ServerProof, Z kyber.Point) bool {
 	//Input checks
 	if serverPublicKey == nil || proof == nil || Z == nil {
@@ -718,6 +729,8 @@ func (proof ServerProof) ToBytes() (data []byte, err error) {
 // It returns the commitment to that secret to be included in the context and the new server
 func GenerateNewRoundSecret(suite Suite, server Server) kyber.Point {
 	// FIXME rethink + instead store kp in server + make it a method of interfaceServer and stop exporting setroundsecret
+	// + probably better to set Server immutable and enforce newContext => new server (reusing possibly the long-term key pair or not)
+	// it is how dagacothority use servers now, to allow the node to serve multiple different contexts at once
 	kp := key.NewKeyPair(suite)
 	server.SetRoundSecret(kp.Private)
 	return kp.Public

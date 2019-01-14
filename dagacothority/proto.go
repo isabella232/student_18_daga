@@ -41,7 +41,7 @@ type CreateContext struct {
 	DagaNodes *onet.Roster
 }
 
-// CreateContextReply is the reply to a CreateContext request ... (yes looks like I'll stop trying to satisfy golint quickly..)
+// CreateContextReply is the reply to a CreateContext request ... (yes looks like I'll stop trying to satisfy golint quickly ^^)
 type CreateContextReply struct {
 	Context Context
 }
@@ -54,7 +54,7 @@ type PKclientCommitments struct {
 }
 
 // PKclientChallenge is a copy of daga.Challenge to make awk proto generation happy (don't have proto generation in sign/daga + awk doesn't like type aliases)
-// TODO(/never): (find better solution) or why not using same proto.go generation procedure in sign/daga etc..
+// TODO: (find better solution) or why not using same proto.go generation procedure in sign/daga etc..
 type PKclientChallenge struct {
 	Cs   kyber.Scalar
 	Sigs []ServerSignature
@@ -106,7 +106,7 @@ type Context struct {
 	ServiceID ServiceID
 	// signatures that show endorsement of the context by all the daga servers
 	Signatures [][]byte
-	// awk friendly version of daga.MinimumAuthenticationContext { daga.Members, R, H } that was previously relied upon to implement the interface
+	// awk friendly version of daga.MinimumAuthenticationContext { daga.Members, R, H } that was previously relied upon to implement the interface TODO: create proto files for sign/daga and keep original intent.
 	X      []kyber.Point
 	Y      []kyber.Point
 	R      []kyber.Point

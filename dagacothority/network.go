@@ -68,6 +68,8 @@ func NetEncodeClients(clients []daga.Client) ([]NetClient, error) {
 //}
 
 // NetEncodeServer is used to translate a daga.Server to the net friendly version of it
+// NOT intended to travel on wires, but to allow to save it in bbolt or to dump it to disk
+// ==> TODO/FIXME means that currently unencrypted sensitive data is in bbolt saved state of service
 func NetEncodeServer(s daga.Server) *NetServer {
 	return &NetServer{
 		PrivateKey:     s.PrivateKey(),

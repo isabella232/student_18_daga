@@ -16,14 +16,12 @@ import (
 // SuiteEC is the EC crypto concrete implementation of the DAGA Suite interface,
 // it is used to implement DAGA on the twisted Edwards curve that is birationally equivalent to Curve25519
 // (i.e. the suite uses the same curve that is used in Ed25519's EdDSA signature scheme)
-// TODO there are naming issues related to the curves in Kyber => create discussion
+// TODO there are naming issues related to the curves in Kyber => create discussion (+ IMHO lacks guidelines and documentation too)
 type suiteEC struct {
 	edwards25519.Curve
 }
 
-// Returns a new Suite backed by a suiteEC
-// TODO maybe here add possibility to let user give me a suite that is suitable ^^ (
-// 	=> make suiteEC embed interfaces instead etc.. decide what I let in the hand of user (probably only Group provider or maybe radnom provider too)
+// Returns a new Suite backed by a suiteEC TODO "singleton object" ?
 func NewSuiteEC() Suite {
 	return new(suiteEC)
 }
@@ -31,9 +29,9 @@ func NewSuiteEC() Suite {
 // returns new hash.Hash computing the SHA-256 checksum
 // this hash is used in DAGA to derive valid Scalars of the group used
 func (s suiteEC) Hash() hash.Hash {
-	// QUESTION are length extension attacks considered to be feasible on sha256 and should we care (we don't use it to build MAC's then...) ?
+	// QUESTION should we care about length extension attacks on sha256 (we don't use it to build MAC's then...) ?
 	// TODO maybe instead use sha512/256 ? (which should be faster on 64 bit architectures)
-	// and finally see the Hash related comment on Suite
+	//  and finally see the Hash related comment on Suite
 	return sha256.New()
 }
 
@@ -71,8 +69,9 @@ func (s SuiteProof) Read(r io.Reader, objs ...interface{}) error {
 // New implements the kyber.Encoding interface, needed to satisfy the kyber.Proof.Suite interface
 func (s SuiteProof) New(t reflect.Type) interface{} {
 	// QUESTION not totally sure if this is working, but a quick go playground hints it is ok.. https://play.golang.org/p/pkcd2RzlZad
-	// TODO if this is ok, this implementation might be better that the one used in group/internal/marshalling/marshal.go
-	// TODO (and to my current understanding completely equivalent...only no need to have those package vars only to get their reflect type)
+	// TODO this implementation might be better that the one used in group/internal/marshalling/marshal.go
+	//  and to my current understanding completely equivalent.
+	//  (+) no need to have those package vars only to get their reflect type
 	scalarInterface := reflect.TypeOf((*kyber.Scalar)(nil)).Elem()
 	pointInterface := reflect.TypeOf((*kyber.Point)(nil)).Elem()
 	if t.Implements(scalarInterface) {
@@ -84,31 +83,12 @@ func (s SuiteProof) New(t reflect.Type) interface{} {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TODO if time, concrete implementation that uses same primitives that in DAGA paper (work in a schnorr group)
-// TODO QUESTION did someone already implemented a kyber Schnorr group somewhere ?
-//type SuiteSchnorr struct {
+// TODO concrete implementation that uses same primitives that in DAGA paper (work in a schnorr group)
+// TODO QUESTION did someone already implemented a kyber Schnorr group somewhere (with mod.Int) ? => no, might be a good idea
+//type suiteSchnorr struct {
 //	mod.Int
 //}
-//
-//func (s SuiteSchnorr) Hash() hash.Hash {
-//	return sha256.New()
+//// Returns a new Suite backed by a SuiteSchnorr
+//func NewSuiteEC() Suite {
+//	return new(suiteSchnorr)
 //}
-//
-//func (s SuiteSchnorr) NewKey(random cipher.Stream) kyber.Scalar {
-//	return s.Scalar().Pick(random)
-//}
-//
-//func (s SuiteSchnorr) Scalar() kyber.Scalar {
-//	return mod.NewInt(nil, s.)
-//}
-//
-//func (s SuiteSchnorr) Point() kyber.Point {
-//	return nil
-//}
-//
-//func () Base() kyber.Point {
-//}
-//
-////func newSuiteSchnorr() Suite {
-////	return new(SuiteSchnorr)
-////}

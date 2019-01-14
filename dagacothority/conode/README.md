@@ -1,4 +1,4 @@
-# Conode
+# Conode - general infos (from cothority_template)
 
 This package implements the cothority server. Conodes are linked together to form cothorities, run decentralized protocols, and offer services to clients.
 
@@ -30,7 +30,7 @@ $(go env GOPATH)/src/github.com/dedis/cothority_template/conode/run_conode.sh lo
 
 This will create three nodes and configure them with default values, then run
 them in background. To check if they're running correctly, use: 
-#FIXME
+
 
 ```bash
 $(go env GOPATH)/src/github.com/dedis/cothority_template/conode/run_conode.sh check

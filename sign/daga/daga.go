@@ -1,10 +1,11 @@
-// TODO quick documentation and DAGA description with links to relevant parts of the Syta papers
+// TODO quick documentation and DAGA description with links to relevant parts of the Syta papers and or my report
+//  (or cp paste of relevant part of my report)
+//  + note about IMHO package has nothing to do with signatures but ...,
 package daga
 
 // TODO decide / review method vs functions + "granularity of parameters"
-// I'd say put DAGA "primitives" as functions and create methods on clients and servers that use those,
-// put the daga primitives into kyber and the rest into a DAGA package somewhere else in cothority
-// TODO QUESTION FIXME how to securely erase secrets ?
+//  I'd say put DAGA "primitives" as functions and create methods on clients and servers that use those,
+//  put the daga primitives into kyber and the rest into a DAGA package somewhere else in cothority
 import (
 	"errors"
 	"fmt"
@@ -12,23 +13,28 @@ import (
 	"github.com/dedis/kyber/sign/schnorr"
 	"github.com/dedis/kyber/util/key"
 	"hash"
-	"strconv"
 )
 
 // Suite represents the set of functionalities needed for the DAGA package to operate
-// the purpose of the Suite is to allow multiple implementations,
-// (e.g one using EC crypto on edwards25519 curve and another one using a Schnorr group like in the original DAGA paper,
-// originally "DAGA assumes a cyclic multiplicative group G of prime order q, where p=2q+1,
+// the purpose of the Suite is to allow multiple implementations using different cryptographic primitives,
+// e.g an implementation using EC crypto on edwards25519 curve and another one using a Schnorr group like in the original DAGA paper,
+// (originally "DAGA assumes a cyclic multiplicative group G of prime order q, where p=2q+1,
 // where the Discrete Logarithm and Decisional Diffie-Hellman assumptions hold"
 // quoted from Syta - Identity Management Through Privacy Preserving Aut)
 //
 // concrete suites are defined in daga/suite.go
+// TODO whole daga.Suite idea is probably a bad idea, we should choose a group and make sure everything works well
+//  together and with group.. or push it to the extremes and use it correctly (but lots of crypto details to look..)
 type Suite interface {
 	kyber.Group
 	kyber.Random
-	key.Generator     // needed since sometimes/in some groups we need to take care while generating secrets, (e.g in edwards25519, to avoid small subgroup attacks, need to mask some bits)
-	kyber.HashFactory // FIXME remove this hashfactory and defines hash1 hash2 as hash functions that should behaves like RO and that returns scalars and points respectively
-	// FIXME review where Hash2 should be called instead of Hash and how, I might have used Hash everywhere, bad (ok for current suite but not for all)
+	key.Generator     // needed since sometimes/in some groups we need to take care while generating secrets, (e.g in edwards25519, to avoid small subgroup attacks, need to mask some bits to make all secrets multiple of 8)
+	kyber.HashFactory
+	// TODO remove this hashfactory and defines hash1 hash2 as hash functions that should behaves like RO and that map input to scalars and field elements
+	//  review where Hash2 should be called instead of Hash and how, I might have used Hash everywhere, bad (ok for current suite but not for all)
+	//  and / or eventually keep hashfactory for the usage that don't care and specify which hash is used.
+	//  finally put all these things in a new DAGA interface or rename Suite to DAGA
+	//  see too the comment on SchnorSign => better to have signing related things a requirement in the suite
 	hashTwo() hash.Hash // DAGA needs another hash function (that can be of another size depending on the concrete groups used)
 }
 
@@ -49,7 +55,7 @@ type Suite interface {
 // validity of the supplied authentication message. After a context expires, all servers
 // securely erase their per-round secrets r making it impossible to process authentication
 // messages within this context.
-// See Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.3
+// See "Syta - Identity Management Through Privacy Preserving Aut Chapter 4.7.3"
 type AuthenticationContext interface {
 	Members() Members
 	ClientsGenerators() []kyber.Point
@@ -58,7 +64,7 @@ type AuthenticationContext interface {
 
 // the members of an auth. context
 //
-// X the public keys of the clients/users
+// X the public keys of the clients/users/entities
 //
 // Y the public keys of the servers
 type Members struct {
@@ -66,14 +72,17 @@ type Members struct {
 }
 
 // minimum DAGA context, containing nothing but what DAGA needs to work internally
-// used for the test suite and in context factories (or later in concrete contexts..if you don't need to generate proto files in your new project...as a way to implement for you the interface)
+// used for the test suite and in context factories
+// (or later in concrete contexts, as a way to implement for you the interface) (if you don't need to generate proto files in your new project......)
 //
-// G contains the 'group' (<- poor choice of word) definition, that is the public keys of the clients (G.X) and the servers (G.Y)
+// G contains the 'group' (see "Syta - Identity Management Through Privacy Preserving Aut Chapter 2.3" for terminology) definition,
+// that is the public keys of the clients (G.X) and the servers (G.Y)
 //
 // R contains the commitments of the servers to their unique per-round secrets
 //
 // H contains the unique per-round generators of the group (<- the algebraic structure) associated to each clients
-// TODO maybe remove the g thing (but we lose reading "compatibility with daga paper") and have a slices of struct {x, h} and struct {y, r} instead to enforce same length
+// TODO maybe remove the G thing (but we lose reading "compatibility with daga paper")
+//  and instead have a slices of struct {x, h} and struct {y, r} to enforce same length
 type MinimumAuthenticationContext struct {
 	G Members
 	R []kyber.Point
@@ -121,16 +130,20 @@ func (ac MinimumAuthenticationContext) ServersSecretsCommitments() []kyber.Point
 
 func ValidateContext(context AuthenticationContext) error {
 	members := context.Members()
-	// TODO other thing, notably on generators, (points/keys don't have small order, generators are generators (ok that one is stupid all points are generators^^) etc..)
+	// TODO maybe other thing, notably on generators,
+	//  (points/keys don't have small order, or i.e. generators are generators of the correct subgroup etc..)
+	//  see the questions in client.go, resolve "issues" related to context management when context evolution implemented in dagacothority and
+	//  then decide/fix sign/daga server and context related code/API and rewrite them.
+	//  (now in cothority service implementation a node won't serve auth. requests under a context it didn't built and approve => + anytrust we are ok)
 	if len(members.X) != len(context.ClientsGenerators()) || len(members.Y) != len(context.ServersSecretsCommitments()) || len(members.X) == 0 || len(members.Y) == 0 {
-		return errors.New("NewMinimumAuthenticationContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
+		return errors.New("ValidateContext: illegal length, len(x) != len(h) Or len(y) != len(r) Or zero length slices")
 	}
 	return nil
 }
 
 // Signs using schnorr signature scheme over the group of the Suite
 // QUESTION IMO this is a bad idea ! better to have Sign be a required function listed in the Suite,
-//  where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..
+//  where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..or remove the Suite...by fixing it to a concrete suite
 func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
 	if private == nil {
@@ -148,7 +161,7 @@ func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err e
 }
 
 // SchnorrVerify checks if a Schnorr signature generated using SchnorrSign is valid and returns an error if it is not the case
-// QUESTION same as above
+// QUESTION same as above, + maybe design a kyber signer interface that offer sign/verify/newkey etc..
 func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error) {
 	//Input checks
 	if public == nil {
@@ -245,24 +258,4 @@ func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
 	data = append(data, temp...)
 
 	return data, nil
-}
-
-// GenerateClientGenerator generates a per-round generator for a given client
-func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen kyber.Point, err error) {
-	if index < 0 {
-		return nil, fmt.Errorf("wrond index: %d", index)
-	}
-	if len(commits) <= 0 {
-		return nil, fmt.Errorf("wrong commits:\n%v", commits)
-	}
-	hasher := suite.Hash()
-	hasher.Write([]byte(strconv.Itoa(index)))
-	if pointBytes, err := PointArrayToBytes(commits); err != nil {
-		return nil, err
-	} else {
-		hasher.Write(pointBytes)
-	}
-	exponent := suite.Scalar().SetBytes(hasher.Sum(nil))
-	gen = suite.Point().Mul(exponent, nil)
-	return
 }

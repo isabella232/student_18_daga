@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// TODO refactor test helpers, create helpers that build various requests, and have the test that test API endpoints accept request as parameter
+// TODO create helpers that build various requests, and have the test that test API endpoints accept request as parameter
 
 var tSuite = daga.NewSuiteEC()
 
@@ -61,14 +61,13 @@ func TestService_CreateContext(t *testing.T) {
 			SubscribersKeys: subscriberKeys,
 		}
 
-		// TODO use openPGP or whatever (now there is no verification at all, here only to documente what I had in mind)
+		// TODO use openPGP or whatever (now there is no verification, here only to documente one of the options I had in mind)
 		keyPair := key.NewKeyPair(tSuite)
 		hasher := tSuite.Hash()
 		hasher.Write(uuid.UUID(request.ServiceID).Bytes())
 		pointBytes, err := daga.PointArrayToBytes(request.SubscribersKeys)
 		require.NoError(t, err)
 		hasher.Write(pointBytes)
-		// TODO auth roster too..
 		signature, err := daga.SchnorrSign(tSuite, keyPair.Private, hasher.Sum(nil))
 		request.Signature = signature
 
@@ -101,7 +100,7 @@ func TestService_PKClient(t *testing.T) {
 	// provide initial state to the service (instead of fetching it from FS)
 	populateServicesStates(services, dagaServers, dummyContext)
 
-	for _, s := range services { // QUESTION purpose/point of running test on multiple "same" service ??
+	for _, s := range services { // QUESTION purpose of running test on multiple "same" service ??
 		log.Lvl2("Sending request to", s)
 
 		commitments := testing2.RandomPointSlice(len(dummyContext.ClientsGenerators()) * 3)
@@ -150,8 +149,9 @@ func TestService_Auth(t *testing.T) {
 }
 
 // verify that PKClient works for context created with CreateContext
-// TODO understand why this one is fine on my machine (with race flag too) but "FAIL still have things lingering in travis"
-//  seems that in travis the test is stopped prematurely .. some timeout ? => no, context not found in state but that's not possible..context is obtained/returned by service only after succesfull storage in state...
+// TODO understand why this one is fine on my machine (with race flag too) but "FAIL still have things lingering" in travis
+//  seems that in travis the test is stopped prematurely .. some timeout ?
+//  => no, context not found in state but that's not possible..context is obtained/returned by service only after successful storage in state...
 func TestService_CreateContextAndPKClient(t *testing.T) {
 	local := onet.NewTCPTest(tSuite)
 	hosts, roster, _ := local.GenTree(5, true)

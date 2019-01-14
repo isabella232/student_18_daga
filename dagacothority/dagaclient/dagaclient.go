@@ -1,7 +1,7 @@
 /*
 * TODO FIXME
 * This is a template for creating an app.
- */
+*/
 package main
 
 import (
@@ -37,7 +37,8 @@ func main() {
 		},
 		{
 			Name:        "createContext",
-			Description: "setup NUMCLIENTS clients, a daga auth. context (with all the nodes in ROSTER as daga servers) and save them to current directory under client%d.bin and context.bin",
+			Description: "setup NUMCLIENTS clients, a daga auth. context (with all the nodes in ROSTER as daga servers) " +
+				"and save them to current directory under client%d.bin and context.bin",
 			Usage:       "setup NUMCLIENTS ROSTER",
 			Aliases:     []string{"c"},
 			ArgsUsage:   "NUMCLIENTS the number of clients, ROSTER the public group definition file",
@@ -58,9 +59,10 @@ func main() {
 	log.ErrFatal(cliApp.Run(os.Args))
 }
 
-// setup c clients, and a daga auth context served by cothority defined in roster and save them to FS
-// all the servers/nodes in the provided group/roster will be part of the generated Context
-// TODO clean rewrite is still used later (notably the err handling)
+// setup c clients, and a daga auth context created and served by cothority defined in roster and save them to FS
+// all the servers/nodes in the provided roster will be part of the generated Context.
+// used for testing.
+// TODO clean rewrite if still used later (notably the err handling)
 func cmdSetup(c *cli.Context) error {
 	// read number of clients
 	numClients := readInt(c.Args(), "Please give the number of DAGA clients you want to configure")
@@ -82,8 +84,10 @@ func cmdSetup(c *cli.Context) error {
 			subscribers = append(subscribers, client.PublicKey())
 		}
 	}
+	// ! recall that this is a testing CLI helper, in real life it is not the
+	// 3rd-party service admin that generate keypairs of the clients but the clients themselves
 
-	// create AdminClient (3rd-party service admin) to call daga API endpoint
+	// create AdminClient (3rd-party service admin, !not daga admin!) to call daga API endpoint
 	serviceProvider := dagacothority.NewAdminClient()
 
 	var errs []error
@@ -91,7 +95,7 @@ func cmdSetup(c *cli.Context) error {
 	if context, err := serviceProvider.CreateContext(subscribers, roster); err != nil {
 		return err
 	} else {
-		//save context to new protobuf bin file TODO or whatever, maybe better toml config files
+		//save context to new protobuf bin file TODO or whatever, maybe better toml config files => "parser"
 		errs = append(errs, saveToFile("./context.bin", context)) // TODO remove magic strings
 	}
 
@@ -117,10 +121,10 @@ func cmdAuth(c *cli.Context) error {
 	log.Info("Auth command")
 
 	// fetch args
+	// cmdAuth only needs an auth. context, and the client info's in context (basically an index and a privatekey)
 	clientPath := readString(c.Args(), "Please give the client definition file of the client you want to run")
-	contextPath := readString(c.Args().Tail(), "Please give the context definition file of the authentication context")
-	// cmdAuth only needs an auth. context, and the client identity in context (basically an index and a privatekey)
-	// TODO for now accept context and private client toml (kinda... net bin for now)
+	contextPath := readString(c.Args().Tail(), "Please give the context definition file of the authentication context you want to auth. into")
+
 	network.RegisterMessages(dagacothority.NetClient{}, dagacothority.Context{})
 	client, err := dagacothority.ReadClient(clientPath)
 	if err != nil {

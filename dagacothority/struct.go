@@ -106,15 +106,17 @@ func (c Context) ServersSecretsCommitments() []kyber.Point {
 }
 
 // Equals is to be used by nodes upon reception of request/reply to verify that it is part of same auth.context that was requested/is accepted.
-// in general for DAGA to work we need to check/enforce same order but this function is only to check that the context is the "same"
-// that one of our accepted context (TODO FIXME maybe not useful but maybe useful ..see below ).
+// in general for DAGA to work we need to check/enforce same order (in internal slices)
+// but this function is only to check that the context is the "same"
+// that one of our accepted context.
 // after the check done, to proceed remember to keep context that is in message/request/reply for all computations.
-// FIXME compare IDs and basta, (maybe enforce strict equality by making context embed an hash of the fields that need to be strictly equal)
-// and drop the idea that it might be useful to have "different-same" contexts (premature optimisation + dumb
-// TODO (unless we consider having ~random group members assigned in unpredictable ways to mitigate the problem of context propagation and anonymity when new subscriber arrive and old leave)
-// (different rosters => maybe legitimate use to balance workload etc.. ??)
+// TODO drop the idea that it might be useful to have "different-same" contexts (premature optimisation)
+//  (unless we consider having ~random group members assigned in unpredictable ways to mitigate the problem of context
+//  propagation and anonymity when new subscriber arrive and old leave)
+//  and allow different rosters => maybe legitimate use to balance workload etc.. ??)
+//  see later when context evolution scenarios are fixed and implemented.
+//  + consider moving this in sign/daga
 func (c Context) Equals(other Context) bool {
-	// TODO consider moving this in kyber daga
 	members1 := c.Members()
 	members2 := other.Members()
 	return ContainsSameElems(members1.X, members2.X) &&
