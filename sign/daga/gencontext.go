@@ -110,7 +110,7 @@ func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen
 	//	return nil, errors.New("GenerateClientGenerator: failed to pick generator, unexpected error: " + err.Error())
 	//}
 
-	// TODO additionally if we want to be completely correct we maybe need to check that :
+	// TODO additionally if we want to be completely correct we need to check that :
 	////////////////
 	// from https://cr.yp.to/ecdh.html:
 	//	There are some unusual non-Diffie-Hellman elliptic-curve protocols that need to ensure ``contributory'' behavior.

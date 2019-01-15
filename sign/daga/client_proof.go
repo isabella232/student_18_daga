@@ -6,7 +6,8 @@ package daga
 // Camenish and Stadler techniques.
 // It also provide the necessary code to interface with the said framework (ProverContext and VerifierContext)
 // and ~API-wrappers to use them in a readable way.
-// TODO maybe organize those in a "sub package" of daga "ClientProof" + see if we can work from the structure of the ~API-wrapper
+// TODO maybe organize those in a "sub package" of daga "ClientProof"
+//  + see if we can work from the structure of the ~API-wrapper
 //  to put a reusable thing in kyber.proof inspired from it, to ease future usage of the framework and/or to add documentation.
 
 import (
@@ -512,7 +513,7 @@ func newClientProver(suite Suite, context AuthenticationContext, tagAndCommitmen
 	return prover
 }
 
-//ToBytes is a helper function used to convert a ClientProof into []byte to be used in signatures
+//ToBytes is a helper function used to marshal a ClientProof into []byte to be used in signatures
 func (proof ClientProof) ToBytes() (data []byte, err error) {
 	data, e := proof.Cs.Cs.MarshalBinary()
 	if e != nil {

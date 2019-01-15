@@ -231,7 +231,7 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 		// 	(or trivially by checking order..!!if attacker can set generator of a target to a point of order 8 I'd say already gameover!! see comment above)
 		// 	anyway to my understanding we lose nothing (security-wise) by always performing the bit-twiddlings
 		// 	(security tied to order of subgroup (~2^252) and discretelog complexity (~O(sqrt(l)) => ~126 bits)
-		// 	and we might lose security if we don't !
+		// 	and we might lose security if we don't !, if attacker control every server but one (the kth) and manage to succesfully retrieve s_k using the described trick and luck => can expose client
 		// 	relevant links/explanations:
 		// 	https://crypto.stackexchange.com/questions/12425/why-are-the-lower-3-bits-of-curve25519-ed25519-secret-keys-cleared-during-creati
 		// 	https://eprint.iacr.org/2016/995.pdf
@@ -257,7 +257,7 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 	}
 	T0 := suite.Point().Mul(exp, clientGenerator)
 
-	//	Computes the commitments to the shared secrets, S=(Z, S0, S1, .., Sm)
+	//	Computes the commitments to the shared secrets, S=(Z, S0, S1, .., Sm) // TODO merge with previous loop
 	S := make([]kyber.Point, 0, len(serverKeys)+2)
 	S = append(S, Z, suite.Point().Base()) // append Z, S0=g
 	exp = sharedSecrets[0]                 // s1
@@ -279,7 +279,7 @@ func newInitialTagAndCommitments(suite Suite, serverKeys []kyber.Point, clientGe
 func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMessage) (Tf kyber.Point, err error) {
 	// FIXME not sure that the verifyserverproof belongs inside this method in the client..DAGA paper specify that it is the servers that check it
 	//   + not sure that this is how things were intended in the paper, maybe redefine what is sent to the client ! (only the final tag...) but why not... as it is now..
-	//   => see the remarks in server.go, address those when rewriting the API
+	//   => see the remarks in server.go, address those when rewriting the API, and notice that "anytrust + all server proofs => deniability ko, some client authenticated for sure
 
 	//Input checks
 	if context == nil || len(msg.Tags) == 0 || len(msg.Tags) != len(msg.Proofs) || len(msg.Proofs) != len(msg.Sigs) || len(msg.Sigs) != len(msg.Indexes) {
@@ -312,6 +312,7 @@ func GetFinalLinkageTag(suite Suite, context AuthenticationContext, msg ServerMe
 		var valid bool
 		if p.R2 == nil {
 			valid = verifyMisbehavingProof(suite, members.Y[i], &p, msg.Request.SCommits[0])
+			// TODO and then if valid, what ??...
 		} else {
 			valid = verifyServerProof(suite, context, i, &msg)
 		}

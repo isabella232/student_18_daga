@@ -13,12 +13,10 @@ package daga
 // 	-introduce context factory and methods etc..
 
 import (
-	"crypto/sha512"
 	"errors"
 	"fmt"
 	"github.com/dedis/kyber"
 	"github.com/dedis/kyber/util/key"
-	"io"
 	"strconv"
 )
 
@@ -489,7 +487,7 @@ func generateServerProof(suite Suite, context AuthenticationContext, s kyber.Sca
 		Tprevious = msg.Tags[len(msg.Tags)-1]
 	}
 	//Generating the hash
-	hasher := suite.Hash()
+	hasher := suite.hashTwo()
 	Tprevious.MarshalTo(hasher)
 	T.MarshalTo(hasher)
 	context.ServersSecretsCommitments()[server.Index()].MarshalTo(hasher)
@@ -587,7 +585,7 @@ func verifyServerProof(suite Suite, context AuthenticationContext, i int, msg *S
 	return true
 }
 
-// generateMisbehavingProof creates the proof of a misbehaving client  // TODO rename....
+// generateMisbehavingProof creates the proof of a misbehaving client  // TODO rename....^^
 func generateMisbehavingProof(suite Suite, Z kyber.Point, server Server) (proof *ServerProof, err error) {
 	//Input checks
 	if Z == nil {
@@ -602,20 +600,16 @@ func generateMisbehavingProof(suite Suite, Z kyber.Point, server Server) (proof 
 	t2 := suite.Point().Mul(v, nil)
 
 	//Step 2
-	hasher := sha512.New()
-	var writer io.Writer = hasher
-	Zs.MarshalTo(writer)
-	Z.MarshalTo(writer)
-	server.PublicKey().MarshalTo(writer)
-	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
-	t1.MarshalTo(writer)
-	t2.MarshalTo(writer)
+	hasher := suite.hashTwo()
+	Zs.MarshalTo(hasher)
+	Z.MarshalTo(hasher)
+	server.PublicKey().MarshalTo(hasher)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(hasher)
+	t1.MarshalTo(hasher)
+	t2.MarshalTo(hasher)
 	challenge := hasher.Sum(nil)
 
-	hasher = suite.Hash()
-	hasher.Write(challenge)
-	//rand := suite.Cipher(challenge)
-	c := suite.Scalar().SetBytes(hasher.Sum(nil))
+	c := suite.Scalar().SetBytes(challenge)
 
 	//Step 3
 	a := suite.Scalar().Mul(c, server.PrivateKey())
@@ -659,21 +653,17 @@ func verifyMisbehavingProof(suite Suite, serverPublicKey kyber.Point, proof *Ser
 	t2 := suite.Point().Add(d, e)
 
 	//Step 2
-	hasher := sha512.New()
-	var writer io.Writer = hasher
-	proof.T3.MarshalTo(writer)
-	Z.MarshalTo(writer)
-	serverPublicKey.MarshalTo(writer)
-	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(writer)
-	t1.MarshalTo(writer)
-	t2.MarshalTo(writer)
+	hasher := suite.hashTwo()
+	proof.T3.MarshalTo(hasher)
+	Z.MarshalTo(hasher)
+	serverPublicKey.MarshalTo(hasher)
+	suite.Point().Mul(suite.Scalar().One(), nil).MarshalTo(hasher)
+	t1.MarshalTo(hasher)
+	t2.MarshalTo(hasher)
 	challenge := hasher.Sum(nil)
 
-	hasher = suite.Hash()
-	hasher.Write(challenge)
-
 	//rand := suite.Cipher(challhasenge)
-	c := suite.Scalar().SetBytes(hasher.Sum(nil))
+	c := suite.Scalar().SetBytes(challenge)
 
 	if !c.Equal(proof.C) {
 		return false

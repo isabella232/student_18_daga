@@ -31,12 +31,17 @@ func NewSuiteEC() Suite {
 func (s suiteEC) Hash() hash.Hash {
 	// QUESTION should we care about length extension attacks on sha256 (we don't use it to build MAC's then...) ?
 	// TODO maybe instead use sha512/256 ? (which should be faster on 64 bit architectures)
-	//  and finally see the Hash related comment on Suite
 	return sha256.New()
 }
 
+// returns new hash.Hash computing the SHA-256 checksum
+// this hash is used in DAGA as a random oracle to build the NIZK proof of the servers.
 func (s suiteEC) hashTwo() hash.Hash {
-	return sha256.New()
+	// needs to distribute "uniformly" (RO) the input to the range of valid exponents, (i.e. phi(p) for the shnorr group example)
+	// => all field elements
+	// QUESTION: but I'll have to admit that, since we work in a subgroup of order q I don't get why it was especially
+	//  required a different range, in my mind it is sufficient to map to Zq, or put differently the exponents are eq mod q...(not formally written hope you understand what I mean)
+	return s.Hash()
 }
 
 func (s suiteEC) RandomStream() cipher.Stream {

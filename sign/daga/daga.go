@@ -23,19 +23,19 @@ import (
 // quoted from Syta - Identity Management Through Privacy Preserving Aut)
 //
 // concrete suites are defined in daga/suite.go
-// TODO whole daga.Suite idea is probably a bad idea, we should choose a group and make sure everything works well
+// TODO daga.Suite idea is a good idea but probably a bad idea too, since it wasn't introduced from start
+//  we should choose a group and make sure everything works well
 //  together and with group.. or push it to the extremes and use it correctly (but lots of crypto details to look..)
+//  ==> do it when rewriting server part.
 type Suite interface {
 	kyber.Group
 	kyber.Random
 	key.Generator     // needed since sometimes/in some groups we need to take care while generating secrets, (e.g in edwards25519, to avoid small subgroup attacks, need to mask some bits to make all secrets multiple of 8)
-	kyber.HashFactory
-	// TODO remove this hashfactory and defines hash1 hash2 as hash functions that should behaves like RO and that map input to scalars and field elements
-	//  review where Hash2 should be called instead of Hash and how, I might have used Hash everywhere, bad (ok for current suite but not for all)
+	kyber.HashFactory  // to map input to non trivial scalars (i.e. in Zq* for the Schnorr group example)
+	// TODO remove this hashfactory and defines hash1 hash2 as hash functions that should behaves like RO and that map input to scalars and field elements respectively
 	//  and / or eventually keep hashfactory for the usage that don't care and specify which hash is used.
-	//  finally put all these things in a new DAGA interface or rename Suite to DAGA
 	//  see too the comment on SchnorSign => better to have signing related things a requirement in the suite
-	hashTwo() hash.Hash // DAGA needs another hash function (that can be of another size depending on the concrete groups used)
+	hashTwo() hash.Hash // DAGA needs another hash function to map input to field elements (i.e. Zp for the schnorr group example) (that can be of another size depending on the concrete groups used)
 }
 
 // AuthenticationContext holds all the constants of a particular DAGA authentication round.
@@ -132,7 +132,7 @@ func ValidateContext(context AuthenticationContext) error {
 	members := context.Members()
 	// TODO maybe other thing, notably on generators,
 	//  (points/keys don't have small order, or i.e. generators are generators of the correct subgroup etc..)
-	//  see the questions in client.go, resolve "issues" related to context management when context evolution implemented in dagacothority and
+	//  see the related questions in client.go, resolve "issues" related to context management when context evolution implemented in dagacothority and
 	//  then decide/fix sign/daga server and context related code/API and rewrite them.
 	//  (now in cothority service implementation a node won't serve auth. requests under a context it didn't built and approve => + anytrust we are ok)
 	if len(members.X) != len(context.ClientsGenerators()) || len(members.Y) != len(context.ServersSecretsCommitments()) || len(members.X) == 0 || len(members.Y) == 0 {
@@ -142,8 +142,9 @@ func ValidateContext(context AuthenticationContext) error {
 }
 
 // Signs using schnorr signature scheme over the group of the Suite
-// QUESTION IMO this is a bad idea ! better to have Sign be a required function listed in the Suite,
-//  where concrete suite implementation make sure that the signature scheme works well with the chosen group etc..or remove the Suite...by fixing it to a concrete suite
+//  QUESTION easy to confuse what are the exact properties of the sign algo here, (e.g. more like ecdsa or eddsa ?), lacks documentation,
+//   how to interop with other existing implementations out there etc.. (not our concern for now but.) ?
+//   + maybe put it in suite and move implementation in suiteEC (or maybe design a kyber signer interface that offer sign/verify/newkey etc..)
 func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err error) {
 	//Input checks
 	if private == nil {
@@ -161,7 +162,7 @@ func SchnorrSign(suite Suite, private kyber.Scalar, msg []byte) (s []byte, err e
 }
 
 // SchnorrVerify checks if a Schnorr signature generated using SchnorrSign is valid and returns an error if it is not the case
-// QUESTION same as above, + maybe design a kyber signer interface that offer sign/verify/newkey etc..
+// QUESTION same as above
 func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error) {
 	//Input checks
 	if public == nil {
@@ -178,7 +179,7 @@ func SchnorrVerify(suite Suite, public kyber.Point, msg, sig []byte) (err error)
 	return err
 }
 
-//AuthenticationContextToBytes is a utility function to convert an AuthenticationContext into []byte
+//AuthenticationContextToBytes is a utility function that marshal a context into []byte, used in signatures
 func AuthenticationContextToBytes(ac AuthenticationContext) (data []byte, err error) {
 	members := ac.Members()
 	temp, e := PointArrayToBytes(members.X)
@@ -208,7 +209,7 @@ func AuthenticationContextToBytes(ac AuthenticationContext) (data []byte, err er
 	return data, nil
 }
 
-//PointArrayToBytes is a utility function to convert a kyber.Point array into []byte, used in signatures
+//PointArrayToBytes is a utility function that marshal a kyber.Point array into []byte, used in signatures
 func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	for _, p := range array {
 		temp, e := p.MarshalBinary() // hope p not nil..
@@ -220,7 +221,7 @@ func PointArrayToBytes(array []kyber.Point) (data []byte, err error) {
 	return data, nil
 }
 
-//ScalarArrayToBytes is a utility function to convert a kyber.Scalar array into []byte, used in signatures
+//ScalarArrayToBytes is a utility function that marshal a kyber.Scalar array into []byte, used in signatures
 func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 	for _, s := range array {
 		temp, e := s.MarshalBinary()
@@ -232,7 +233,7 @@ func ScalarArrayToBytes(array []kyber.Scalar) (data []byte, err error) {
 	return data, nil
 }
 
-//ToBytes is a helper function used to convert a ClientMessage into []byte to be used in signatures
+//ToBytes is a helper function that marshal a ClientMessage into []byte to be used in signatures
 func (msg AuthenticationMessage) ToBytes() (data []byte, err error) {
 	data, e := AuthenticationContextToBytes(msg.C)
 	if e != nil {
