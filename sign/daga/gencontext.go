@@ -130,6 +130,9 @@ func GenerateClientGenerator(suite Suite, index int, commits []kyber.Point) (gen
 	// then if it the case (I believe), a quick check using the following snippet shows that some
 	// (but not all, notably the points of order 8 are correctly rejected)
 	// of the bad points are accepted by current implementation !
+	// (again maybe I say bullshits, and the test doesnt make sense, not same coordinates or dunno (those numbers are x coords of points in the montgomery),
+	// but then strange that the 2 supposed "order 8 point are rejected" and not the others
+
 
 	//for desc, bytes := range map[string][]byte{
 	//	"zero": make([]byte, 32),

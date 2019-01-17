@@ -59,6 +59,9 @@ func (c Client) NewPKclientVerifier(context Context, dst *network.ServerIdentity
 // - finally extract the final linkage tag after completion of the auth. process
 func (c Client) Auth(context Context) (kyber.Point, error) {
 
+	// TODO check the signatures and eventually the public keys of the servers should be fetched and trusted through
+	//  other means, same trust issues as when obtaining a signed binary release, need to trust the key..
+
 	// abstraction of remote servers/verifiers for PKclient, it is a function that wrap an API call to PKclient
 	PKclientVerifier := c.NewPKclientVerifier(context, context.Roster.RandomServerIdentity())
 
