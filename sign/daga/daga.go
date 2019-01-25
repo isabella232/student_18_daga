@@ -1,10 +1,19 @@
-// TODO quick documentation and DAGA description with links to relevant parts of the Syta papers and or my report
-//  (or cp paste of relevant part of my report)
-//  + note about IMHO package has nothing to do with signatures but ...,
+//DAGA is an authentication protocol run between an entity (user)
+//at the proving side and a set of anytrust servers at the verifying
+//side. The protocol allows the servers to verify that an entity is in-
+//deed a member of a group specified by a list of public keys, while
+//preserving the entity’s anonymity in a forward-secure way. More-
+//over, authentication attempts are divided into epochs (or authenti-
+//cation rounds) and each successful authentication results in a unique
+//(per-round) tag that allows linking authentications of the same en-
+//tity thus offering to the verifying side the proportionality property
+//it sometimes expects/needs.
+//cf "Syta - Identity Management Through Privacy Preserving Aut"
+//  TODO note about IMHO package has nothing to do with signatures but ...,
 package daga
 
 // TODO decide / review method vs functions + "granularity of parameters"
-//  I'd say put DAGA "primitives" as functions and create methods on clients and servers that use those,
+//  I'd say put DAGA "primitives" as functions and create methods on clients and servers that use those as a 2nd API,
 //  put the daga primitives into kyber and the rest into a DAGA package somewhere else in cothority
 import (
 	"errors"
@@ -30,8 +39,8 @@ import (
 type Suite interface {
 	kyber.Group
 	kyber.Random
-	key.Generator     // needed since sometimes/in some groups we need to take care while generating secrets, (e.g in edwards25519, to avoid small subgroup attacks, need to mask some bits to make all secrets multiple of 8)
-	kyber.HashFactory  // to map input to non trivial scalars (i.e. in Zq* for the Schnorr group example)
+	key.Generator     // needed since sometimes/in some groups we need to take care while generating secrets, (e.g in edwards25519, to avoid small subgroup attacks without having to check order of points, need to mask some bits to make all secrets multiple of 8)
+	kyber.HashFactory // to map input to non trivial scalars (i.e. in Zq* for the Schnorr group example)
 	// TODO remove this hashfactory and defines hash1 hash2 as hash functions that should behaves like RO and that map input to scalars and field elements respectively
 	//  and / or eventually keep hashfactory for the usage that don't care and specify which hash is used.
 	//  see too the comment on SchnorSign => better to have signing related things a requirement in the suite

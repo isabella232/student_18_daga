@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-// Client represents an entity (see terminology in "Syta - Identity Management Through Privacy Preserving Aut 2.3)".
+// Client represents an entity (see terminology in "Syta - Identity Management Through Privacy Preserving Aut 2.3").
 // that can authenticate as a member of a group using DAGA.
 // Interface for flexibility and to allow possibly different implementations, ease testing etc.,
 // defines the method that other DAGA primitives expect/need to do their job.
@@ -100,6 +100,7 @@ type AuthenticationMessage struct {
 
 // NewAuthenticationMessage returns a pointer to a new AuthenticationMessage for/under `context` by `client`.
 // it performs the daga client protocol:
+//	- build initial tags and commitments
 // 	- PKclient proof of knowledge with a PKclientVerifier (`sendCommitsReceiveChallenge` abstraction of remote proof verifiers)
 //	- assemble everything
 func NewAuthenticationMessage(suite Suite, context AuthenticationContext,

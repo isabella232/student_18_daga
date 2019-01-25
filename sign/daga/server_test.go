@@ -313,9 +313,7 @@ func TestFinalizeChallenge(t *testing.T) {
 	require.Zero(t, clientChallenge, "Wrong check: Lower signature count")
 }
 
-// TODO port to new implementation rhaaa
 func TestInitializeServerMessage(t *testing.T) {
-	// TODO test for one server as we saw that it previously triggered an hidden bug
 	clients, servers, context, _ := GenerateTestContext(suite, 2, 2)
 	for _, server := range servers {
 		if server.RoundSecret() == nil {

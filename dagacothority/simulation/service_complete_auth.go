@@ -15,7 +15,7 @@ import (
 /*
 * Defines the simulation of auth. requests for the daga service
 * (complete auth. request, including the PKClient building)
- */
+*/
 
 func init() {
 	onet.SimulationRegister("DagaAuthSimulation", NewAuthSimulation)
@@ -85,6 +85,7 @@ func (s *SimServiceCompleteAuth) Run(config *onet.SimulationConfig) error {
 	log.Lvl1("done generating fresh clients")
 
 	// setup, issue a CreateContext call to the dagacothority
+	// was moved here to speed up when gathering data about traffic, but was previously in the loop
 	createContext := monitor.NewTimeMeasure("CreateContext")
 	context, err := serviceProviderAdmin.CreateContext(subscriberKeys, config.Roster)
 	createContext.Record()
@@ -100,9 +101,6 @@ func (s *SimServiceCompleteAuth) Run(config *onet.SimulationConfig) error {
 		cIdx := rand.Intn(len(context.Members().X))
 		c, err := dagacothority.NewClient(clients[cIdx].Index(), clients[cIdx].PrivateKey())
 
-		// 	TODO new service API that returns current Tx Rx then here 2 calls, one before one after + RecordSingleMeasure
-		//   or have the services talk to monitor directly (possible ??) (only temp modification to gather stats) => recordcountermeasure in API method
-		// TODO run those traffic tests localhost instead of deterlab if possible
 		baseTx := make(map[string]uint64, len(config.Roster.List))
 		for _, node := range config.Roster.List {
 			reply := requestTraffic(c, node)

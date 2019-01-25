@@ -1,15 +1,10 @@
 package daga
 
 // FIXME audit/verify + rename "everything" + maybe see how to nicify external api (make some functions methods etc..)
-// FIXME rewrite everything..mostly unverifiable/maintainable
-// introduce things somewhere to simplify job of implementers
-// 	(e.g. define an interface to allow sending receiving messages to any other node  in context, then concrete implementations
-//	only have to implement the functions/map them to their actual way of communication and everything else handled by kyber daga) (might be challenging for cothority case, with protocols etc but migth benefit everyone else)
-// mhhh maybe here is not the place => new level of abstraction/package
-// FIXME => don't know if I'll have time (need to update tests etc.. that's why I should have started from scratch instead
-// of using it...lost HUGE amount of time refactoring in all directions with not that much benefits in the end)
-
-// see cothority implementation to see how can improve life of user-code
+//  rewrite everything..
+//  => don't know if I'll have time (need to update tests etc.. that's why I should have started from scratch instead
+//  of using it...lost HUGE amount of time refactoring in all directions with not that much benefits in the end
+//  start from looking at cothority implementation to see how can improve life of user-code, to redesign the new API
 // 	-introduce context factory and methods etc..
 
 import (
@@ -22,8 +17,7 @@ import (
 
 // Server represents a DAGA server
 // Interface for flexibility and to allow possibly different implementations,
-// defines the method that other DAGA primitives expect/need to do their job.
-// TODO doc + add new methods that simplify hide daga internals for user-code (newServerMsg, process, etc..)
+// defines the methods that other DAGA primitives expect/need to do their job.
 type Server interface {
 	Client                     // client interface (a server can be a client, why not) TODO or introduce a new interface/type for "thing with keypair + index"
 	RoundSecret() kyber.Scalar //Per round secret
@@ -62,7 +56,6 @@ func (s *server) SetRoundSecret(secret kyber.Scalar) {
 // to be used by user implementations
 // or make them methods on clients / servers etc..
 //func (s server) NewChallengeCommitment(suite Suite) (commit *ChallengeCommitment, opening kyber.Scalar, err error) {
-//	// TODO move content of newChallengeCommitment here
 //	return newChallengeCommitment(suite, &s)
 //}
 
@@ -104,7 +97,7 @@ func (c Challenge) VerifySignatures(suite Suite, serverKeys []kyber.Point, pkCli
 		yes := struct{}{}
 		for _, sig := range c.Sigs {
 			if _, ok := encountered[sig.Index]; ok {
-				return fmt.Errorf("duplicate signature") // TODO FIXME works if we ensure/assume no duplicate public key in context + correct key always fetched from context using sig.Index..but IMHO this is messy and error prone...=> better to check actual signature for duplicates + give the benefit to spot duplicate keys in context
+				return fmt.Errorf("duplicate signature")
 			}
 			encountered[sig.Index] = yes
 
@@ -335,7 +328,7 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	members := context.Members()
 	//Checks that not all servers already did the protocols
 	if len(msg.Indexes) >= len(members.Y) {
-		return fmt.Errorf("ServerProtocol: too many calls of the protocols") // FIXME... ok... smells like fish..
+		return fmt.Errorf("ServerProtocol: too many calls of the protocols")
 	}
 
 	// Iteratively checks each signature if this is not the first server to receive the client's request
@@ -369,13 +362,14 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 	}
 
 	//Check all the proofs
-	// FIXME / QUESTION: so all we need to do to bypass is remove the proofs ?? => rewrite DAGA API and rewrite everything here
+	// FIXME so all we need to do to bypass is remove the proofs ?? => rewrite DAGA API and rewrite everything here
 	if len(msg.Proofs) != 0 {
 		for i, p := range msg.Proofs {
 			var valid bool
 			if p.R2 == nil {
 				members := context.Members()
 				valid = verifyMisbehavingProof(suite, members.Y[i], &p, msg.Request.SCommits[0])
+				// and then..?
 			} else {
 				valid = verifyServerProof(suite, context, i, msg)
 			}
@@ -409,7 +403,7 @@ func ServerProtocol(suite Suite, msg *ServerMessage, server Server) error {
 		return e
 	}
 
-	//Signs our message // FIXME QUESTION AGAIN ?? to me this thing has nothing to do here (and guess that it is/should be handled by Onet (TLS) or ??)
+	//Signs our message // FIXME, again to me this thing has nothing to do here (and guess that it is/should be handled by Onet (TLS) or ??)
 	temp, e := T.MarshalBinary()
 	if e != nil {
 		return fmt.Errorf("error in T: %s", e)
@@ -563,8 +557,8 @@ func verifyServerProof(suite Suite, context AuthenticationContext, i int, msg *S
 	} else {
 		Tprevious = msg.Tags[i-1]
 	}
-	// FIXME remember to use hashtwo when/where needed to keep things compatible with other implementations
-	hasher := suite.Hash()
+
+	hasher := suite.hashTwo()
 	Tprevious.MarshalTo(hasher)
 	msg.Tags[i].MarshalTo(hasher)
 	context.ServersSecretsCommitments()[index].MarshalTo(hasher)
@@ -720,7 +714,7 @@ func (proof ServerProof) ToBytes() (data []byte, err error) {
 func GenerateNewRoundSecret(suite Suite, server Server) kyber.Point {
 	// FIXME rethink + instead store kp in server + make it a method of interfaceServer and stop exporting setroundsecret
 	// + probably better to set Server immutable and enforce newContext => new server (reusing possibly the long-term key pair or not)
-	// it is how dagacothority use servers now, to allow the node to serve multiple different contexts at once
+	// and this is it is how dagacothority use servers now
 	kp := key.NewKeyPair(suite)
 	server.SetRoundSecret(kp.Private)
 	return kp.Public
