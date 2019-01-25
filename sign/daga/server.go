@@ -10,8 +10,8 @@ package daga
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
-	"github.com/dedis/kyber/util/key"
+	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/util/key"
 	"strconv"
 )
 

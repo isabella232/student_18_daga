@@ -2,7 +2,7 @@ package daga
 
 import (
 	"crypto/sha512"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"

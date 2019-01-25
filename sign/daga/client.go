@@ -3,8 +3,8 @@ package daga
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
-	"github.com/dedis/kyber/util/key"
+	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/util/key"
 	"strconv"
 )
 
@@ -65,7 +65,7 @@ func NewClient(suite Suite, i int, s kyber.Scalar) (Client, error) {
 		// FIXME .. or make it a proper secret..
 		// FIXME .. or trust user to not shoot itself in the foot
 		// FIXME .. or don't care and see later when usage/contract/etc of edwards25519 clearly defined
-		//  and issue regarding key generator fixed (https://github.com/dedis/kyber/issues/351)
+		//  and issue regarding key generator fixed (https://go.dedis.ch/kyber/issues/351)
 		kp = &key.Pair{
 			Private: s, // <- could (e.g. edwards25519) be attacked if not in proper form
 			Public:  suite.Point().Mul(s, nil),

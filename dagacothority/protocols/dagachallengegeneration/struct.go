@@ -1,7 +1,7 @@
 package dagachallengegeneration
 
 import (
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/student_18_daga/dagacothority"
 	"github.com/dedis/student_18_daga/sign/daga"

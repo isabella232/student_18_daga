@@ -22,10 +22,7 @@ import (
 	"github.com/dedis/onet/log"
 	"gopkg.in/urfave/cli.v1"
 	// Here you can import any other needed service for your conode.
-	// For example, if your service needs cosi available in the server
-	// as well, uncomment this:
-	//_ "github.com/dedis/cothority/cosi/service"
-	// Import your service:
+	// Import your service(s):
 	//_ "github.com/dedis/cothority/pop/service"
 	_ "github.com/dedis/cothority/status/service" // "side-effect" import => will run the init function of package => will register the service
 	_ "github.com/dedis/student_18_daga/dagacothority/service"

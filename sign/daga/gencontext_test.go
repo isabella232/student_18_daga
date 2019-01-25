@@ -1,7 +1,7 @@
 package daga
 
 import (
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"math/rand"
 	"testing"
 )

@@ -2,7 +2,7 @@ package dagacothority_test
 
 import (
 	"fmt"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/student_18_daga/sign/daga"
 	"github.com/stretchr/testify/assert"
 	"math/rand"

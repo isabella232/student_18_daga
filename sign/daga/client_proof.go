@@ -13,8 +13,8 @@ package daga
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
-	"github.com/dedis/kyber/proof"
+	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/proof"
 	"strconv"
 )
 

@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/dedis/kyber"
-	"github.com/dedis/kyber/util/key"
+	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/util/key"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"

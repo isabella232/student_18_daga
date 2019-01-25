@@ -9,7 +9,7 @@ FIXME in fact no... they are in proto.go ... not sure how to keep kind of cohere
 import (
 	"encoding/ascii85"
 	"errors"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/network"
 	"github.com/dedis/student_18_daga/sign/daga"

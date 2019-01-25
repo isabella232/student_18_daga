@@ -21,7 +21,7 @@ additionally this means that the data-structures need to stay onet/protobuf frie
 */
 
 import (
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/onet"
 )
 

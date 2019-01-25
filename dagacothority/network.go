@@ -2,7 +2,7 @@ package dagacothority
 
 import (
 	"errors"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/student_18_daga/sign/daga"
 )
 

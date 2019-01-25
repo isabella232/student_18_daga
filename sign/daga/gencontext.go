@@ -3,8 +3,8 @@ package daga
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
-	"github.com/dedis/kyber/xof/blake2xb"
+	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/xof/blake2xb"
 	"strconv"
 )
 

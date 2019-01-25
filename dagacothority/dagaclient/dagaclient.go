@@ -7,7 +7,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/app"
 	"github.com/dedis/onet/log"

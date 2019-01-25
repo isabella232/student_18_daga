@@ -2,8 +2,8 @@ package protocols
 
 import (
 	"errors"
-	"github.com/dedis/kyber"
 	"github.com/dedis/onet"
+	"go.dedis.ch/kyber"
 )
 
 // NextNode returns the node right after us (ownIndex) in the ring.

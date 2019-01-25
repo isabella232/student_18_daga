@@ -7,7 +7,7 @@ TODO
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/onet"
 	"github.com/dedis/onet/log"
 	"github.com/dedis/onet/network"

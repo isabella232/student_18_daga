@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
-	"github.com/dedis/kyber"
+	"go.dedis.ch/kyber"
 	"github.com/dedis/student_18_daga/dagacothority"
 	"gopkg.in/satori/go.uuid.v1"
 	"sync"
