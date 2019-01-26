@@ -245,11 +245,12 @@ func (s *Service) PKClient(req *dagacothority.PKclientCommitments) (*dagacothori
 // traffic is an API endpoint used only to gather stats/data (used in simulations), upon reception of a valid request,
 // answer with the current total rx/tx
 func (s *Service) traffic(req *dagacothority.Traffic) (*dagacothority.TrafficReply, error) {
-	counterIO := s.CounterIO()
-	return &dagacothority.TrafficReply{
-		Rx: counterIO.Rx(),
-		Tx: counterIO.Tx(),
-	}, nil
+	//counterIO := s.CounterIO()
+	//return &dagacothority.TrafficReply{
+	//	Rx: counterIO.Rx(),
+	//	Tx: counterIO.Tx(),
+	//}, nil
+	return nil, errors.New("!uncomment function body and patch onet!")
 }
 
 // function called to initialize and start a new DAGA (Server's) protocol where current node takes a "Leader" role
