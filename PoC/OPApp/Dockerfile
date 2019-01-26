@@ -6,15 +6,17 @@ WORKDIR /opt/poc-op-app
 # grab and build dex
 RUN apk add --no-cache --update alpine-sdk 
 
-#.only temp! TODO remove
+#.only temp! TODO remove and find better way
 WORKDIR /go/src/github.com/dexidp
 RUN go get -d github.com/sarkortrantor/dex
 RUN cp -r ../sarkortrantor/dex/ dex
 WORKDIR dex 
 RUN git checkout daga_connector
 WORKDIR ../../dedis
-RUN git clone -b PoC https://github.com/dedis/student_18_daga.git
+RUN git clone https://github.com/dedis/student_18_daga.git
 WORKDIR ../dexidp/dex/cmd/dex
+#to fix dedis vanity
+RUN go get go.dedis.ch/kyber
 RUN go get -u
 WORKDIR ../..
 RUN make release-binary

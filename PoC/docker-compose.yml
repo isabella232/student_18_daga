@@ -37,3 +37,12 @@ services:
     command: [$DAGA_NBNODES, $DAGA_LOGLVL]
     volumes:
       - ./DAGACothority/poc-dagacothority:/opt/poc-dagacothority
+  user:
+    build:
+      context: ./user-agent
+    ports:
+     - 5900:5900
+    volumes:
+     - ./DAGACothority/poc-dagacothority:/opt/daga
+    depends_on:
+     - "daga"

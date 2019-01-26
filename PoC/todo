@@ -13,3 +13,6 @@ ok -create web folder and specify it in config
 daemonize dagadaemon ?
 ok -generate config.yaml from setup variables
 nice way to resolve names automatically from all actors (now I have to add lines in /etc/hosts)
+
+find what is the root of the new encoding/decoding bug (wiretype 3 unrecognized) dedis/* 4th december = ok then I guess that the new encding commits of gbosson broke my code..
+while resolving above, use vendor folder and put dedis dependencies as of 4th december instead of bulshitting the Dockerfiles

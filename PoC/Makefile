@@ -1,4 +1,4 @@
-all: setup_env up create_context run_dagadaemon
+all: setup_env up #create_context run_dagadaemon
 
 setup_env:
 	./setup-env.sh
@@ -9,7 +9,7 @@ down:
 up_build:
 	sudo docker-compose up --build
 # TODO better...via admin web ui or else..
-create_context:
-	dagaclient c 2 ./DAGACothority/poc-dagacothority/public.toml
-run_dagadaemon:
-	dagadaemon &
+#create_context:
+#	dagaclient c 2 ./DAGACothority/poc-dagacothority/public.toml
+#run_dagadaemon:
+#	dagadaemon &
