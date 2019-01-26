@@ -44,5 +44,9 @@ services:
      - 5900:5900
     volumes:
      - ./DAGACothority/poc-dagacothority:/opt/daga
+     - ./user-agent/poc-user:/opt/user
     depends_on:
      - "daga"
+    extra_hosts:
+     - rpapp.poc:${DOCKER_HOST_IP}
+     - opapp.poc:${DOCKER_HOST_IP}

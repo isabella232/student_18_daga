@@ -1,4 +1,4 @@
-all: setup_env up #create_context run_dagadaemon
+all: setup_env up_build #create_context run_dagadaemon
 
 setup_env:
 	./setup-env.sh
